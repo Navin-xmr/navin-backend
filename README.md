@@ -13,7 +13,48 @@ The backend service powers the off-chain layer of the platform, handling API log
 git clone https://github.com/Navin-xmr/navin-backend.git
 cd navin-backend
 
+# Install dependencies
+npm install
+
+# Create your environment file
+cp .env.example .env
+
+# Start the dev server (tsx)
+npm run dev
+
 ```
+
+### Environment
+
+Required variables:
+
+- `MONGO_URI`
+
+Optional variables:
+
+- `PORT` (default: `3000`)
+- `NODE_ENV` (default: `development`)
+
+### Scripts
+
+```bash
+# Dev (hot reload)
+npm run dev
+
+# Typecheck
+npm run typecheck
+
+# Build
+npm run build
+
+# Run compiled output
+npm run start
+```
+
+### Endpoints
+
+- `GET /api/health`
+- `POST /api/users`
 
 ## Contributing
 
