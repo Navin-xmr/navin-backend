@@ -1,7 +1,7 @@
-import { env } from "../env.js";
+import { env } from '../env.js';
 
 export const config = {
   nodeEnv: env.NODE_ENV,
   port: env.PORT,
-  mongoUri: env.MONGO_URI
+  mongoUri: env.MONGO_URI,
 } as const;

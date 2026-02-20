@@ -1,4 +1,4 @@
-import { UserModel } from "./users.model.js";
+import { UserModel } from './users.model.js';
 
 export async function createUser(input: { email: string; name: string }) {
   return UserModel.create(input);

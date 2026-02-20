@@ -1,6 +1,6 @@
-import type { RequestHandler } from "express";
-import type { ZodSchema } from "zod";
-import { AppError } from "../http/errors.js";
+import type { RequestHandler } from 'express';
+import type { ZodSchema } from 'zod';
+import { AppError } from '../http/errors.js';
 
 export function validate(input: {
   body?: ZodSchema;
@@ -14,7 +14,7 @@ export function validate(input: {
       if (input.params) req.params = input.params.parse(req.params);
       next();
     } catch {
-      next(new AppError(400, "Validation error", "VALIDATION_ERROR"));
+      next(new AppError(400, 'Validation error', 'VALIDATION_ERROR'));
     }
   };
 }

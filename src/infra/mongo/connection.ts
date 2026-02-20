@@ -1,4 +1,4 @@
-import mongoose from "mongoose";
+import mongoose from 'mongoose';
 
 export async function connectMongo(mongoUri: string) {
   await mongoose.connect(mongoUri);
