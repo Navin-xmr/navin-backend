@@ -10,7 +10,11 @@ export default {
       'ts-jest',
       {
         useESM: true,
-        isolatedModules: true,
+        tsconfig: {
+          module: 'NodeNext',
+          moduleResolution: 'NodeNext',
+          isolatedModules: true,
+        },
       },
     ],
   },
@@ -19,4 +23,5 @@ export default {
   coverageDirectory: 'coverage',
   verbose: true,
   setupFiles: ['./tests/setup.ts'],
+  modulePathIgnorePatterns: ['<rootDir>/src/modules/users/__mocks__/'],
 };
