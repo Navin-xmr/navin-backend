@@ -7,6 +7,7 @@ import { errorMiddleware } from './shared/http/errorMiddleware.js';
 
 import { healthRouter } from './modules/health/health.routes.js';
 import { usersRouter } from './modules/users/users.routes.js';
+import { authRouter } from './modules/auth/auth.routes.js';
 
 export function buildApp() {
   const app = express();
@@ -16,6 +17,7 @@ export function buildApp() {
   app.use(express.json());
 
   app.use('/api/health', healthRouter);
+  app.use('/api/auth', authRouter);
   app.use('/api/users', usersRouter);
 
   app.use(notFound());
