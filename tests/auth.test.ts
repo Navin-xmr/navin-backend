@@ -1,31 +1,40 @@
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { jest } from '@jest/globals';
+import { AppError } from '../src/shared/http/errors.js';
 
-// Mock mongoose
-jest.mock('mongoose', () => ({
-  connect: jest.fn().mockResolvedValue(undefined),
-  connection: { close: jest.fn() },
-  model: jest.fn(),
-  Schema: class {
-    constructor() {}
-    Types: {};
-  },
-}));
+type UserDoc = {
+  _id: { toString(): string };
+  email: string;
+  name: string;
+  role: string;
+  organizationId?: { toString(): string } | null;
+  password?: string;
+};
 
-// Manual mock for users.model.ts
-const mockCreate = jest.fn();
-const mockFindOne = jest.fn();
-jest.mock('../src/modules/users/users.model.js', () => ({
+type UserDocPartial = Partial<UserDoc>;
+
+const mockCreate = jest.fn() as jest.MockedFunction<(doc: Partial<UserDoc>) => Promise<UserDoc>>;
+const mockFindOne = jest.fn() as jest.MockedFunction<
+  (query: Record<string, unknown>) => Promise<UserDocPartial | null>
+>;
+
+jest.unstable_mockModule('../src/modules/users/users.model.js', () => ({
   UserModel: {
     create: mockCreate,
     findOne: mockFindOne,
   },
 }));
 
-// Import after mocks
-import { env } from '../src/env.js';
-import { signup, login, verifyToken, type TokenPayload } from '../src/modules/auth/auth.service.js';
+const { env } = await import('../src/env.js');
+const { signup, login, verifyToken } = await import('../src/modules/auth/auth.service.js');
+const { requireAuth } = await import('../src/shared/middleware/requireAuth.js');
+
+type TokenPayload = {
+  userId: string;
+  role: string;
+  organizationId?: string;
+};
 
 describe('Auth Service', () => {
   beforeEach(() => {
@@ -35,7 +44,7 @@ describe('Auth Service', () => {
 
   describe('signup', () => {
     it('should create a new user and return a token', async () => {
-      const mockUser: any = {
+      const mockUser: UserDoc = {
         _id: { toString: () => 'user-id-123' },
         email: 'test@example.com',
         name: 'Test User',
@@ -76,8 +85,8 @@ describe('Auth Service', () => {
 
   describe('login', () => {
     it('should return a token on successful login', async () => {
-      const hashedPassword1 = await bcrypt.hash('password123', 10);
-      const mockUser: any = {
+      const hashedPassword = await bcrypt.hash('password123', 10);
+      const mockUser: UserDoc = {
         _id: { toString: () => 'user-id-123' },
         email: 'test@example.com',
         name: 'Test User',
@@ -99,7 +108,7 @@ describe('Auth Service', () => {
 
     it('should throw error for invalid credentials (bad password)', async () => {
       const hashedPassword = await bcrypt.hash('password123', 10);
-      const mockUser: any = {
+      const mockUser: UserDoc = {
         _id: { toString: () => 'user-id-123' },
         email: 'test@example.com',
         name: 'Test User',
@@ -147,6 +156,17 @@ describe('Auth Service', () => {
       expect(() => {
         verifyToken('invalid-token');
       }).toThrow();
+    });
+  });
+
+  describe('requireAuth middleware', () => {
+    it('should reject requests without a valid Bearer token', () => {
+      const req: any = { headers: {} };
+      const res: any = {};
+      const next = jest.fn();
+
+      expect(() => requireAuth(req, res, next)).toThrow(AppError);
+      expect(next).not.toHaveBeenCalled();
     });
   });
 });
