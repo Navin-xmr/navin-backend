@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "skills": {
+    "senior-backend": {
+      "source": "davila7/claude-code-templates",
+      "sourceType": "github",
+      "computedHash": "1919d688687239bae5880bd935ce8f845e7b4f82293faba882bb8e2cbb9481b6"
+    }
+  }
+}
