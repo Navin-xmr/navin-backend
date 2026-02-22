@@ -18,7 +18,7 @@ export default {
       },
     ],
   },
-  testMatch: ['**/tests/**/*.test.ts', '**/__tests__/**/*.test.ts'],
+  testMatch: ['**/tests/**/*.test.ts', '**/__tests__/**/*.test.ts', '**/src/modules/users/*.test.ts'],
   collectCoverageFrom: ['src/**/*.ts', '!src/**/*.d.ts'],
   coverageDirectory: 'coverage',
   verbose: true,
