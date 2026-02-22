@@ -1,0 +1,95 @@
+openapi: 3.0.0
+info:
+  title: Navin Backend API
+  version: 1.0.0
+paths:
+  /api/shipments:
+    get:
+      summary: Get paginated shipments
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [CREATED, IN_TRANSIT, DELIVERED, CANCELLED]
+        - in: query
+          name: page
+          schema:
+            type: integer
+        - in: query
+          name: limit
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Paginated shipments
+    post:
+      summary: Create a shipment
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Shipment'
+      responses:
+        '201':
+          description: Shipment created
+  /api/shipments/{id}:
+    patch:
+      summary: Update off-chain metadata
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                offChainMetadata:
+                  type: object
+      responses:
+        '200':
+          description: Shipment updated
+components:
+  schemas:
+    Shipment:
+      type: object
+      properties:
+        trackingNumber:
+          type: string
+        origin:
+          type: string
+        destination:
+          type: string
+        enterpriseId:
+          type: string
+        logisticsId:
+          type: string
+        status:
+          type: string
+          enum: [CREATED, IN_TRANSIT, DELIVERED, CANCELLED]
+        milestones:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              timestamp:
+                type: string
+                format: date-time
+              description:
+                type: string
+        offChainMetadata:
+          type: object
+securitySchemes:
+  bearerAuth:
+    type: http
+    scheme: bearer

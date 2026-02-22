@@ -19,6 +19,7 @@ export function buildApp() {
   app.use('/api/health', healthRouter);
   app.use('/api/auth', authRouter);
   app.use('/api/users', usersRouter);
+  app.use('/api/shipments', require('./modules/shipments/shipments.routes').default);
 
   app.use(notFound());
   app.use(errorMiddleware());
