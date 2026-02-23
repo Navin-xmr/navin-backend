@@ -160,6 +160,7 @@ describe('Shipments API (mocked DB)', () => {
       .set('Authorization', `Bearer ${token}`)
       .send({ status: 'IN_TRANSIT' });
 
+    // console.log('Response:', res.body);
     expect(res.status).toBe(200);
     expect(res.body.status).toBe('IN_TRANSIT');
     expect(res.body.milestones).toBeDefined();

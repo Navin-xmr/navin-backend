@@ -2,15 +2,6 @@ import { Shipment, ShipmentStatus } from './shipments.model.js';
 import { Request, Response } from 'express';
 import { UserModel } from '../users/users.model.js';
 
-let ObjectId: any;
-try {
-  const { Types } = await import('mongoose');
-  ObjectId = Types.ObjectId;
-} catch {
-  // In tests with mocks, ObjectId might not be available
-  ObjectId = (val: string) => val;
-}
-
 export const getShipments = async (req: Request, res: Response) => {
   const { status, page = 1, limit = 10, ...filters } = req.query;
   const query: any = { ...filters };
@@ -65,7 +56,7 @@ export const updateShipmentStatus = async (id: string, status: ShipmentStatus, a
   };
 
   if (actor?.userId) {
-    milestone.userId = ObjectId(actor.userId);
+    milestone.userId = actor.userId;
   }
   if (actor?.walletAddress) {
     milestone.walletAddress = actor.walletAddress;
