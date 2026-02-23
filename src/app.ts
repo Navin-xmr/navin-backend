@@ -8,6 +8,7 @@ import { errorMiddleware } from './shared/http/errorMiddleware.js';
 import { healthRouter } from './modules/health/health.routes.js';
 import { usersRouter } from './modules/users/users.routes.js';
 import { authRouter } from './modules/auth/auth.routes.js';
+import { shipmentsRouter } from './modules/shipments/shipments.routes.js';
 
 export function buildApp() {
   const app = express();
@@ -19,7 +20,7 @@ export function buildApp() {
   app.use('/api/health', healthRouter);
   app.use('/api/auth', authRouter);
   app.use('/api/users', usersRouter);
-  app.use('/api/shipments', require('./modules/shipments/shipments.routes').default);
+  app.use('/api/shipments', shipmentsRouter);
 
   app.use(notFound());
   app.use(errorMiddleware());

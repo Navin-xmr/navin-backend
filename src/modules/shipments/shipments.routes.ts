@@ -1,11 +1,13 @@
 import { Router } from 'express';
-import { getShipments, createShipment, patchShipment } from './shipments.controller';
-import { requireRole } from '../../shared/middleware/requireRole';
+import { getShipments, createShipment, patchShipment, patchShipmentStatus } from './shipments.controller.js';
+import { requireRole } from '../../shared/middleware/requireRole.js';
+import { requireAuth } from '../../shared/middleware/requireAuth.js';
 
-const router = Router();
+export const shipmentsRouter = Router();
 
-router.get('/', getShipments);
-router.post('/', requireRole(['MANAGER', 'ADMIN']), createShipment);
-router.patch('/:id', patchShipment);
+shipmentsRouter.get('/', getShipments);
+shipmentsRouter.post('/', requireRole(...['MANAGER', 'ADMIN']), createShipment);
+shipmentsRouter.patch('/:id', patchShipment);
+shipmentsRouter.patch('/:id/status', requireAuth, patchShipmentStatus);
 
-export default router;
+export default shipmentsRouter;
