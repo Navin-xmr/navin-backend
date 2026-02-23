@@ -1,6 +1,7 @@
 import { Shipment, ShipmentStatus } from './shipments.model.js';
 import { Request, Response } from 'express';
 import { UserModel } from '../users/users.model.js';
+import { tokenizeShipment } from '../../services/stellar.service.js';
 
 export const getShipments = async (req: Request, res: Response) => {
   const { status, page = 1, limit = 10, ...filters } = req.query;
@@ -25,6 +26,21 @@ export const createShipment = async (req: Request, res: Response) => {
   const { trackingNumber, origin, destination, enterpriseId, logisticsId, status, milestones, offChainMetadata } = req.body;
   const shipment = new Shipment({ trackingNumber, origin, destination, enterpriseId, logisticsId, status, milestones, offChainMetadata });
   await shipment.save();
+
+  try {
+    const stellar = await tokenizeShipment({
+      trackingNumber,
+      origin,
+      destination,
+      shipmentId: shipment._id.toString(),
+    });
+    shipment.stellarTokenId = stellar.stellarTokenId;
+    shipment.stellarTxHash = stellar.stellarTxHash;
+    await shipment.save();
+  } catch (err) {
+    console.warn('Stellar tokenization skipped:', (err as Error).message);
+  }
+
   res.status(201).json(shipment);
 };
 

@@ -10,9 +10,12 @@
     "lint": "eslint src --ext .ts",
     "lint:fix": "eslint src --ext .ts --fix",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
-    "test:watch": "node --experimental-vm-modules node_modules/jest/bin/jest.js --watch"
+    "test:watch": "node --experimental-vm-modules node_modules/jest/bin/jest.js --watch",
+    "seed": "tsx src/scripts/seed.ts"
   },
   "dependencies": {
+    "@faker-js/faker": "^10.3.0",
+    "@stellar/stellar-sdk": "^14.5.0",
     "bcrypt": "^6.0.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
