@@ -11,6 +11,8 @@ const MilestoneSchema = new Schema({
   name: { type: String, required: true },
   timestamp: { type: Date, required: true },
   description: { type: String },
+  userId: { type: Schema.Types.ObjectId, ref: 'User' },
+  walletAddress: { type: String },
 });
 
 const ShipmentSchema = new Schema({

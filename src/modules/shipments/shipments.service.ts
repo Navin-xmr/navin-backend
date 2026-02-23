@@ -1,5 +1,5 @@
 // Service layer for Shipment
-import { Shipment } from './shipments.model';
+import { Shipment } from './shipments.model.js';
 
 export const findShipments = async (query: any, skip: number, limit: number) => {
   return Shipment.find(query).skip(skip).limit(limit);
