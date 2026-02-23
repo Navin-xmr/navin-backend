@@ -24,6 +24,8 @@ const ShipmentSchema = new Schema({
   status: { type: String, enum: Object.values(ShipmentStatus), default: ShipmentStatus.CREATED },
   milestones: { type: [MilestoneSchema], default: [] },
   offChainMetadata: { type: Schema.Types.Mixed },
+  stellarTokenId: { type: String },
+  stellarTxHash: { type: String },
 }, { timestamps: true });
 
 export const Shipment = model('Shipment', ShipmentSchema);
