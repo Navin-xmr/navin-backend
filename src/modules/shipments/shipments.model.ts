@@ -26,6 +26,11 @@ const ShipmentSchema = new Schema({
   offChainMetadata: { type: Schema.Types.Mixed },
   stellarTokenId: { type: String },
   stellarTxHash: { type: String },
+  deliveryProof: {
+    url: { type: String },
+    recipientSignatureName: { type: String },
+    uploadedAt: { type: Date },
+  },
 }, { timestamps: true });
 
 export const Shipment = model('Shipment', ShipmentSchema);
