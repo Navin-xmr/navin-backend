@@ -4,80 +4,6 @@ import { UserModel } from '../users/users.model.js';
 import { tokenizeShipment } from '../../services/stellar.service.js';
 import { mockUploadToStorage } from '../../services/mockStorageService.js';
 
-type ParsedMultipartFile = {
-  buffer: Buffer;
-  originalName: string;
-  mimeType: string;
-  size: number;
-};
-
-const parseMultipartRequest = async (req: Request): Promise<{ fields: Record<string, string>; file?: ParsedMultipartFile }> => {
-  const contentType = req.headers['content-type'];
-  if (!contentType || !contentType.includes('multipart/form-data')) {
-    return { fields: {} };
-  }
-
-  const boundaryMatch = contentType.match(/boundary=(?:"([^"]+)"|([^;]+))/i);
-  const boundary = boundaryMatch?.[1] ?? boundaryMatch?.[2];
-  if (!boundary) {
-    throw new Error('Invalid multipart boundary');
-  }
-
-  const chunks: Buffer[] = [];
-  await new Promise<void>((resolve, reject) => {
-    req.on('data', (chunk) => chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)));
-    req.on('end', () => resolve());
-    req.on('error', reject);
-  });
-
-  const raw = Buffer.concat(chunks).toString('latin1');
-  const parts = raw.split(`--${boundary}`);
-  const fields: Record<string, string> = {};
-  let file: ParsedMultipartFile | undefined;
-
-  for (const part of parts) {
-    if (!part || part === '--\r\n' || part === '--' || part === '\r\n') continue;
-
-    const normalized = part.startsWith('\r\n') ? part.slice(2) : part;
-    const separatorIndex = normalized.indexOf('\r\n\r\n');
-    if (separatorIndex < 0) continue;
-
-    const headerSection = normalized.slice(0, separatorIndex);
-    let bodySection = normalized.slice(separatorIndex + 4);
-    if (bodySection.endsWith('\r\n')) {
-      bodySection = bodySection.slice(0, -2);
-    }
-
-    const disposition = headerSection
-      .split('\r\n')
-      .find((line) => line.toLowerCase().startsWith('content-disposition:'));
-    if (!disposition) continue;
-
-    const nameMatch = disposition.match(/name="([^"]+)"/i);
-    const filenameMatch = disposition.match(/filename="([^"]*)"/i);
-    const fieldName = nameMatch?.[1];
-    if (!fieldName) continue;
-
-    if (filenameMatch) {
-      const contentTypeLine = headerSection
-        .split('\r\n')
-        .find((line) => line.toLowerCase().startsWith('content-type:'));
-      const mimeType = contentTypeLine?.split(':')[1]?.trim() ?? 'application/octet-stream';
-      const fileBuffer = Buffer.from(bodySection, 'latin1');
-      file = {
-        buffer: fileBuffer,
-        originalName: filenameMatch[1] || 'upload.bin',
-        mimeType,
-        size: fileBuffer.length,
-      };
-    } else {
-      fields[fieldName] = bodySection;
-    }
-  }
-
-  return { fields, file };
-};
-
 export const getShipments = async (req: Request, res: Response) => {
   const { status, page = 1, limit = 10, ...filters } = req.query;
   const query: any = { ...filters };
@@ -189,8 +115,8 @@ export const patchShipmentStatus = async (req: Request, res: Response) => {
 export const uploadShipmentProof = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { fields, file } = await parseMultipartRequest(req);
-    const recipientSignatureName = fields.recipientSignatureName;
+    const { recipientSignatureName } = req.body;
+    const file = req.file;
 
     if (!file) {
       return res.status(400).json({ message: 'No file uploaded' });
