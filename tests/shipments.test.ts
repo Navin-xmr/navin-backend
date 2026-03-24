@@ -1,11 +1,12 @@
-import { jest } from '@jest/globals';
+import { jest, describe, beforeAll, beforeEach, it, expect } from '@jest/globals';
 import request from 'supertest';
+import process from 'process';
 
 // Mock in-memory DB for shipments
 const shipmentsData: any[] = [];
 const usersData: any[] = [];
 
-await jest.unstable_mockModule('../src/modules/shipments/shipments.model', () => {
+await jest.unstable_mockModule('../src/modules/shipments/shipments.model.js', () => {
   function ShipmentConstructor(this: any, doc: any) {
     Object.assign(this, doc);
     this.milestones = doc.milestones || [];
@@ -71,7 +72,7 @@ await jest.unstable_mockModule('../src/modules/shipments/shipments.model', () =>
   return { Shipment: ShipmentConstructor, ShipmentStatus };
 });
 
-await jest.unstable_mockModule('../src/modules/users/users.model', () => {
+await jest.unstable_mockModule('../src/modules/users/users.model.js', () => {
   const UserModel = {
     create: (u: any) => {
       const user = { ...u, _id: String(usersData.length) };
@@ -100,7 +101,7 @@ describe('Shipments API (mocked DB)', () => {
 
   it('should paginate shipments', async () => {
     for (let i = 0; i < 15; i++) {
-      await (await import('../src/modules/shipments/shipments.model')).Shipment.create({
+      await (await import('../src/modules/shipments/shipments.model.js')).Shipment.create({
         trackingNumber: `TN${i}`,
         origin: 'A',
         destination: 'B',
@@ -117,7 +118,7 @@ describe('Shipments API (mocked DB)', () => {
   });
 
   it('should filter shipments by status', async () => {
-    const mod = await import('../src/modules/shipments/shipments.model');
+    const mod = await import('../src/modules/shipments/shipments.model.js');
     await mod.Shipment.create({ trackingNumber: 'TN1', origin: 'A', destination: 'B', enterpriseId: 'ent1', logisticsId: 'log1', status: 'IN_TRANSIT' });
     await mod.Shipment.create({ trackingNumber: 'TN2', origin: 'A', destination: 'B', enterpriseId: 'ent2', logisticsId: 'log2', status: 'DELIVERED' });
     const res = await request(app).get('/api/shipments?status=IN_TRANSIT');
@@ -127,8 +128,8 @@ describe('Shipments API (mocked DB)', () => {
   });
 
   it('should append milestone on status change and record user/wallet', async () => {
-    const users = await import('../src/modules/users/users.model');
-    const mod = await import('../src/modules/shipments/shipments.model');
+    const users = await import('../src/modules/users/users.model.js');
+    const mod = await import('../src/modules/shipments/shipments.model.js');
 
     const user = await users.UserModel.create({
       email: 'test@example.com',
@@ -169,5 +170,62 @@ describe('Shipments API (mocked DB)', () => {
     expect(ms.name).toBe('IN_TRANSIT');
     expect(ms.walletAddress).toBe('0xABC123');
     expect(ms.userId).toBeDefined();
+  });
+
+  it('should return 401 when trying to create a shipment without a token', async () => {
+    const res = await request(app).post('/api/shipments').send({});
+    expect(res.status).toBe(401);
+  });
+
+  it('should return 403 when trying to create a shipment as a VIEWER', async () => {
+    const users = await import('../src/modules/users/users.model.js');
+    const user = await users.UserModel.create({
+      email: 'viewer2@example.com',
+      name: 'Viewer',
+      passwordHash: 'password',
+      role: 'VIEWER',
+      organizationId: 'org1',
+      walletAddress: '0xABC123',
+    });
+
+    const tokenPayload = { userId: String(user._id), role: user.role };
+    const { default: { sign } } = await import('jsonwebtoken');
+    const token = sign(tokenPayload, process.env.JWT_SECRET || 'secret');
+
+    const res = await request(app)
+      .post('/api/shipments')
+      .set('Authorization', `Bearer ${token}`)
+      .send({});
+    expect(res.status).toBe(403);
+  });
+
+  it('should create a shipment successfully as a MANAGER', async () => {
+    const users = await import('../src/modules/users/users.model.js');
+    const user = await users.UserModel.create({
+      email: 'manager2@example.com',
+      name: 'Manager',
+      passwordHash: 'password',
+      role: 'MANAGER',
+      organizationId: 'org1',
+      walletAddress: '0xABC123',
+    });
+
+    const tokenPayload = { userId: String(user._id), role: user.role };
+    const { default: { sign } } = await import('jsonwebtoken');
+    const token = sign(tokenPayload, process.env.JWT_SECRET || 'secret');
+
+    const res = await request(app)
+      .post('/api/shipments')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        trackingNumber: 'TN-NEW-1',
+        origin: 'A',
+        destination: 'B',
+        enterpriseId: 'ent1',
+        logisticsId: 'log1',
+        status: 'CREATED'
+      });
+    expect(res.status).toBe(201);
+    expect(res.body.trackingNumber).toBe('TN-NEW-1');
   });
 });

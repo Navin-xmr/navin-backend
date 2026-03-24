@@ -1,19 +1,24 @@
-import { Shipment, ShipmentStatus } from './shipments.model.js';
+import { ShipmentStatus } from './shipments.model.js';
 import { Request, Response } from 'express';
 import { UserModel } from '../users/users.model.js';
-import { tokenizeShipment } from '../../services/stellar.service.js';
-import { mockUploadToStorage } from '../../services/mockStorageService.js';
+import type { FilterQuery } from 'mongoose';
+import {
+  findShipments,
+  countShipments,
+  createShipmentService,
+  patchShipmentService,
+  updateShipmentStatusService,
+  uploadShipmentProofService,
+} from './shipments.service.js';
 
 export const getShipments = async (req: Request, res: Response) => {
   const { status, page = 1, limit = 10, ...filters } = req.query;
-  const query: any = { ...filters };
+  const query: FilterQuery<unknown> = { ...filters };
   if (status) query.status = status;
 
   const skip = (Number(page) - 1) * Number(limit);
-  const shipments = await Shipment.find(query)
-    .skip(skip)
-    .limit(Number(limit));
-  const total = await Shipment.countDocuments(query);
+  const shipments = await findShipments(query, skip, Number(limit));
+  const total = await countShipments(query);
 
   res.json({
     data: shipments,
@@ -24,65 +29,16 @@ export const getShipments = async (req: Request, res: Response) => {
 };
 
 export const createShipment = async (req: Request, res: Response) => {
-  const { trackingNumber, origin, destination, enterpriseId, logisticsId, status, milestones, offChainMetadata } = req.body;
-  const shipment = new Shipment({ trackingNumber, origin, destination, enterpriseId, logisticsId, status, milestones, offChainMetadata });
-  await shipment.save();
-
-  try {
-    const stellar = await tokenizeShipment({
-      trackingNumber,
-      origin,
-      destination,
-      shipmentId: shipment._id.toString(),
-    });
-    shipment.stellarTokenId = stellar.stellarTokenId;
-    shipment.stellarTxHash = stellar.stellarTxHash;
-    await shipment.save();
-  } catch (err) {
-    console.warn('Stellar tokenization skipped:', (err as Error).message);
-  }
-
+  const shipment = await createShipmentService(req.body);
   res.status(201).json(shipment);
 };
 
 export const patchShipment = async (req: Request, res: Response) => {
   const { id } = req.params;
   const { offChainMetadata } = req.body;
-  const shipment = await Shipment.findByIdAndUpdate(id, { offChainMetadata }, { new: true });
+  const shipment = await patchShipmentService(id, offChainMetadata);
   if (!shipment) return res.status(404).json({ message: 'Shipment not found' });
   res.json(shipment);
-};
-
-export const updateShipmentStatus = async (id: string, status: ShipmentStatus, actor?: { userId?: string; walletAddress?: string }) => {
-  const shipment = await Shipment.findById(id);
-  if (!shipment) return null;
-
-  if (shipment.status === status) return shipment;
-
-  // Validate status
-  if (!Object.values(ShipmentStatus).includes(status)) {
-    throw new Error('Invalid status');
-  }
-
-  shipment.status = status;
-
-  const milestone: any = {
-    name: status,
-    timestamp: new Date(),
-    description: `Status changed to ${status}`,
-  };
-
-  if (actor?.userId) {
-    milestone.userId = actor.userId;
-  }
-  if (actor?.walletAddress) {
-    milestone.walletAddress = actor.walletAddress;
-  }
-
-  shipment.milestones.push(milestone);
-
-  await shipment.save();
-  return shipment;
 };
 
 export const patchShipmentStatus = async (req: Request, res: Response) => {
@@ -95,8 +51,7 @@ export const patchShipmentStatus = async (req: Request, res: Response) => {
     return res.status(400).json({ message: 'Invalid status value' });
   }
 
-  // resolve actor info from authenticated user if present
-  const user = (req as any).user;
+  const user = req.user;
   let walletAddress: string | undefined;
   if (user?.userId) {
     const found = await UserModel.findById(user.userId);
@@ -104,11 +59,11 @@ export const patchShipmentStatus = async (req: Request, res: Response) => {
   }
 
   try {
-    const updated = await updateShipmentStatus(id, status as ShipmentStatus, { userId: user?.userId, walletAddress });
+    const updated = await updateShipmentStatusService(id, status as ShipmentStatus, { userId: user?.userId, walletAddress });
     if (!updated) return res.status(404).json({ message: 'Shipment not found' });
     res.json(updated);
-  } catch (err: any) {
-    res.status(400).json({ message: err.message || 'Failed to update status' });
+  } catch (err) {
+    res.status(400).json({ message: (err as Error).message || 'Failed to update status' });
   }
 };
 
@@ -122,18 +77,7 @@ export const uploadShipmentProof = async (req: Request, res: Response) => {
       return res.status(400).json({ message: 'No file uploaded' });
     }
 
-    const fakeUrl = await mockUploadToStorage(file);
-    const shipment = await Shipment.findByIdAndUpdate(
-      id,
-      {
-        deliveryProof: {
-          url: fakeUrl,
-          recipientSignatureName,
-          uploadedAt: new Date(),
-        },
-      },
-      { new: true },
-    );
+    const shipment = await uploadShipmentProofService(id, file, recipientSignatureName);
 
     if (!shipment) {
       return res.status(404).json({ message: 'Shipment not found' });

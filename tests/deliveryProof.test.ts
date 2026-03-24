@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 const shipmentsData: any[] = [];
 
-await jest.unstable_mockModule('../src/modules/shipments/shipments.model', () => {
+await jest.unstable_mockModule('../src/modules/shipments/shipments.model.js', () => {
   function ShipmentConstructor(this: any, doc: any) {
     Object.assign(this, doc);
     this.milestones = doc.milestones || [];
@@ -48,7 +48,7 @@ describe('POST /api/shipments/:id/proof', () => {
   });
 
   it('should mock upload and update shipment with proof metadata', async () => {
-    const shipmentModel = await import('../src/modules/shipments/shipments.model');
+    const shipmentModel = await import('../src/modules/shipments/shipments.model.js');
     const shipment = await shipmentModel.Shipment.create({
       trackingNumber: 'TN-PROOF',
       origin: 'A',
@@ -71,7 +71,7 @@ describe('POST /api/shipments/:id/proof', () => {
   });
 
   it('should return 400 when file is missing', async () => {
-    const shipmentModel = await import('../src/modules/shipments/shipments.model');
+    const shipmentModel = await import('../src/modules/shipments/shipments.model.js');
     const shipment = await shipmentModel.Shipment.create({
       trackingNumber: 'TN-NO-FILE',
       origin: 'A',
