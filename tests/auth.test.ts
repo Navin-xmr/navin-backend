@@ -9,7 +9,7 @@ type UserDoc = {
   name: string;
   role: string;
   organizationId?: { toString(): string } | null;
-  password?: string;
+  passwordHash?: string;
 };
 
 type UserDocPartial = Partial<UserDoc>;
@@ -92,7 +92,7 @@ describe('Auth Service', () => {
         name: 'Test User',
         role: 'user',
         organizationId: null,
-        password: hashedPassword,
+        passwordHash: hashedPassword,
       };
 
       mockFindOne.mockResolvedValue(mockUser);
@@ -113,7 +113,7 @@ describe('Auth Service', () => {
         email: 'test@example.com',
         name: 'Test User',
         role: 'user',
-        password: hashedPassword,
+        passwordHash: hashedPassword,
       };
 
       mockFindOne.mockResolvedValue(mockUser);

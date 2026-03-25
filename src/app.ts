@@ -9,6 +9,8 @@ import { healthRouter } from './modules/health/health.routes.js';
 import { usersRouter } from './modules/users/users.routes.js';
 import { authRouter } from './modules/auth/auth.routes.js';
 import { shipmentsRouter } from './modules/shipments/shipments.routes.js';
+import { webhooksRouter } from './modules/webhooks/iot.routes.js';
+import { analyticsRouter } from './modules/analytics/analytics.routes.js';
 
 export function buildApp() {
   const app = express();
@@ -21,6 +23,8 @@ export function buildApp() {
   app.use('/api/auth', authRouter);
   app.use('/api/users', usersRouter);
   app.use('/api/shipments', shipmentsRouter);
+  app.use('/api/webhooks', webhooksRouter);
+  app.use('/api/analytics', analyticsRouter);
 
   app.use(notFound());
   app.use(errorMiddleware());

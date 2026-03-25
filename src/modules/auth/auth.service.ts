@@ -53,7 +53,7 @@ export async function login(input: LoginInput) {
     throw new AppError(401, 'Invalid credentials', 'INVALID_CREDENTIALS');
   }
 
-  const isValidPassword = await bcrypt.compare(input.password, user.password);
+  const isValidPassword = await bcrypt.compare(input.password, user.passwordHash);
   if (!isValidPassword) {
     throw new AppError(401, 'Invalid credentials', 'INVALID_CREDENTIALS');
   }

@@ -3,6 +3,61 @@ info:
   title: Navin Backend API
   version: 1.0.0
 paths:
+  /api/analytics/performance:
+    get:
+      summary: Get analytics performance dashboard
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: startDate
+          required: true
+          schema:
+            type: string
+            format: date-time
+        - in: query
+          name: endDate
+          required: true
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Performance dashboard
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: object
+                    properties:
+                      startDate:
+                        type: string
+                        format: date-time
+                      endDate:
+                        type: string
+                        format: date-time
+                      shipmentsByStatus:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            status:
+                              type: string
+                            total:
+                              type: integer
+                      averageDeliveryTimeByLogisticsId:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            logisticsId:
+                              type: string
+                            averageDeliveryTimeMs:
+                              type: number
+                      totalDelayedShipments:
+                        type: integer
   /api/shipments:
     get:
       summary: Get paginated shipments

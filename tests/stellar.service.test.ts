@@ -10,6 +10,7 @@ const mockSubmitTransaction = jest.fn<() => Promise<unknown>>();
 
 const mockBuilderInstance = {
   addOperation: jest.fn(),
+  addMemo: jest.fn(),
   setTimeout: jest.fn(),
   build: jest.fn(),
 };
@@ -17,6 +18,7 @@ const mockBuilderInstance = {
 const MockTransactionBuilder = jest.fn();
 const mockFromSecret = jest.fn();
 const mockManageData = jest.fn();
+const mockMemoHash = jest.fn();
 
 await jest.unstable_mockModule('@stellar/stellar-sdk', () => ({
   Horizon: {
@@ -32,6 +34,7 @@ await jest.unstable_mockModule('@stellar/stellar-sdk', () => ({
     PUBLIC: 'Public Global Stellar Network ; September 2015',
   },
   Operation: { manageData: mockManageData },
+  Memo: { hash: mockMemoHash },
   BASE_FEE: '100',
 }));
 
@@ -65,9 +68,11 @@ describe('Stellar Service - tokenizeShipment', () => {
     });
     mockSubmitTransaction.mockResolvedValue({ hash: 'mock-tx-hash-abc123' });
     mockManageData.mockReturnValue({ type: 'manageData' });
+    mockMemoHash.mockReturnValue('mock-memo-hash');
 
     MockTransactionBuilder.mockReturnValue(mockBuilderInstance);
     mockBuilderInstance.addOperation.mockReturnValue(mockBuilderInstance);
+    mockBuilderInstance.addMemo.mockReturnValue(mockBuilderInstance);
     mockBuilderInstance.setTimeout.mockReturnValue(mockBuilderInstance);
     mockBuilderInstance.build.mockReturnValue(mockTransaction);
   });
@@ -142,5 +147,59 @@ describe('Stellar Service - tokenizeShipment', () => {
 
     await expect(tokenizeShipment(shipmentData))
       .rejects.toThrow('Horizon: tx_failed');
+  });
+});
+
+describe('Stellar Service - anchorTelemetryHash', () => {
+  const telemetry = {
+    shipmentId: 'ship-telemetry-123',
+    dataHash: 'a'.repeat(64), // 32 bytes hex
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+
+    mockStellarSecretKey = 'STEST_MOCK_SECRET_KEY_FOR_UNIT_TESTS';
+
+    mockFromSecret.mockReturnValue({
+      publicKey: () => 'GABCDEFGHIJKLMNOPQRSTUVWXYZ234567',
+    });
+    mockLoadAccount.mockResolvedValue({
+      accountId: () => 'GABCDEFGHIJKLMNOPQRSTUVWXYZ234567',
+    });
+    mockSubmitTransaction.mockResolvedValue({ hash: 'mock-telemetry-tx-hash' });
+    mockManageData.mockReturnValue({ type: 'manageData' });
+    mockMemoHash.mockReturnValue('mock-memo-hash');
+
+    MockTransactionBuilder.mockReturnValue(mockBuilderInstance);
+    mockBuilderInstance.addOperation.mockReturnValue(mockBuilderInstance);
+    mockBuilderInstance.addMemo.mockReturnValue(mockBuilderInstance);
+    mockBuilderInstance.setTimeout.mockReturnValue(mockBuilderInstance);
+    mockBuilderInstance.build.mockReturnValue(mockTransaction);
+  });
+
+  it('should submit a transaction that embeds dataHash into Memo', async () => {
+    const { anchorTelemetryHash } = await import('../src/services/stellar.service.js');
+
+    const result = await anchorTelemetryHash(telemetry);
+
+    expect(mockManageData).toHaveBeenCalledWith({
+      name: `telemetry:${telemetry.shipmentId}`,
+      value: telemetry.dataHash,
+    });
+
+    // Ensures we call Memo.hash(...) with the correct bytes representation.
+    expect(mockMemoHash).toHaveBeenCalledWith(expect.any(Buffer));
+    expect(mockBuilderInstance.addMemo).toHaveBeenCalledWith('mock-memo-hash');
+
+    expect(mockSubmitTransaction).toHaveBeenCalledWith(mockTransaction);
+    expect(result).toEqual({ stellarTxHash: 'mock-telemetry-tx-hash' });
+  });
+
+  it('should throw when dataHash is empty', async () => {
+    const { anchorTelemetryHash } = await import('../src/services/stellar.service.js');
+
+    await expect(anchorTelemetryHash({ ...telemetry, dataHash: '' }))
+      .rejects.toThrow('dataHash must be a non-empty string');
   });
 });
