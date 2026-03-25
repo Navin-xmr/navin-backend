@@ -6,4 +6,5 @@ export const config = {
   mongoUri: env.MONGO_URI,
   stellarSecretKey: env.STELLAR_SECRET_KEY,
   stellarNetwork: env.STELLAR_NETWORK,
+  redisUrl: env.REDIS_URL,
 } as const;

@@ -7,6 +7,7 @@ const EnvSchema = z.object({
   JWT_SECRET: z.string().min(32),
   STELLAR_SECRET_KEY: z.string().optional(),
   STELLAR_NETWORK: z.string().default('testnet'),
+  REDIS_URL: z.string().default('redis://127.0.0.1:6379'),
 });
 
 export const env = EnvSchema.parse(process.env);
