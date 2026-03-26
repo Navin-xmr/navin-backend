@@ -9,6 +9,7 @@ import {
   updateShipmentStatusService,
   uploadShipmentProofService,
 } from './shipments.service.js';
+import { emitStatusUpdate } from '../../infra/socket/io.js';
 
 export const getShipments = async (req: Request, res: Response) => {
   const { status, cursor, limit = 20, ...filters } = req.query;
@@ -57,6 +58,15 @@ export const patchShipmentStatus = async (req: Request, res: Response) => {
   try {
     const updated = await updateShipmentStatusService(id, status as ShipmentStatus, { userId: user?.userId, walletAddress });
     if (!updated) return res.status(404).json({ message: 'Shipment not found' });
+    
+    // Emit status update to the shipment room
+    emitStatusUpdate(id, {
+      shipmentId: id,
+      status: updated.status,
+      milestones: updated.milestones,
+      updatedAt: updated.updatedAt,
+    });
+    
     res.json(updated);
   } catch (err) {
     res.status(400).json({ message: (err as Error).message || 'Failed to update status' });

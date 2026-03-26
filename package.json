@@ -12,7 +12,8 @@
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
     "test:watch": "node --experimental-vm-modules node_modules/jest/bin/jest.js --watch",
     "seed": "tsx src/scripts/seed.ts",
-    "generate-api-key": "tsx src/scripts/generateApiKey.ts"
+    "generate-api-key": "tsx src/scripts/generateApiKey.ts",
+    "worker:stellar": "tsx src/workers/stellar.worker.ts"
   },
   "dependencies": {
     "@faker-js/faker": "^10.3.0",

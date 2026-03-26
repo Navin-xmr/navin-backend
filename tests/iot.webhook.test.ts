@@ -21,14 +21,12 @@ describe('POST /api/webhooks/iot', () => {
   const dataHash = generateDataHash(parsedBodyForHash);
 
   let app: any;
-  const mockAnchorTelemetryHash: any = jest.fn();
   const mockTelemetryCreate: any = jest.fn();
   const mockValidateApiKey: any = jest.fn();
+  const mockPushStellarAnchorJob: any = jest.fn();
 
   beforeEach(async () => {
     jest.clearAllMocks();
-
-    mockAnchorTelemetryHash.mockResolvedValue({ stellarTxHash: 'mock-tx-hash-telemetry' });
 
     mockTelemetryCreate.mockResolvedValue({
       _id: 't1',
@@ -40,7 +38,7 @@ describe('POST /api/webhooks/iot', () => {
       batteryLevel: body.batteryLevel,
       timestamp: parsedBodyForHash.timestamp,
       dataHash,
-      stellarTxHash: 'mock-tx-hash-telemetry',
+      anchorStatus: 'PENDING_ANCHOR',
       rawPayload: parsedBodyForHash,
     });
 
@@ -53,46 +51,57 @@ describe('POST /api/webhooks/iot', () => {
       },
     });
 
-    await jest.unstable_mockModule('../src/modules/telemetry/telemetry.model.js', () => {
-      return {
-        Telemetry: {
-          create: mockTelemetryCreate,
-        },
-      };
-    });
+    mockPushStellarAnchorJob.mockResolvedValue(undefined);
 
-    await jest.unstable_mockModule('../src/services/stellar.service.js', () => {
-      return {
-        tokenizeShipment: jest.fn(async () => ({
-          stellarTokenId: 'mock-stellar-token-id',
-          stellarTxHash: 'mock-stellar-tx-hash',
-        })),
-        anchorTelemetryHash: mockAnchorTelemetryHash,
-      };
-    });
+    await jest.unstable_mockModule('../src/modules/telemetry/telemetry.model.js', () => ({
+      Telemetry: {
+        create: mockTelemetryCreate,
+      },
+      TelemetryAnchorStatus: {
+        PENDING_ANCHOR: 'PENDING_ANCHOR',
+        ANCHORED: 'ANCHORED',
+        ANCHOR_FAILED: 'ANCHOR_FAILED',
+      },
+    }));
 
-    await jest.unstable_mockModule('../src/modules/auth/apiKey.service.js', () => {
-      return {
-        validateApiKey: mockValidateApiKey,
-        generateApiKey: jest.fn(),
-        revokeApiKey: jest.fn(),
-        listApiKeys: jest.fn(),
-      };
-    });
+    await jest.unstable_mockModule('../src/modules/auth/apiKey.service.js', () => ({
+      validateApiKey: mockValidateApiKey,
+      generateApiKey: jest.fn(),
+      revokeApiKey: jest.fn(),
+      listApiKeys: jest.fn(),
+    }));
+
+    await jest.unstable_mockModule('../src/infra/socket/io.js', () => ({
+      initSocketIO: jest.fn(),
+      getIO: jest.fn(),
+      emitAnomalyDetected: jest.fn(),
+      emitTelemetryUpdate: jest.fn(),
+      emitStatusUpdate: jest.fn(),
+    }));
+
+    await jest.unstable_mockModule('../src/infra/redis/queue.js', () => ({
+      pushAlertJob: jest.fn(),
+      pushStellarAnchorJob: mockPushStellarAnchorJob,
+      getTransactionQueue: jest.fn(),
+      getRedisClient: jest.fn(),
+    }));
 
     const appModule = await import('../src/app.js');
     app = appModule.buildApp();
   });
 
-  it('hashes payload, anchors hash via Stellar, and saves txHash + dataHash', async () => {
+  it('returns 202 Accepted and queues Stellar anchoring job', async () => {
     const res = await request(app)
       .post('/api/webhooks/iot')
       .set('x-api-key', 'valid-api-key-12345')
       .send(body);
 
-    expect(res.status).toBe(201);
-    expect(mockValidateApiKey).toHaveBeenCalledWith('valid-api-key-12345');
-    expect(mockAnchorTelemetryHash).toHaveBeenCalledWith({
+    expect(res.status).toBe(202);
+    expect(res.body.message).toContain('queued for Stellar anchoring');
+    
+    expect(mockPushStellarAnchorJob).toHaveBeenCalledTimes(1);
+    expect(mockPushStellarAnchorJob).toHaveBeenCalledWith({
+      telemetryId: 't1',
       shipmentId: body.shipmentId,
       dataHash,
     });
@@ -102,26 +111,28 @@ describe('POST /api/webhooks/iot', () => {
         shipmentId: body.shipmentId,
         temperature: body.temperature,
         humidity: body.humidity,
-        latitude: body.latitude,
-        longitude: body.longitude,
-        batteryLevel: body.batteryLevel,
-        timestamp: expect.any(Date),
         dataHash,
-        stellarTxHash: 'mock-tx-hash-telemetry',
-        rawPayload: expect.objectContaining({
-          ...parsedBodyForHash,
-          // Ensure we don't accidentally depend on reference equality.
-          timestamp: expect.any(Date),
-        }),
-      }),
+        anchorStatus: 'PENDING_ANCHOR',
+      })
     );
 
     expect(res.body.data).toEqual(
       expect.objectContaining({
         dataHash,
-        stellarTxHash: 'mock-tx-hash-telemetry',
-      }),
+        anchorStatus: 'PENDING_ANCHOR',
+      })
     );
+  });
+
+  it('saves telemetry with PENDING_ANCHOR status', async () => {
+    const res = await request(app)
+      .post('/api/webhooks/iot')
+      .set('x-api-key', 'valid-api-key-12345')
+      .send(body);
+
+    expect(res.status).toBe(202);
+    expect(res.body.data.anchorStatus).toBe('PENDING_ANCHOR');
+    expect(res.body.data.stellarTxHash).toBeUndefined();
   });
 
   it('returns 401 when x-api-key header is missing', async () => {

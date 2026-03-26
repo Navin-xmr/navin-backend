@@ -92,6 +92,16 @@ await jest.unstable_mockModule('../src/modules/users/users.model.js', () => {
   return { UserModel };
 });
 
+await jest.unstable_mockModule('../src/infra/socket/io.js', () => {
+  return {
+    initSocketIO: jest.fn(),
+    getIO: jest.fn(),
+    emitAnomalyDetected: jest.fn(),
+    emitTelemetryUpdate: jest.fn(),
+    emitStatusUpdate: jest.fn(),
+  };
+});
+
 describe('Shipments API (mocked DB)', () => {
   let app: any;
   let buildApp: any;

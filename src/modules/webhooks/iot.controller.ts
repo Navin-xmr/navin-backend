@@ -1,22 +1,20 @@
 import type { RequestHandler } from 'express';
 
 import { generateDataHash } from '../../shared/utils/crypto.js';
-import { anchorTelemetryHash } from '../../services/stellar.service.js';
 import { createTelemetryRecord } from '../telemetry/telemetry.service.js';
+import { TelemetryAnchorStatus } from '../telemetry/telemetry.model.js';
 import { detectAnomaly } from '../anomaly/anomaly.service.js';
-import { emitAnomalyDetected } from '../../infra/socket/io.js';
-import { pushAlertJob } from '../../infra/redis/queue.js';
+import { emitAnomalyDetected, emitTelemetryUpdate } from '../../infra/socket/io.js';
+import { pushAlertJob, pushStellarAnchorJob } from '../../infra/redis/queue.js';
 import type { IotWebhookBody } from './iot.validation.js';
 
 export const iotWebhookController: RequestHandler = async (req, res) => {
   const body = req.body as IotWebhookBody;
 
+  // Generate data hash
   const dataHash = generateDataHash(body);
-  const { stellarTxHash } = await anchorTelemetryHash({
-    shipmentId: body.shipmentId,
-    dataHash,
-  });
 
+  // Save telemetry record with PENDING_ANCHOR status
   const telemetry = await createTelemetryRecord({
     shipmentId: body.shipmentId,
     temperature: body.temperature,
@@ -26,12 +24,27 @@ export const iotWebhookController: RequestHandler = async (req, res) => {
     batteryLevel: body.batteryLevel,
     timestamp: body.timestamp,
     dataHash,
-    stellarTxHash,
+    anchorStatus: TelemetryAnchorStatus.PENDING_ANCHOR,
     rawPayload: body,
   });
 
-  res.status(201).json({ data: telemetry });
+  // Push Stellar anchoring job to background queue
+  await pushStellarAnchorJob({
+    telemetryId: telemetry._id.toString(),
+    shipmentId: body.shipmentId,
+    dataHash,
+  });
 
+  // Emit telemetry update to the shipment room
+  emitTelemetryUpdate(body.shipmentId, telemetry);
+
+  // Respond immediately with 202 Accepted
+  res.status(202).json({ 
+    data: telemetry,
+    message: 'Telemetry received and queued for Stellar anchoring'
+  });
+
+  // Process anomaly detection asynchronously
   setImmediate(async () => {
     const result = await detectAnomaly({
       _id: telemetry._id.toString(),

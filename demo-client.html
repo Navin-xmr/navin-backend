@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-time Shipment Tracking Demo</title>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            border-bottom: 3px solid #4CAF50;
+            padding-bottom: 10px;
+        }
+        h2 {
+            color: #555;
+            margin-top: 0;
+        }
+        .input-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #666;
+        }
+        input, textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-right: 10px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 10px;
+        }
+        .status.connected {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status.disconnected {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .event-log {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 15px;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+        }
+        .event {
+            padding: 8px;
+            margin-bottom: 8px;
+            border-radius: 4px;
+            border-left: 4px solid #007bff;
+            background: white;
+        }
+        .event.telemetry {
+            border-left-color: #28a745;
+        }
+        .event.status {
+            border-left-color: #ffc107;
+        }
+        .event.anomaly {
+            border-left-color: #dc3545;
+        }
+        .event-time {
+            color: #6c757d;
+            font-size: 11px;
+        }
+        .event-type {
+            font-weight: bold;
+            color: #495057;
+        }
+        .event-data {
+            margin-top: 5px;
+            color: #212529;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        @media (max-width: 768px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>🚚 Real-time Shipment Tracking Demo</h1>
+    
+    <div class="container">
+        <h2>Connection Status</h2>
+        <div id="status" class="status disconnected">Disconnected</div>
+        
+        <div class="input-group">
+            <label for="jwtToken">JWT Token:</label>
+            <textarea id="jwtToken" rows="3" placeholder="Paste your JWT token here"></textarea>
+        </div>
+        
+        <div class="input-group">
+            <label for="shipmentId">Shipment ID:</label>
+            <input type="text" id="shipmentId" placeholder="Enter shipment ID (MongoDB ObjectId)">
+        </div>
+        
+        <button id="connectBtn" onclick="connect()">Connect</button>
+        <button id="disconnectBtn" onclick="disconnect()" disabled>Disconnect</button>
+        <button id="joinBtn" onclick="joinRoom()" disabled>Join Shipment Room</button>
+        <button id="leaveBtn" onclick="leaveRoom()" disabled>Leave Room</button>
+    </div>
+
+    <div class="grid">
+        <div class="container">
+            <h2>📊 Test Actions</h2>
+            <p>Use Postman or curl to trigger events:</p>
+            
+            <h3>1. Send Telemetry Data</h3>
+            <pre style="background: #f8f9fa; padding: 10px; border-radius: 4px; overflow-x: auto;">
+POST http://localhost:3000/api/webhooks/iot
+Headers:
+  x-api-key: YOUR_API_KEY
+  Content-Type: application/json
+Body:
+{
+  "shipmentId": "YOUR_SHIPMENT_ID",
+  "temperature": 22.5,
+  "humidity": 55,
+  "latitude": 12.34,
+  "longitude": 56.78,
+  "batteryLevel": 91,
+  "timestamp": "2026-03-26T12:00:00.000Z"
+}</pre>
+
+            <h3>2. Update Shipment Status</h3>
+            <pre style="background: #f8f9fa; padding: 10px; border-radius: 4px; overflow-x: auto;">
+PATCH http://localhost:3000/api/shipments/YOUR_SHIPMENT_ID/status
+Headers:
+  Authorization: Bearer YOUR_JWT_TOKEN
+  Content-Type: application/json
+Body:
+{
+  "status": "IN_TRANSIT"
+}</pre>
+        </div>
+
+        <div class="container">
+            <h2>📡 Real-time Event Log</h2>
+            <button onclick="clearLog()" style="background: #6c757d; margin-bottom: 10px;">Clear Log</button>
+            <div id="eventLog" class="event-log">
+                <div style="color: #6c757d; text-align: center; padding: 20px;">
+                    Waiting for events...
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let socket = null;
+        let currentShipmentId = null;
+
+        function connect() {
+            const token = document.getElementById('jwtToken').value.trim();
+            if (!token) {
+                alert('Please enter a JWT token');
+                return;
+            }
+
+            socket = io('http://localhost:3000', {
+                auth: { token }
+            });
+
+            socket.on('connect', () => {
+                updateStatus('Connected', true);
+                document.getElementById('connectBtn').disabled = true;
+                document.getElementById('disconnectBtn').disabled = false;
+                document.getElementById('joinBtn').disabled = false;
+                logEvent('system', 'Connected to server', { socketId: socket.id });
+            });
+
+            socket.on('disconnect', () => {
+                updateStatus('Disconnected', false);
+                document.getElementById('connectBtn').disabled = false;
+                document.getElementById('disconnectBtn').disabled = true;
+                document.getElementById('joinBtn').disabled = true;
+                document.getElementById('leaveBtn').disabled = true;
+                logEvent('system', 'Disconnected from server');
+            });
+
+            socket.on('error', (error) => {
+                logEvent('error', 'Error', error);
+            });
+
+            socket.on('room_joined', (data) => {
+                logEvent('system', 'Joined room', data);
+                document.getElementById('leaveBtn').disabled = false;
+            });
+
+            socket.on('room_left', (data) => {
+                logEvent('system', 'Left room', data);
+                document.getElementById('leaveBtn').disabled = true;
+            });
+
+            socket.on('telemetry_update', (data) => {
+                logEvent('telemetry', 'Telemetry Update', data);
+            });
+
+            socket.on('status_update', (data) => {
+                logEvent('status', 'Status Update', data);
+            });
+
+            socket.on('anomaly_detected', (data) => {
+                logEvent('anomaly', 'Anomaly Detected', data);
+            });
+        }
+
+        function disconnect() {
+            if (socket) {
+                socket.disconnect();
+                socket = null;
+            }
+        }
+
+        function joinRoom() {
+            const shipmentId = document.getElementById('shipmentId').value.trim();
+            if (!shipmentId) {
+                alert('Please enter a shipment ID');
+                return;
+            }
+            if (!socket) {
+                alert('Please connect first');
+                return;
+            }
+            currentShipmentId = shipmentId;
+            socket.emit('join_shipment', shipmentId);
+        }
+
+        function leaveRoom() {
+            if (!socket || !currentShipmentId) return;
+            socket.emit('leave_shipment', currentShipmentId);
+            currentShipmentId = null;
+        }
+
+        function updateStatus(text, connected) {
+            const statusEl = document.getElementById('status');
+            statusEl.textContent = text;
+            statusEl.className = 'status ' + (connected ? 'connected' : 'disconnected');
+        }
+
+        function logEvent(type, eventType, data) {
+            const logEl = document.getElementById('eventLog');
+            const eventEl = document.createElement('div');
+            eventEl.className = 'event ' + type;
+            
+            const time = new Date().toLocaleTimeString();
+            eventEl.innerHTML = `
+                <div class="event-time">${time}</div>
+                <div class="event-type">${eventType}</div>
+                <div class="event-data">${JSON.stringify(data, null, 2)}</div>
+            `;
+            
+            if (logEl.firstChild && logEl.firstChild.textContent.includes('Waiting for events')) {
+                logEl.innerHTML = '';
+            }
+            
+            logEl.insertBefore(eventEl, logEl.firstChild);
+        }
+
+        function clearLog() {
+            document.getElementById('eventLog').innerHTML = `
+                <div style="color: #6c757d; text-align: center; padding: 20px;">
+                    Waiting for events...
+                </div>
+            `;
+        }
+    </script>
+</body>
+</html>

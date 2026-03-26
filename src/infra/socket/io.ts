@@ -41,3 +41,11 @@ export function getIO(): Server {
 export function emitAnomalyDetected(shipmentId: string, anomaly: unknown) {
   getIO().to(shipmentRoomName(shipmentId)).emit('anomaly_detected', anomaly);
 }
+
+export function emitTelemetryUpdate(shipmentId: string, telemetry: unknown) {
+  getIO().to(shipmentRoomName(shipmentId)).emit('telemetry_update', telemetry);
+}
+
+export function emitStatusUpdate(shipmentId: string, statusData: unknown) {
+  getIO().to(shipmentRoomName(shipmentId)).emit('status_update', statusData);
+}

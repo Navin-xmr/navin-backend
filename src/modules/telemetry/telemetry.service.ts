@@ -1,4 +1,4 @@
-import { Telemetry } from './telemetry.model.js';
+import { Telemetry, TelemetryAnchorStatus } from './telemetry.model.js';
 import type { FilterQuery } from 'mongoose';
 
 export async function createTelemetryRecord(input: {
@@ -10,7 +10,8 @@ export async function createTelemetryRecord(input: {
   batteryLevel: number;
   timestamp: Date;
   dataHash: string;
-  stellarTxHash: string;
+  stellarTxHash?: string;
+  anchorStatus?: TelemetryAnchorStatus;
   rawPayload: unknown;
 }) {
   return Telemetry.create({
@@ -23,8 +24,37 @@ export async function createTelemetryRecord(input: {
     timestamp: input.timestamp,
     dataHash: input.dataHash,
     stellarTxHash: input.stellarTxHash,
+    anchorStatus: input.anchorStatus || TelemetryAnchorStatus.PENDING_ANCHOR,
     rawPayload: input.rawPayload,
   });
+}
+
+export async function updateTelemetryAnchor(
+  telemetryId: string,
+  stellarTxHash: string
+) {
+  return Telemetry.findByIdAndUpdate(
+    telemetryId,
+    {
+      stellarTxHash,
+      anchorStatus: TelemetryAnchorStatus.ANCHORED,
+    },
+    { new: true }
+  );
+}
+
+export async function markTelemetryAnchorFailed(
+  telemetryId: string,
+  error: string
+) {
+  return Telemetry.findByIdAndUpdate(
+    telemetryId,
+    {
+      anchorStatus: TelemetryAnchorStatus.ANCHOR_FAILED,
+      anchorError: error,
+    },
+    { new: true }
+  );
 }
 
 export async function getTelemetryService(params: {
