@@ -23,6 +23,7 @@ describe('POST /api/webhooks/iot', () => {
   let app: any;
   const mockAnchorTelemetryHash: any = jest.fn();
   const mockTelemetryCreate: any = jest.fn();
+  const mockValidateApiKey: any = jest.fn();
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -43,6 +44,15 @@ describe('POST /api/webhooks/iot', () => {
       rawPayload: parsedBodyForHash,
     });
 
+    mockValidateApiKey.mockResolvedValue({
+      isValid: true,
+      apiKeyDoc: {
+        _id: 'key123',
+        organizationId: 'org456',
+        shipmentId: body.shipmentId,
+      },
+    });
+
     await jest.unstable_mockModule('../src/modules/telemetry/telemetry.model.js', () => {
       return {
         Telemetry: {
@@ -61,6 +71,15 @@ describe('POST /api/webhooks/iot', () => {
       };
     });
 
+    await jest.unstable_mockModule('../src/modules/auth/apiKey.service.js', () => {
+      return {
+        validateApiKey: mockValidateApiKey,
+        generateApiKey: jest.fn(),
+        revokeApiKey: jest.fn(),
+        listApiKeys: jest.fn(),
+      };
+    });
+
     const appModule = await import('../src/app.js');
     app = appModule.buildApp();
   });
@@ -68,9 +87,11 @@ describe('POST /api/webhooks/iot', () => {
   it('hashes payload, anchors hash via Stellar, and saves txHash + dataHash', async () => {
     const res = await request(app)
       .post('/api/webhooks/iot')
+      .set('x-api-key', 'valid-api-key-12345')
       .send(body);
 
     expect(res.status).toBe(201);
+    expect(mockValidateApiKey).toHaveBeenCalledWith('valid-api-key-12345');
     expect(mockAnchorTelemetryHash).toHaveBeenCalledWith({
       shipmentId: body.shipmentId,
       dataHash,
@@ -103,9 +124,35 @@ describe('POST /api/webhooks/iot', () => {
     );
   });
 
+  it('returns 401 when x-api-key header is missing', async () => {
+    const res = await request(app)
+      .post('/api/webhooks/iot')
+      .send(body);
+
+    expect(res.status).toBe(401);
+    expect(res.body.message).toBe('Missing x-api-key header');
+    expect(mockValidateApiKey).not.toHaveBeenCalled();
+  });
+
+  it('returns 401 when API key is invalid', async () => {
+    mockValidateApiKey.mockResolvedValue({
+      isValid: false,
+    });
+
+    const res = await request(app)
+      .post('/api/webhooks/iot')
+      .set('x-api-key', 'invalid-api-key')
+      .send(body);
+
+    expect(res.status).toBe(401);
+    expect(res.body.message).toBe('Invalid API key');
+    expect(mockValidateApiKey).toHaveBeenCalledWith('invalid-api-key');
+  });
+
   it('returns 400 on invalid payload (validation error)', async () => {
     const res = await request(app)
       .post('/api/webhooks/iot')
+      .set('x-api-key', 'valid-api-key-12345')
       .send({
         ...body,
         temperature: 'not-a-number',
