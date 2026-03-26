@@ -27,27 +27,12 @@ describe('GET /api/anomalies - Cursor Pagination', () => {
       logisticsId: '507f1f77bcf86cd799439012',
     });
 
-    const telemetry = await Telemetry.create({
-      shipmentId: shipment._id,
-      temperature: 30,
-      humidity: 50,
-      latitude: 0,
-      longitude: 0,
-      batteryLevel: 80,
-      timestamp: new Date(),
-      dataHash: 'hash1',
-      stellarTxHash: 'tx1',
-      rawPayload: {},
-    });
-
     await Anomaly.create({
       shipmentId: shipment._id,
-      telemetryId: telemetry._id,
-      type: 'temperature',
-      severity: 'high',
+      timestamp: new Date(),
+      type: 'TEMPERATURE_EXCEEDED',
+      severity: 'HIGH',
       message: 'Test anomaly',
-      detectedValue: 30,
-      threshold: 25,
     });
 
     const res = await request(app).get('/api/anomalies?limit=10');
@@ -67,29 +52,14 @@ describe('GET /api/anomalies - Cursor Pagination', () => {
       logisticsId: '507f1f77bcf86cd799439012',
     });
 
-    const telemetry = await Telemetry.create({
-      shipmentId: shipment._id,
-      temperature: 30,
-      humidity: 50,
-      latitude: 0,
-      longitude: 0,
-      batteryLevel: 80,
-      timestamp: new Date(),
-      dataHash: 'hash2',
-      stellarTxHash: 'tx2',
-      rawPayload: {},
-    });
-
     const anomalies = [];
     for (let i = 0; i < 5; i++) {
       const a = await Anomaly.create({
         shipmentId: shipment._id,
-        telemetryId: telemetry._id,
-        type: 'temperature',
-        severity: 'high',
+        timestamp: new Date(Date.now() + i),
+        type: 'TEMPERATURE_EXCEEDED',
+        severity: 'HIGH',
         message: `Anomaly ${i}`,
-        detectedValue: 30,
-        threshold: 25,
       });
       anomalies.push(a);
     }
@@ -128,50 +98,20 @@ describe('GET /api/anomalies - Cursor Pagination', () => {
       logisticsId: '507f1f77bcf86cd799439012',
     });
 
-    const telemetry1 = await Telemetry.create({
-      shipmentId: shipment1._id,
-      temperature: 30,
-      humidity: 50,
-      latitude: 0,
-      longitude: 0,
-      batteryLevel: 80,
-      timestamp: new Date(),
-      dataHash: 'hash3',
-      stellarTxHash: 'tx3',
-      rawPayload: {},
-    });
-
-    const telemetry2 = await Telemetry.create({
-      shipmentId: shipment2._id,
-      temperature: 30,
-      humidity: 50,
-      latitude: 0,
-      longitude: 0,
-      batteryLevel: 80,
-      timestamp: new Date(),
-      dataHash: 'hash4',
-      stellarTxHash: 'tx4',
-      rawPayload: {},
-    });
-
     await Anomaly.create({
       shipmentId: shipment1._id,
-      telemetryId: telemetry1._id,
-      type: 'temperature',
-      severity: 'high',
+      timestamp: new Date(),
+      type: 'TEMPERATURE_EXCEEDED',
+      severity: 'HIGH',
       message: 'Anomaly 1',
-      detectedValue: 30,
-      threshold: 25,
     });
 
     await Anomaly.create({
       shipmentId: shipment2._id,
-      telemetryId: telemetry2._id,
-      type: 'temperature',
-      severity: 'high',
+      timestamp: new Date(),
+      type: 'TEMPERATURE_EXCEEDED',
+      severity: 'HIGH',
       message: 'Anomaly 2',
-      detectedValue: 30,
-      threshold: 25,
     });
 
     const res = await request(app).get(`/api/anomalies?shipmentId=${shipment1._id}`);

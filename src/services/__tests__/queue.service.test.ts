@@ -1,6 +1,9 @@
 import { jest, describe, it, expect, beforeEach } from '@jest/globals';
 
-const mockAdd = jest.fn().mockResolvedValue({});
+// Jest's inference for `.mockResolvedValue()` can be too strict in ESM+TS builds here.
+// We only care that `add` is called with the right args.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mockAdd: any = jest.fn(async () => undefined);
 
 jest.unstable_mockModule('bullmq', () => ({
   Queue: jest.fn().mockImplementation(() => ({ add: mockAdd })),

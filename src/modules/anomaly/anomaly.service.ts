@@ -1,5 +1,6 @@
 import { Anomaly } from './anomaly.model.js';
 import type { FilterQuery } from 'mongoose';
+import { evaluateTelemetry } from '../../services/anomaly.service.js';
 
 interface TelemetryData {
   _id: string;
@@ -7,102 +8,69 @@ interface TelemetryData {
   temperature: number;
   humidity: number;
   batteryLevel: number;
+  timestamp?: Date;
 }
 
 interface AnomalyResult {
   detected: boolean;
-  anomaly?: {
+  anomalies: Array<{
     _id: string;
     shipmentId: string;
-    telemetryId: string;
     type: string;
     severity: string;
     message: string;
-    detectedValue: number;
-    threshold: number;
-  };
+    timestamp: string;
+    resolved: boolean;
+  }>;
 }
 
 export async function detectAnomaly(data: TelemetryData): Promise<AnomalyResult> {
-  if (data.temperature > 25) {
-    const anomaly = await Anomaly.create({
-      shipmentId: data.shipmentId,
-      telemetryId: data._id,
-      type: 'temperature',
-      severity: data.temperature > 30 ? 'high' : 'medium',
-      message: `Temperature exceeded threshold: ${data.temperature}°C`,
-      detectedValue: data.temperature,
-      threshold: 25,
-    });
-    const obj = anomaly.toObject();
-    return {
-      detected: true,
-      anomaly: {
-        _id: obj._id.toString(),
-        shipmentId: obj.shipmentId.toString(),
-        telemetryId: obj.telemetryId.toString(),
-        type: obj.type,
-        severity: obj.severity,
-        message: obj.message,
-        detectedValue: obj.detectedValue,
-        threshold: obj.threshold,
-      },
-    };
-  }
+  const timestamp = data.timestamp ?? new Date();
+  const thresholds = {
+    maxTemp: 25,
+    maxHumidity: 80,
+    minBatteryLevel: 20,
+  };
 
-  if (data.humidity > 80) {
-    const anomaly = await Anomaly.create({
+  const evaluated = evaluateTelemetry(
+    {
       shipmentId: data.shipmentId,
-      telemetryId: data._id,
-      type: 'humidity',
-      severity: data.humidity > 90 ? 'high' : 'medium',
-      message: `Humidity exceeded threshold: ${data.humidity}%`,
-      detectedValue: data.humidity,
-      threshold: 80,
-    });
-    const obj = anomaly.toObject();
-    return {
-      detected: true,
-      anomaly: {
-        _id: obj._id.toString(),
-        shipmentId: obj.shipmentId.toString(),
-        telemetryId: obj.telemetryId.toString(),
-        type: obj.type,
-        severity: obj.severity,
-        message: obj.message,
-        detectedValue: obj.detectedValue,
-        threshold: obj.threshold,
-      },
-    };
-  }
+      timestamp,
+      temperature: data.temperature,
+      humidity: data.humidity,
+      batteryLevel: data.batteryLevel,
+    },
+    thresholds,
+  );
 
-  if (data.batteryLevel < 20) {
-    const anomaly = await Anomaly.create({
-      shipmentId: data.shipmentId,
-      telemetryId: data._id,
-      type: 'battery',
-      severity: data.batteryLevel < 10 ? 'high' : 'low',
-      message: `Battery level critically low: ${data.batteryLevel}%`,
-      detectedValue: data.batteryLevel,
-      threshold: 20,
-    });
-    const obj = anomaly.toObject();
-    return {
-      detected: true,
-      anomaly: {
-        _id: obj._id.toString(),
-        shipmentId: obj.shipmentId.toString(),
-        telemetryId: obj.telemetryId.toString(),
-        type: obj.type,
-        severity: obj.severity,
-        message: obj.message,
-        detectedValue: obj.detectedValue,
-        threshold: obj.threshold,
-      },
-    };
-  }
+  if (evaluated.length === 0) return { detected: false, anomalies: [] };
 
-  return { detected: false };
+  const created = await Anomaly.create(
+    evaluated.map(a => ({
+      shipmentId: a.shipmentId,
+      type: a.type,
+      severity: a.severity,
+      message: a.message,
+      timestamp: a.timestamp,
+      resolved: a.resolved,
+    })),
+  );
+
+  const docs = Array.isArray(created) ? created : [created];
+  const anomalies = docs.map(doc => {
+    const obj = doc.toObject();
+    return {
+      _id: obj._id.toString(),
+      shipmentId: obj.shipmentId.toString(),
+      type: obj.type,
+      severity: obj.severity,
+      message: obj.message,
+      timestamp: new Date(obj.timestamp).toISOString(),
+      resolved: obj.resolved,
+    };
+  });
+
+  return { detected: true, anomalies };
 }
 
 export async function getAnomaliesService(params: {
@@ -119,7 +87,7 @@ export async function getAnomaliesService(params: {
   if (cursor) query._id = { $lt: cursor };
 
   const anomalies = await Anomaly.find(query)
-    .sort({ createdAt: -1, _id: -1 })
+    .sort({ timestamp: -1, _id: -1 })
     .limit(limit + 1)
     .lean();
 

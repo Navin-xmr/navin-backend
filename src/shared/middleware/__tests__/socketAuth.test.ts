@@ -1,6 +1,6 @@
 import { describe, it, expect, jest } from '@jest/globals';
 
-jest.unstable_mockModule('../../../modules/auth/auth.service', () => ({
+jest.unstable_mockModule('../../../modules/auth/auth.service.js', () => ({
   verifyToken: jest.fn(),
 }));
 
@@ -10,7 +10,7 @@ describe('socketAuth', () => {
 
   beforeEach(async () => {
     jest.clearAllMocks();
-    const authService = await import('../../../modules/auth/auth.service');
+    const authService = await import('../../../modules/auth/auth.service.js');
     verifyToken = authService.verifyToken as jest.Mock;
     const mod = await import('../socketAuth.js');
     socketAuth = mod.socketAuth;
