@@ -1,6 +1,7 @@
 import { jest, describe, it, expect, beforeEach } from '@jest/globals';
 
-const mockAdd = jest.fn().mockResolvedValue({});
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mockAdd: any = jest.fn(async () => ({}));
 
 jest.unstable_mockModule('bullmq', () => ({
   Queue: jest.fn().mockImplementation(() => ({ add: mockAdd })),

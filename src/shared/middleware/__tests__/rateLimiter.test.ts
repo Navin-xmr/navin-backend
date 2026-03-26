@@ -5,9 +5,9 @@ import { standardLimiter, strictLimiter } from '../rateLimiter.js';
 
 import rateLimit from 'express-rate-limit';
 
-function buildTestApp(limiter: ReturnType<typeof strictLimiter>) {
+function buildTestApp(limiter: unknown) {
   const app = express();
-  app.use(limiter);
+  app.use(limiter as any);
   app.get('/test', (_req, res) => res.json({ success: true }));
   return app;
 }
