@@ -13,10 +13,18 @@ await jest.unstable_mockModule('../src/modules/shipments/shipments.model.js', ()
   }
 
   ShipmentConstructor.find = (query: any) => {
-    const arr = shipmentsData.filter(d => !query || !query.status || d.status === query.status);
+    const cursor = query?._id?.$lt;
+    const status = query?.status;
+    const arr = shipmentsData
+      .filter(d => (status ? d.status === status : true))
+      .filter(d => (cursor ? Number(d._id) < Number(cursor) : true))
+      .sort((a, b) => Number(b._id) - Number(a._id));
+
     return {
-      skip: (s: number) => ({
-        limit: (l: number) => Promise.resolve(arr.slice(s, s + l)),
+      sort: () => ({
+        limit: (l: number) => ({
+          lean: () => Promise.resolve(arr.slice(0, l)),
+        }),
       }),
     };
   };
@@ -110,18 +118,25 @@ describe('Shipments API (mocked DB)', () => {
         status: 'CREATED',
       });
     }
-    const res = await request(app).get('/api/shipments?page=2&limit=5');
-    expect(res.status).toBe(200);
-    expect(res.body.data.length).toBe(5);
-    expect(res.body.page).toBe(2);
-    expect(res.body.total).toBe(15);
+    const first = await request(app).get('/api/shipments?limit=5');
+    expect(first.status).toBe(200);
+    expect(first.body.data).toHaveLength(5);
+    expect(first.body.hasMore).toBe(true);
+    expect(first.body.nextCursor).toBeTruthy();
+
+    const second = await request(app).get(`/api/shipments?limit=5&cursor=${first.body.nextCursor}`);
+    expect(second.status).toBe(200);
+    expect(second.body.data).toHaveLength(5);
+    const firstIds = first.body.data.map((s: { _id: string }) => s._id);
+    const secondIds = second.body.data.map((s: { _id: string }) => s._id);
+    expect(firstIds.filter((id: string) => secondIds.includes(id))).toHaveLength(0);
   });
 
   it('should filter shipments by status', async () => {
     const mod = await import('../src/modules/shipments/shipments.model.js');
     await mod.Shipment.create({ trackingNumber: 'TN1', origin: 'A', destination: 'B', enterpriseId: 'ent1', logisticsId: 'log1', status: 'IN_TRANSIT' });
     await mod.Shipment.create({ trackingNumber: 'TN2', origin: 'A', destination: 'B', enterpriseId: 'ent2', logisticsId: 'log2', status: 'DELIVERED' });
-    const res = await request(app).get('/api/shipments?status=IN_TRANSIT');
+    const res = await request(app).get('/api/shipments?status=IN_TRANSIT&limit=20');
     expect(res.status).toBe(200);
     expect(res.body.data.length).toBe(1);
     expect(res.body.data[0].status).toBe('IN_TRANSIT');

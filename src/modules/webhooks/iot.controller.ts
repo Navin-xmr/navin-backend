@@ -39,16 +39,21 @@ export const iotWebhookController: RequestHandler = async (req, res) => {
       temperature: telemetry.temperature,
       humidity: telemetry.humidity,
       batteryLevel: telemetry.batteryLevel,
+      timestamp: telemetry.timestamp,
     });
 
-    if (result.detected && result.anomaly) {
-      emitAnomalyDetected(result.anomaly.shipmentId, result.anomaly);
-      await pushAlertJob({
-        shipmentId: result.anomaly.shipmentId,
-        type: result.anomaly.type,
-        severity: result.anomaly.severity,
-        message: result.anomaly.message,
-      });
+    if (result.detected) {
+      await Promise.all(
+        result.anomalies.map(async anomaly => {
+          emitAnomalyDetected(anomaly.shipmentId, anomaly);
+          await pushAlertJob({
+            shipmentId: anomaly.shipmentId,
+            type: anomaly.type,
+            severity: anomaly.severity,
+            message: anomaly.message,
+          });
+        }),
+      );
     }
   });
 };
