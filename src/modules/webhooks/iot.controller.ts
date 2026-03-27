@@ -6,7 +6,8 @@ import { TelemetryAnchorStatus } from '../telemetry/telemetry.model.js';
 import { detectAnomaly } from '../anomaly/anomaly.service.js';
 import { emitAnomalyDetected, emitTelemetryUpdate } from '../../infra/socket/io.js';
 import { pushAlertJob, pushStellarAnchorJob } from '../../infra/redis/queue.js';
-import type { IotWebhookBody } from './iot.validation.js';
+import type { IotWebhookBody, IotSensorPayload } from './iot.validation.js';
+import { findShipmentBySensorId, saveIotTelemetry } from './iot.service.js';
 
 export const iotWebhookController: RequestHandler = async (req, res) => {
   const body = req.body as IotWebhookBody;
@@ -71,3 +72,12 @@ export const iotWebhookController: RequestHandler = async (req, res) => {
   });
 };
 
+
+export const iotSensorController: RequestHandler = async (req, res) => {
+  const payload = req.body as IotSensorPayload;
+
+  const shipmentId = await findShipmentBySensorId(payload.sensorId);
+  const record = await saveIotTelemetry(payload, shipmentId);
+
+  res.status(202).json({ data: record, shipmentId });
+};

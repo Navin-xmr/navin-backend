@@ -15,3 +15,16 @@ export const IotWebhookBodySchema = z.object({
 
 export type IotWebhookBody = z.infer<typeof IotWebhookBodySchema>;
 
+export const IotSensorPayloadSchema = z.object({
+  sensorId: z.string().min(1),
+  timestamp: z.coerce.date(),
+  temp: z.number(),
+  humidity: z.number(),
+  location: z.object({
+    lat: z.number(),
+    lng: z.number(),
+  }),
+}).strict();
+
+export type IotSensorPayload = z.infer<typeof IotSensorPayloadSchema>;
+
