@@ -97,3 +97,17 @@ export async function getAnomaliesService(params: {
 
   return { data, nextCursor, hasMore };
 }
+
+export async function resolveAnomalyService(id: string) {
+  const anomaly = await Anomaly.findByIdAndUpdate(
+    id,
+    { resolved: true },
+    { new: true, runValidators: true }
+  ).lean();
+
+  if (!anomaly) {
+    throw new Error('Anomaly not found');
+  }
+
+  return anomaly;
+}
