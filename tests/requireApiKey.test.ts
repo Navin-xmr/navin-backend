@@ -2,6 +2,7 @@ import { describe, expect, beforeEach, it, jest } from '@jest/globals';
 import request from 'supertest';
 import express from 'express';
 import { AppError } from '../src/shared/http/errors.js';
+import type { NextFunction, Request, Response } from 'express';
 
 type ValidateApiKeyResult = {
   isValid: boolean;
@@ -45,7 +46,7 @@ describe('requireApiKey middleware', () => {
     });
 
     // Error handler
-    app.use((err: any, req: any, res: any, next: any) => {
+    app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
       if (err instanceof AppError) {
         res.status(err.statusCode).json({ message: err.message, code: err.code });
       } else {
