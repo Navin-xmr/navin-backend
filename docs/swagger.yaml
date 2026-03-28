@@ -318,6 +318,85 @@ paths:
       responses:
         '200':
           description: Shipment updated
+  /api/anomalies:
+    get:
+      summary: Get anomalies with pagination and filtering
+      description: Retrieve a paginated list of anomalies, sorted by timestamp descending. Supports filtering by severity and shipmentId. Requires ADMIN or MANAGER role.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: cursor
+          schema:
+            type: string
+          description: Cursor for pagination
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 20
+          description: Number of items per page
+        - in: query
+          name: shipmentId
+          schema:
+            type: string
+          description: Filter by shipment ID
+        - in: query
+          name: severity
+          schema:
+            type: string
+            enum: [LOW, MEDIUM, HIGH]
+          description: Filter by severity
+      responses:
+        '200':
+          description: Paginated anomalies
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Anomaly'
+                  nextCursor:
+                    type: string
+                    nullable: true
+                  hasMore:
+                    type: boolean
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden - insufficient role
+  /api/anomalies/{id}/resolve:
+    patch:
+      summary: Resolve an anomaly
+      description: Mark an anomaly as resolved. Requires ADMIN or MANAGER role.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: Anomaly ID
+      responses:
+        '200':
+          description: Anomaly resolved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  anomaly:
+                    $ref: '#/components/schemas/Anomaly'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden - insufficient role
+        '404':
+          description: Anomaly not found
 components:
   schemas:
     Shipment:
@@ -350,6 +429,32 @@ components:
                 type: string
         offChainMetadata:
           type: object
+    Anomaly:
+      type: object
+      properties:
+        _id:
+          type: string
+        shipmentId:
+          type: string
+        type:
+          type: string
+          enum: [TEMPERATURE_EXCEEDED, TEMPERATURE_BELOW_MIN, HUMIDITY_EXCEEDED, HUMIDITY_BELOW_MIN, BATTERY_LOW]
+        severity:
+          type: string
+          enum: [LOW, MEDIUM, HIGH]
+        message:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        resolved:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
 securitySchemes:
   bearerAuth:
     type: http
