@@ -33,6 +33,7 @@ const TelemetrySchema = new Schema(
 );
 
 TelemetrySchema.index({ shipmentId: 1, timestamp: -1 });
+TelemetrySchema.index({ shipmentId: 1, timestamp: -1, _id: -1 });
 TelemetrySchema.index({ timestamp: -1, _id: -1 });
 TelemetrySchema.index({ anchorStatus: 1 });
 

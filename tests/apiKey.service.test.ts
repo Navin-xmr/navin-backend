@@ -191,7 +191,7 @@ describe('API Key Service', () => {
 
       const keys = await listApiKeys(orgId);
 
-      expect(keys[0].toObject()).not.toHaveProperty('keyHash');
+      expect(keys[0]).not.toHaveProperty('keyHash');
     });
   });
 });

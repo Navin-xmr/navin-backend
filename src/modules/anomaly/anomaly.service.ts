@@ -87,6 +87,7 @@ export async function getAnomaliesService(params: {
   if (cursor) query._id = { $lt: cursor };
 
   const anomalies = await Anomaly.find(query)
+    .select('-__v')
     .sort({ timestamp: -1, _id: -1 })
     .limit(limit + 1)
     .lean();

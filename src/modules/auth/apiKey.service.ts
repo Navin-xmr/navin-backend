@@ -54,7 +54,7 @@ export async function validateApiKey(rawApiKey: string): Promise<{
     return { isValid: false };
   }
 
-  // Find all active API keys and check against the hash
+  // Find all active API keys (don't use .lean() here since we need document methods)
   const apiKeys = await ApiKeyModel.find({ isActive: true });
 
   for (const apiKeyDoc of apiKeys) {
@@ -80,6 +80,7 @@ export async function revokeApiKey(apiKeyId: string): Promise<void> {
 
 export async function listApiKeys(organizationId: string) {
   return ApiKeyModel.find({ organizationId, isActive: true })
-    .select('-keyHash')
-    .sort({ createdAt: -1 });
+    .select('-keyHash -__v')
+    .sort({ createdAt: -1 })
+    .lean();
 }

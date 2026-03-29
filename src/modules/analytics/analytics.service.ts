@@ -39,6 +39,14 @@ export async function getAnalyticsPerformance(
       },
     },
     {
+      $project: {
+        status: 1,
+        logisticsId: 1,
+        milestones: 1,
+        createdAt: 1,
+      },
+    },
+    {
       $facet: {
         shipmentsByStatus: [
           {
@@ -49,7 +57,6 @@ export async function getAnalyticsPerformance(
           },
         ],
         averageDeliveryTimeByLogisticsId: [
-          // Unwind milestones only for delivered milestones.
           { $match: { 'milestones.name': 'DELIVERED' } },
           { $unwind: '$milestones' },
           { $match: { 'milestones.name': 'DELIVERED' } },
@@ -63,16 +70,9 @@ export async function getAnalyticsPerformance(
           },
         ],
         delayedShipments: [
+          { $match: { status: { $ne: 'DELIVERED' } } },
           {
-            $group: {
-              _id: null,
-              // "Delayed" here means not delivered by the time window (i.e. status != DELIVERED).
-              totalDelayed: {
-                $sum: {
-                  $cond: [{ $ne: ['$status', 'DELIVERED'] }, 1, 0],
-                },
-              },
-            },
+            $count: 'totalDelayed',
           },
         ],
       },
