@@ -1,7 +1,8 @@
 import type { RequestHandler } from 'express';
 
+import { AppError } from '../../shared/http/errors.js';
 import { generateDataHash } from '../../shared/utils/crypto.js';
-import { createTelemetryRecord } from '../telemetry/telemetry.service.js';
+import { createTelemetryRecord, findActiveShipmentBySensorId } from '../telemetry/telemetry.service.js';
 import { TelemetryAnchorStatus } from '../telemetry/telemetry.model.js';
 import { detectAnomaly } from '../anomaly/anomaly.service.js';
 import { emitAnomalyDetected, emitTelemetryUpdate } from '../../infra/socket/io.js';
@@ -11,44 +12,47 @@ import type { IotWebhookBody } from './iot.validation.js';
 export const iotWebhookController: RequestHandler = async (req, res) => {
   const body = req.body as IotWebhookBody;
 
-  // Generate data hash
+  // Resolve active shipment from sensorId
+  const shipment = await findActiveShipmentBySensorId(body.sensorId);
+  if (!shipment) {
+    throw new AppError(404, `No active shipment found for sensorId: ${body.sensorId}`);
+  }
+
+  const shipmentId = shipment._id.toString();
+
   const dataHash = generateDataHash(body);
 
-  // Save telemetry record with PENDING_ANCHOR status
   const telemetry = await createTelemetryRecord({
-    shipmentId: body.shipmentId,
-    temperature: body.temperature,
+    sensorId: body.sensorId,
+    shipmentId,
+    temperature: body.temp,
     humidity: body.humidity,
-    latitude: body.latitude,
-    longitude: body.longitude,
-    batteryLevel: body.batteryLevel,
+    latitude: body.location.lat,
+    longitude: body.location.lng,
     timestamp: body.timestamp,
     dataHash,
     anchorStatus: TelemetryAnchorStatus.PENDING_ANCHOR,
     rawPayload: body,
   });
 
-  // Push Stellar anchoring job to background queue
   await pushStellarAnchorJob({
     telemetryId: telemetry._id.toString(),
-    shipmentId: body.shipmentId,
+    shipmentId,
     dataHash,
   });
 
-  // Emit telemetry update to the shipment room
-  emitTelemetryUpdate(body.shipmentId, telemetry);
+  emitTelemetryUpdate(shipmentId, telemetry);
 
-  // Respond immediately with 202 Accepted
-  res.status(202).json({ 
+  res.status(202).json({
     data: telemetry,
-    message: 'Telemetry received and queued for Stellar anchoring'
+    message: 'Telemetry received and queued for Stellar anchoring',
   });
 
-  // Process anomaly detection asynchronously
+  // Anomaly detection runs after response is sent
   setImmediate(async () => {
     const result = await detectAnomaly({
       _id: telemetry._id.toString(),
-      shipmentId: telemetry.shipmentId.toString(),
+      shipmentId,
       temperature: telemetry.temperature,
       humidity: telemetry.humidity,
       batteryLevel: telemetry.batteryLevel,
@@ -70,4 +74,3 @@ export const iotWebhookController: RequestHandler = async (req, res) => {
     }
   });
 };
-

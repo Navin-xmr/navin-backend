@@ -1,13 +1,25 @@
 import { Telemetry, TelemetryAnchorStatus } from './telemetry.model.js';
+import { Shipment, ShipmentStatus } from '../shipments/shipments.model.js';
 import type { FilterQuery } from 'mongoose';
 
+/**
+ * Finds the active (IN_TRANSIT) shipment linked to a given sensorId.
+ * The sensorId is stored in offChainMetadata.sensorId on the Shipment document.
+ */
+export async function findActiveShipmentBySensorId(sensorId: string) {
+  return Shipment.findOne({
+    'offChainMetadata.sensorId': sensorId,
+    status: ShipmentStatus.IN_TRANSIT,
+  }).lean();
+}
+
 export async function createTelemetryRecord(input: {
+  sensorId: string;
   shipmentId: string;
   temperature: number;
   humidity: number;
   latitude: number;
   longitude: number;
-  batteryLevel: number;
   timestamp: Date;
   dataHash: string;
   stellarTxHash?: string;
@@ -15,45 +27,33 @@ export async function createTelemetryRecord(input: {
   rawPayload: unknown;
 }) {
   return Telemetry.create({
+    sensorId: input.sensorId,
     shipmentId: input.shipmentId,
     temperature: input.temperature,
     humidity: input.humidity,
     latitude: input.latitude,
     longitude: input.longitude,
-    batteryLevel: input.batteryLevel,
     timestamp: input.timestamp,
     dataHash: input.dataHash,
     stellarTxHash: input.stellarTxHash,
-    anchorStatus: input.anchorStatus || TelemetryAnchorStatus.PENDING_ANCHOR,
+    anchorStatus: input.anchorStatus ?? TelemetryAnchorStatus.PENDING_ANCHOR,
     rawPayload: input.rawPayload,
   });
 }
 
-export async function updateTelemetryAnchor(
-  telemetryId: string,
-  stellarTxHash: string
-) {
+export async function updateTelemetryAnchor(telemetryId: string, stellarTxHash: string) {
   return Telemetry.findByIdAndUpdate(
     telemetryId,
-    {
-      stellarTxHash,
-      anchorStatus: TelemetryAnchorStatus.ANCHORED,
-    },
-    { new: true }
+    { stellarTxHash, anchorStatus: TelemetryAnchorStatus.ANCHORED },
+    { new: true },
   );
 }
 
-export async function markTelemetryAnchorFailed(
-  telemetryId: string,
-  error: string
-) {
+export async function markTelemetryAnchorFailed(telemetryId: string, error: string) {
   return Telemetry.findByIdAndUpdate(
     telemetryId,
-    {
-      anchorStatus: TelemetryAnchorStatus.ANCHOR_FAILED,
-      anchorError: error,
-    },
-    { new: true }
+    { anchorStatus: TelemetryAnchorStatus.ANCHOR_FAILED, anchorError: error },
+    { new: true },
   );
 }
 
@@ -79,4 +79,3 @@ export async function getTelemetryService(params: {
 
   return { data, nextCursor, hasMore };
 }
-
