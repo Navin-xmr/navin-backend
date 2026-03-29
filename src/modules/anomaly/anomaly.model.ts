@@ -21,7 +21,7 @@ const AnomalySchema = new Schema(
     timestamp: { type: Date, required: true },
     resolved: { type: Boolean, default: false, required: true },
   },
-  { timestamps: true, strict: true },
+  { timestamps: true, strict: true }
 );
 
 AnomalySchema.index({ shipmentId: 1, timestamp: -1, _id: -1 });

@@ -19,17 +19,17 @@ const TelemetrySchema = new Schema(
 
     dataHash: { type: String, required: true },
     stellarTxHash: { type: String },
-    anchorStatus: { 
-      type: String, 
+    anchorStatus: {
+      type: String,
       enum: Object.values(TelemetryAnchorStatus),
-      default: TelemetryAnchorStatus.PENDING_ANCHOR 
+      default: TelemetryAnchorStatus.PENDING_ANCHOR,
     },
     anchorError: { type: String },
 
     // Keep the original webhook payload for traceability/auditing.
     rawPayload: { type: Schema.Types.Mixed, required: true },
   },
-  { timestamps: true },
+  { timestamps: true }
 );
 
 TelemetrySchema.index({ shipmentId: 1, timestamp: -1 });
@@ -37,4 +37,3 @@ TelemetrySchema.index({ timestamp: -1, _id: -1 });
 TelemetrySchema.index({ anchorStatus: 1 });
 
 export const Telemetry = model('Telemetry', TelemetrySchema);
-

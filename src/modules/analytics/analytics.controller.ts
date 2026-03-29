@@ -8,4 +8,3 @@ export const getPerformanceController: RequestHandler = async (req, res) => {
   const dashboard = await getAnalyticsPerformance(query);
   res.json({ data: dashboard });
 };
-

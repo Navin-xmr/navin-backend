@@ -5,15 +5,23 @@ export function shipmentRoomName(shipmentId: string) {
   return `shipment_${shipmentId}`;
 }
 
-export async function isAuthorizedForShipment(params: { shipmentId: string; organizationId?: string }) {
+export async function isAuthorizedForShipment(params: {
+  shipmentId: string;
+  organizationId?: string;
+}) {
   const { shipmentId, organizationId } = params;
   if (!shipmentId || !organizationId) return false;
 
-  const shipment = await Shipment.findById(shipmentId).select({ enterpriseId: 1, logisticsId: 1 }).lean();
+  const shipment = await Shipment.findById(shipmentId)
+    .select({ enterpriseId: 1, logisticsId: 1 })
+    .lean<{
+      enterpriseId?: { toString: () => string } | string;
+      logisticsId?: { toString: () => string } | string;
+    }>();
   if (!shipment) return false;
 
-  const enterpriseId = (shipment as any).enterpriseId?.toString?.() ?? String((shipment as any).enterpriseId);
-  const logisticsId = (shipment as any).logisticsId?.toString?.() ?? String((shipment as any).logisticsId);
+  const enterpriseId = shipment.enterpriseId?.toString();
+  const logisticsId = shipment.logisticsId?.toString();
   return enterpriseId === organizationId || logisticsId === organizationId;
 }
 
@@ -44,4 +52,3 @@ export function leaveAllShipmentRoomsOnDisconnect(socket: Socket) {
     }
   });
 }
-

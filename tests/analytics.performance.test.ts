@@ -1,6 +1,7 @@
 import { describe, expect, beforeEach, it, jest } from '@jest/globals';
 import request from 'supertest';
 import jwt from 'jsonwebtoken';
+import type { Application } from 'express';
 
 describe('GET /api/analytics/performance', () => {
   // Keep deterministic fixtures for mathematical checks.
@@ -52,12 +53,14 @@ describe('GET /api/analytics/performance', () => {
     },
   ];
 
-  let app: any;
+  let app: Application;
 
   beforeEach(async () => {
-    const mockAggregate = jest.fn(async (pipeline: any[]) => {
+    const mockAggregate = jest.fn(async (pipeline: Array<Record<string, unknown>>) => {
       // Very small, purpose-built aggregation evaluator for this test.
-      const matchStage = pipeline.find((s) => s.$match)?.$match;
+      const matchStage = pipeline.find((s) => '$match' in s)?.$match as
+        | { createdAt?: { $gte: Date; $lte: Date } }
+        | undefined;
       const range = matchStage?.createdAt;
 
       const windowed = shipments.filter((s) => {

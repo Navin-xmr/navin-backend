@@ -10,4 +10,3 @@ export const PerformanceQuerySchema = z
   });
 
 export type PerformanceQuery = z.infer<typeof PerformanceQuerySchema>;
-
