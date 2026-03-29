@@ -70,4 +70,4 @@ If you discover a security vulnerability, email [navinxmr@gmail.com](mailto:navi
 
 ---
 
-**Built with ❤️ leveraging the Stellar ecosystem technology**
+**Built with leveraging the Stellar ecosystem technology**
