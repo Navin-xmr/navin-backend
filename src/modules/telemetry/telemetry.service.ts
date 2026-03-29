@@ -69,6 +69,7 @@ export async function getTelemetryService(params: {
   if (cursor) query._id = { $lt: cursor };
 
   const telemetry = await Telemetry.find(query)
+    .select('-__v -rawPayload')
     .sort({ timestamp: -1, _id: -1 })
     .limit(limit + 1)
     .lean();

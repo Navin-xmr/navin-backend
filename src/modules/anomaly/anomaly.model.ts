@@ -27,5 +27,6 @@ const AnomalySchema = new Schema(
 AnomalySchema.index({ shipmentId: 1, timestamp: -1, _id: -1 });
 AnomalySchema.index({ resolved: 1, timestamp: -1, _id: -1 });
 AnomalySchema.index({ severity: 1, timestamp: -1, _id: -1 });
+AnomalySchema.index({ severity: 1, shipmentId: 1, timestamp: -1, _id: -1 });
 
 export const Anomaly = model('Anomaly', AnomalySchema);
