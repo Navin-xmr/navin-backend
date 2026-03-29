@@ -1,18 +1,18 @@
 import { z } from 'zod';
 
-export const IotWebhookBodySchema = z.object({
-  sensorId: z.string().min(1),
+export const IotWebhookBodySchema = z
+  .object({
+    shipmentId: z.string().min(1),
 
-  // Accept ISO strings or numeric timestamps.
-  timestamp: z.coerce.date(),
+    temperature: z.coerce.number(),
+    humidity: z.coerce.number(),
+    latitude: z.coerce.number(),
+    longitude: z.coerce.number(),
+    batteryLevel: z.coerce.number(),
 
-  temp: z.coerce.number(),
-  humidity: z.coerce.number(),
-
-  location: z.object({
-    lat: z.coerce.number(),
-    lng: z.coerce.number(),
-  }),
-}).strict();
+    // Accept ISO strings or numeric timestamps.
+    timestamp: z.coerce.date(),
+  })
+  .strict();
 
 export type IotWebhookBody = z.infer<typeof IotWebhookBodySchema>;

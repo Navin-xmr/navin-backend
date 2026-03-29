@@ -1,6 +1,38 @@
 import { describe, expect, beforeEach, it, jest } from '@jest/globals';
 import request from 'supertest';
 import { generateDataHash } from '../src/shared/utils/crypto.js';
+import type { Application } from 'express';
+
+type TelemetryCreateResult = {
+  _id: string;
+  shipmentId: string;
+  temperature: number;
+  humidity: number;
+  latitude: number;
+  longitude: number;
+  batteryLevel: number;
+  timestamp: Date;
+  dataHash: string;
+  anchorStatus: string;
+  rawPayload: {
+    shipmentId: string;
+    temperature: number;
+    humidity: number;
+    latitude: number;
+    longitude: number;
+    batteryLevel: number;
+    timestamp: Date;
+  };
+};
+
+type ValidateApiKeyResult = {
+  isValid: boolean;
+  apiKeyDoc?: {
+    _id: string;
+    organizationId: string;
+    shipmentId: string;
+  };
+};
 
 describe('POST /api/webhooks/iot', () => {
   const body = {
@@ -18,13 +50,12 @@ describe('POST /api/webhooks/iot', () => {
 
   const dataHash = generateDataHash(parsedBodyForHash);
 
-  const resolvedShipmentId = '671000000000000000000001';
-
-  let app: any;
-  const mockTelemetryCreate: any = jest.fn();
-  const mockValidateApiKey: any = jest.fn();
-  const mockPushStellarAnchorJob: any = jest.fn();
-  const mockFindActiveShipmentBySensorId: any = jest.fn();
+  let app: Application;
+  const mockTelemetryCreate = jest.fn<(payload: unknown) => Promise<TelemetryCreateResult>>();
+  const mockValidateApiKey = jest.fn<(rawApiKey: string) => Promise<ValidateApiKeyResult>>();
+  const mockPushStellarAnchorJob = jest.fn<
+    (payload: { telemetryId: string; shipmentId: string; dataHash: string }) => Promise<void>
+  >();
 
   beforeEach(async () => {
     jest.clearAllMocks();

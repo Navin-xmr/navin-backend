@@ -33,15 +33,10 @@ const TelemetrySchema = new Schema(
     // Keep the original webhook payload for traceability/auditing.
     rawPayload: { type: Schema.Types.Mixed, required: true },
   },
-  {
-    // Native MongoDB time-series collection configuration.
-    // timeField must be the Date field; metaField groups measurements by sensor.
-    timeseries: { timeField: 'timestamp', metaField: 'sensorId' },
-  },
+  { timestamps: true }
 );
 
 TelemetrySchema.index({ shipmentId: 1, timestamp: -1 });
 TelemetrySchema.index({ anchorStatus: 1 });
 
 export const Telemetry = model('Telemetry', TelemetrySchema);
-

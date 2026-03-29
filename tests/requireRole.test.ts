@@ -1,24 +1,24 @@
 import request from 'supertest';
 import express from 'express';
-import { requireAuth } from '../src/shared/middleware/requireAuth.js';
 import { requireRole } from '../src/shared/middleware/requireRole.js';
 import { AppError } from '../src/shared/http/errors.js';
+import type { NextFunction, Request, RequestHandler, Response } from 'express';
 
 // Mock user roles
-const adminUser = { id: '1', role: 'Admin' };
-const managerUser = { id: '2', role: 'Manager' };
-const viewerUser = { id: '3', role: 'Viewer' };
+const adminUser = { userId: '1', role: 'Admin' };
+const managerUser = { userId: '2', role: 'Manager' };
+const viewerUser = { userId: '3', role: 'Viewer' };
 
 // Mock requireAuth to inject user
-function mockRequireAuth(user: any) {
-  return (req: any , res: any, next: any) => {
-    req.user = user;
+function mockRequireAuth(user: { userId: string; role: string } | undefined): RequestHandler {
+  return (req, _res, next) => {
+    (req as Request & { user?: { userId: string; role: string } }).user = user;
     next();
   };
 }
 
 describe('requireRole middleware', () => {
-  const makeApp = (user: any, allowedRoles: string[]) => {
+  const makeApp = (user: { userId: string; role: string } | undefined, allowedRoles: string[]) => {
     const app = express();
     app.get(
       '/test',
@@ -27,7 +27,7 @@ describe('requireRole middleware', () => {
       (req, res) => res.status(200).json({ success: true })
     );
     // Error handler
-    app.use((err: any, req: any , res: any, next: any) => {
+    app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
       if (err instanceof AppError) {
         res.status(err.statusCode).json({ message: err.message, code: err.code });
       } else {

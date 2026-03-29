@@ -1,11 +1,12 @@
 import { describe, it, expect, jest } from '@jest/globals';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const mockFindById: any = jest.fn();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const mockSelect: any = jest.fn();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const mockLean: any = jest.fn();
+type ShipmentLeanRow = { enterpriseId: string; logisticsId: string } | null;
+type ShipmentSelectResult = { lean: () => Promise<ShipmentLeanRow> };
+type ShipmentFindByIdResult = { select: () => ShipmentSelectResult };
+
+const mockFindById = jest.fn<(shipmentId: string) => ShipmentFindByIdResult>();
+const mockSelect = jest.fn<() => ShipmentSelectResult>();
+const mockLean = jest.fn<() => Promise<ShipmentLeanRow>>();
 
 jest.unstable_mockModule('../../../modules/shipments/shipments.model.js', () => ({
   Shipment: {
@@ -40,9 +41,14 @@ describe('shipmentRooms', () => {
     mockFindById.mockReturnValue({ select: mockSelect });
 
     const mod = await import('../shipmentRooms.js');
-    expect(await mod.isAuthorizedForShipment({ shipmentId: 's1', organizationId: 'org1' })).toBe(false);
-    expect(await mod.isAuthorizedForShipment({ shipmentId: 's1', organizationId: undefined })).toBe(false);
-    expect(await mod.isAuthorizedForShipment({ shipmentId: '', organizationId: 'org1' })).toBe(false);
+    expect(await mod.isAuthorizedForShipment({ shipmentId: 's1', organizationId: 'org1' })).toBe(
+      false
+    );
+    expect(await mod.isAuthorizedForShipment({ shipmentId: 's1', organizationId: undefined })).toBe(
+      false
+    );
+    expect(await mod.isAuthorizedForShipment({ shipmentId: '', organizationId: 'org1' })).toBe(
+      false
+    );
   });
 });
-

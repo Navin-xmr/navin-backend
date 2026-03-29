@@ -3,7 +3,10 @@ import { Worker, Job } from 'bullmq';
 import { connectMongo } from '../infra/mongo/connection.js';
 import { config } from '../config/index.js';
 import { anchorTelemetryHash } from '../services/stellar.service.js';
-import { updateTelemetryAnchor, markTelemetryAnchorFailed } from '../modules/telemetry/telemetry.service.js';
+import {
+  updateTelemetryAnchor,
+  markTelemetryAnchorFailed,
+} from '../modules/telemetry/telemetry.service.js';
 
 interface AnchorTelemetryJob {
   telemetryId: string;
@@ -23,7 +26,9 @@ async function processStellarAnchor(job: Job<AnchorTelemetryJob>) {
       dataHash,
     });
 
-    console.log(`[Stellar Worker] Successfully anchored telemetry ${telemetryId} with tx ${stellarTxHash}`);
+    console.log(
+      `[Stellar Worker] Successfully anchored telemetry ${telemetryId} with tx ${stellarTxHash}`
+    );
 
     // Update MongoDB document with the transaction hash
     await updateTelemetryAnchor(telemetryId, stellarTxHash);
@@ -56,7 +61,7 @@ async function startWorker() {
     concurrency: 5, // Process up to 5 jobs concurrently
   });
 
-  worker.on('completed', (job) => {
+  worker.on('completed', job => {
     console.log(`[Stellar Worker] Job ${job.id} completed successfully`);
   });
 
@@ -64,7 +69,7 @@ async function startWorker() {
     console.error(`[Stellar Worker] Job ${job?.id} failed:`, err.message);
   });
 
-  worker.on('error', (err) => {
+  worker.on('error', err => {
     console.error('[Stellar Worker] Worker error:', err);
   });
 
@@ -84,7 +89,7 @@ async function startWorker() {
   });
 }
 
-startWorker().catch((err) => {
+startWorker().catch(err => {
   console.error('[Stellar Worker] Failed to start:', err);
   process.exit(1);
 });

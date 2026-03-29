@@ -35,4 +35,3 @@ export function generateDataHash(payload: unknown): string {
   const compact = serialized.replace(/\s+/g, '');
   return createHash('sha256').update(compact).digest('hex');
 }
-

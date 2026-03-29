@@ -25,8 +25,7 @@ export async function tokenizeShipment(shipmentData: {
   const keypair = Keypair.fromSecret(secretKey);
   const account = await horizon.loadAccount(keypair.publicKey());
 
-  const network =
-    config.stellarNetwork === 'public' ? Networks.PUBLIC : Networks.TESTNET;
+  const network = config.stellarNetwork === 'public' ? Networks.PUBLIC : Networks.TESTNET;
 
   const transaction = new TransactionBuilder(account, {
     fee: BASE_FEE,
@@ -36,13 +35,13 @@ export async function tokenizeShipment(shipmentData: {
       Operation.manageData({
         name: `tracking:${shipmentData.shipmentId}`,
         value: shipmentData.trackingNumber,
-      }),
+      })
     )
     .addOperation(
       Operation.manageData({
         name: `route:${shipmentData.shipmentId}`,
         value: `${shipmentData.origin}->${shipmentData.destination}`,
-      }),
+      })
     )
     .setTimeout(30)
     .build();
@@ -72,8 +71,7 @@ export async function anchorTelemetryHash(telemetryData: {
   const keypair = Keypair.fromSecret(secretKey);
   const account = await horizon.loadAccount(keypair.publicKey());
 
-  const network =
-    config.stellarNetwork === 'public' ? Networks.PUBLIC : Networks.TESTNET;
+  const network = config.stellarNetwork === 'public' ? Networks.PUBLIC : Networks.TESTNET;
 
   // We must include a Memo to embed the hash, and at least one operation
   // for the transaction to be valid.
@@ -85,7 +83,7 @@ export async function anchorTelemetryHash(telemetryData: {
       Operation.manageData({
         name: `telemetry:${telemetryData.shipmentId}`,
         value: telemetryData.dataHash,
-      }),
+      })
     )
     .addMemo(Memo.hash(Buffer.from(telemetryData.dataHash, 'hex')))
     .setTimeout(30)

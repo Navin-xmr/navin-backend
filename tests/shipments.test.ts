@@ -1,18 +1,54 @@
 import { jest, describe, beforeAll, beforeEach, it, expect } from '@jest/globals';
 import request from 'supertest';
 import process from 'process';
+import type { Application } from 'express';
 
 // Mock in-memory DB for shipments
-const shipmentsData: any[] = [];
-const usersData: any[] = [];
+type PrimitiveId = string | number;
+type MilestoneRecord = Record<string, unknown>;
+type ShipmentRecord = {
+  _id: string;
+  status?: string;
+  milestones: MilestoneRecord[];
+} & Record<string, unknown>;
+type UserRecord = {
+  _id: string;
+  role?: string;
+  walletAddress?: string;
+} & Record<string, unknown>;
+
+const shipmentsData: ShipmentRecord[] = [];
+const usersData: UserRecord[] = [];
 
 await jest.unstable_mockModule('../src/modules/shipments/shipments.model.js', () => {
-  function ShipmentConstructor(this: any, doc: any) {
+  type ShipmentInput = Record<string, unknown> & { milestones?: MilestoneRecord[] };
+  type ShipmentQuery = { _id?: { $lt?: PrimitiveId }; status?: string };
+  type FindChain = {
+    sort: () => {
+      limit: (l: number) => {
+        lean: () => Promise<ShipmentRecord[]>;
+      };
+    };
+  };
+  type ShipmentCtor = {
+    new (doc: ShipmentInput): ShipmentRecord;
+    find: (query?: ShipmentQuery) => FindChain;
+    countDocuments: (query?: { status?: string }) => Promise<number>;
+    deleteMany: () => Promise<void>;
+    create: (doc: ShipmentInput) => Promise<ShipmentRecord>;
+    findById: (id: PrimitiveId) => Promise<(ShipmentRecord & { save: () => Promise<ShipmentRecord> }) | null>;
+    findByIdAndUpdate: (id: PrimitiveId, update: Record<string, unknown>, opts?: { new?: boolean }) => Promise<ShipmentRecord | null>;
+    prototype: {
+      save: (this: ShipmentRecord) => Promise<ShipmentRecord>;
+    };
+  };
+
+  const ShipmentConstructor = function (this: ShipmentRecord, doc: ShipmentInput) {
     Object.assign(this, doc);
     this.milestones = doc.milestones || [];
-  }
+  } as unknown as ShipmentCtor;
 
-  ShipmentConstructor.find = (query: any) => {
+  ShipmentConstructor.find = (query = {}) => {
     const cursor = query?._id?.$lt;
     const status = query?.status;
     const arr = shipmentsData
@@ -29,7 +65,7 @@ await jest.unstable_mockModule('../src/modules/shipments/shipments.model.js', ()
     };
   };
 
-  ShipmentConstructor.countDocuments = (query: any) =>
+  ShipmentConstructor.countDocuments = (query) =>
     Promise.resolve(shipmentsData.filter(d => !query || !query.status || d.status === query.status).length);
 
   ShipmentConstructor.deleteMany = () => {
@@ -37,13 +73,13 @@ await jest.unstable_mockModule('../src/modules/shipments/shipments.model.js', ()
     return Promise.resolve();
   };
 
-  ShipmentConstructor.create = (doc: any) => {
+  ShipmentConstructor.create = (doc) => {
     const d = { ...doc, _id: String(shipmentsData.length), milestones: doc.milestones || [] };
-    shipmentsData.push(d);
+    shipmentsData.push(d as ShipmentRecord);
     return Promise.resolve(d);
   };
 
-  ShipmentConstructor.findById = (id: any) => {
+  ShipmentConstructor.findById = (id) => {
     const found = shipmentsData.find(d => String(d._id) === String(id));
     if (!found) return Promise.resolve(null);
     return Promise.resolve({
@@ -51,27 +87,27 @@ await jest.unstable_mockModule('../src/modules/shipments/shipments.model.js', ()
       save: async function () {
         const idx = shipmentsData.findIndex(d => String(d._id) === String(this._id));
         if (idx !== -1) {
-          shipmentsData[idx] = { ...this };
+          shipmentsData[idx] = { ...this } as ShipmentRecord;
         }
-        return this;
+        return this as ShipmentRecord;
       },
     });
   };
 
-  ShipmentConstructor.findByIdAndUpdate = (id: any, update: any, opts: any) => {
+  ShipmentConstructor.findByIdAndUpdate = (id, update, opts) => {
     const idx = shipmentsData.findIndex(d => String(d._id) === String(id));
     if (idx === -1) return Promise.resolve(null);
-    shipmentsData[idx] = { ...shipmentsData[idx], ...update };
+    shipmentsData[idx] = { ...shipmentsData[idx], ...update } as ShipmentRecord;
     return Promise.resolve(opts?.new ? shipmentsData[idx] : null);
   };
 
   ShipmentConstructor.prototype.save = async function () {
     const idx = shipmentsData.findIndex(d => String(d._id) === String(this._id));
     if (idx !== -1) {
-      shipmentsData[idx] = { ...this };
+      shipmentsData[idx] = { ...this } as ShipmentRecord;
     } else {
       this._id = String(shipmentsData.length);
-      shipmentsData.push({ ...this });
+      shipmentsData.push({ ...this } as ShipmentRecord);
     }
     return this;
   };
@@ -82,12 +118,12 @@ await jest.unstable_mockModule('../src/modules/shipments/shipments.model.js', ()
 
 await jest.unstable_mockModule('../src/modules/users/users.model.js', () => {
   const UserModel = {
-    create: (u: any) => {
+    create: (u: Record<string, unknown>) => {
       const user = { ...u, _id: String(usersData.length) };
-      usersData.push(user);
+      usersData.push(user as UserRecord);
       return Promise.resolve(user);
     },
-    findById: (id: any) => Promise.resolve(usersData.find(u => String(u._id) === String(id)) || null),
+    findById: (id: PrimitiveId) => Promise.resolve(usersData.find(u => String(u._id) === String(id)) || null),
   };
   return { UserModel };
 });
@@ -103,12 +139,12 @@ await jest.unstable_mockModule('../src/infra/socket/io.js', () => {
 });
 
 describe('Shipments API (mocked DB)', () => {
-  let app: any;
-  let buildApp: any;
+  let app: Application;
+  let buildApp: () => Application;
 
   beforeAll(async () => {
     const appModule = await import('../src/app.js');
-    buildApp = appModule.buildApp;
+    buildApp = appModule.buildApp as () => Application;
     app = buildApp();
   });
 
@@ -186,7 +222,6 @@ describe('Shipments API (mocked DB)', () => {
       .set('Authorization', `Bearer ${token}`)
       .send({ status: 'IN_TRANSIT' });
 
-    // console.log('Response:', res.body);
     expect(res.status).toBe(200);
     expect(res.body.status).toBe('IN_TRANSIT');
     expect(res.body.milestones).toBeDefined();

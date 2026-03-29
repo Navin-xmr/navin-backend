@@ -15,6 +15,5 @@ analyticsRouter.get(
   requireAuth,
   requireRole('ADMIN', 'MANAGER'),
   validate({ query: PerformanceQuerySchema }),
-  asyncHandler(getPerformanceController),
+  asyncHandler(getPerformanceController)
 );
-
