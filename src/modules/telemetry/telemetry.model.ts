@@ -8,6 +8,9 @@ export enum TelemetryAnchorStatus {
 
 const TelemetrySchema = new Schema(
   {
+    // metaField — identifies the sensor source
+    sensorId: { type: String, required: true },
+
     shipmentId: { type: Types.ObjectId, ref: 'Shipment', required: true },
 
     temperature: { type: Number, required: true },
@@ -15,6 +18,7 @@ const TelemetrySchema = new Schema(
     latitude: { type: Number, required: true },
     longitude: { type: Number, required: true },
     batteryLevel: { type: Number, required: true },
+    // timeField — required by MongoDB time-series
     timestamp: { type: Date, required: true },
 
     dataHash: { type: String, required: true },
@@ -33,7 +37,6 @@ const TelemetrySchema = new Schema(
 );
 
 TelemetrySchema.index({ shipmentId: 1, timestamp: -1 });
-TelemetrySchema.index({ timestamp: -1, _id: -1 });
 TelemetrySchema.index({ anchorStatus: 1 });
 
 export const Telemetry = model('Telemetry', TelemetrySchema);

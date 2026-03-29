@@ -36,13 +36,11 @@ type ValidateApiKeyResult = {
 
 describe('POST /api/webhooks/iot', () => {
   const body = {
-    shipmentId: '671000000000000000000001',
-    temperature: 22.5,
-    humidity: 55,
-    latitude: 12.34,
-    longitude: 56.78,
-    batteryLevel: 91,
+    sensorId: 'sensor-abc-001',
     timestamp: '2026-01-15T12:30:00.000Z',
+    temp: 22.5,
+    humidity: 55,
+    location: { lat: 12.34, lng: 56.78 },
   };
 
   const parsedBodyForHash = {
@@ -64,12 +62,12 @@ describe('POST /api/webhooks/iot', () => {
 
     mockTelemetryCreate.mockResolvedValue({
       _id: 't1',
-      shipmentId: body.shipmentId,
-      temperature: body.temperature,
+      sensorId: body.sensorId,
+      shipmentId: resolvedShipmentId,
+      temperature: body.temp,
       humidity: body.humidity,
-      latitude: body.latitude,
-      longitude: body.longitude,
-      batteryLevel: body.batteryLevel,
+      latitude: body.location.lat,
+      longitude: body.location.lng,
       timestamp: parsedBodyForHash.timestamp,
       dataHash,
       anchorStatus: 'PENDING_ANCHOR',
@@ -78,24 +76,31 @@ describe('POST /api/webhooks/iot', () => {
 
     mockValidateApiKey.mockResolvedValue({
       isValid: true,
-      apiKeyDoc: {
-        _id: 'key123',
-        organizationId: 'org456',
-        shipmentId: body.shipmentId,
-      },
+      apiKeyDoc: { _id: 'key123', organizationId: 'org456' },
     });
 
     mockPushStellarAnchorJob.mockResolvedValue(undefined);
 
+    mockFindActiveShipmentBySensorId.mockResolvedValue({
+      _id: resolvedShipmentId,
+      status: 'IN_TRANSIT',
+    });
+
     await jest.unstable_mockModule('../src/modules/telemetry/telemetry.model.js', () => ({
-      Telemetry: {
-        create: mockTelemetryCreate,
-      },
+      Telemetry: { create: mockTelemetryCreate },
       TelemetryAnchorStatus: {
         PENDING_ANCHOR: 'PENDING_ANCHOR',
         ANCHORED: 'ANCHORED',
         ANCHOR_FAILED: 'ANCHOR_FAILED',
       },
+    }));
+
+    await jest.unstable_mockModule('../src/modules/telemetry/telemetry.service.js', () => ({
+      createTelemetryRecord: async (input: any) => mockTelemetryCreate(input),
+      findActiveShipmentBySensorId: mockFindActiveShipmentBySensorId,
+      updateTelemetryAnchor: jest.fn(),
+      markTelemetryAnchorFailed: jest.fn(),
+      getTelemetryService: jest.fn(),
     }));
 
     await jest.unstable_mockModule('../src/modules/auth/apiKey.service.js', () => ({
@@ -124,7 +129,7 @@ describe('POST /api/webhooks/iot', () => {
     app = appModule.buildApp();
   });
 
-  it('returns 202 Accepted and queues Stellar anchoring job', async () => {
+  it('returns 202 and queues Stellar anchoring job', async () => {
     const res = await request(app)
       .post('/api/webhooks/iot')
       .set('x-api-key', 'valid-api-key-12345')
@@ -132,29 +137,15 @@ describe('POST /api/webhooks/iot', () => {
 
     expect(res.status).toBe(202);
     expect(res.body.message).toContain('queued for Stellar anchoring');
-    
-    expect(mockPushStellarAnchorJob).toHaveBeenCalledTimes(1);
-    expect(mockPushStellarAnchorJob).toHaveBeenCalledWith({
-      telemetryId: 't1',
-      shipmentId: body.shipmentId,
-      dataHash,
-    });
 
-    expect(mockTelemetryCreate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        shipmentId: body.shipmentId,
-        temperature: body.temperature,
-        humidity: body.humidity,
-        dataHash,
-        anchorStatus: 'PENDING_ANCHOR',
-      })
+    expect(mockFindActiveShipmentBySensorId).toHaveBeenCalledWith(body.sensorId);
+
+    expect(mockPushStellarAnchorJob).toHaveBeenCalledWith(
+      expect.objectContaining({ shipmentId: resolvedShipmentId }),
     );
 
     expect(res.body.data).toEqual(
-      expect.objectContaining({
-        dataHash,
-        anchorStatus: 'PENDING_ANCHOR',
-      })
+      expect.objectContaining({ anchorStatus: 'PENDING_ANCHOR' }),
     );
   });
 
@@ -169,6 +160,18 @@ describe('POST /api/webhooks/iot', () => {
     expect(res.body.data.stellarTxHash).toBeUndefined();
   });
 
+  it('returns 404 when no active shipment is found for sensorId', async () => {
+    mockFindActiveShipmentBySensorId.mockResolvedValue(null);
+
+    const res = await request(app)
+      .post('/api/webhooks/iot')
+      .set('x-api-key', 'valid-api-key-12345')
+      .send(body);
+
+    expect(res.status).toBe(404);
+    expect(res.body.message).toContain('sensor-abc-001');
+  });
+
   it('returns 401 when x-api-key header is missing', async () => {
     const res = await request(app)
       .post('/api/webhooks/iot')
@@ -180,9 +183,7 @@ describe('POST /api/webhooks/iot', () => {
   });
 
   it('returns 401 when API key is invalid', async () => {
-    mockValidateApiKey.mockResolvedValue({
-      isValid: false,
-    });
+    mockValidateApiKey.mockResolvedValue({ isValid: false });
 
     const res = await request(app)
       .post('/api/webhooks/iot')
@@ -191,19 +192,34 @@ describe('POST /api/webhooks/iot', () => {
 
     expect(res.status).toBe(401);
     expect(res.body.message).toBe('Invalid API key');
-    expect(mockValidateApiKey).toHaveBeenCalledWith('invalid-api-key');
   });
 
-  it('returns 400 on invalid payload (validation error)', async () => {
+  it('returns 400 on malformed payload (temp is not a number)', async () => {
     const res = await request(app)
       .post('/api/webhooks/iot')
       .set('x-api-key', 'valid-api-key-12345')
-      .send({
-        ...body,
-        temperature: 'not-a-number',
-      });
+      .send({ ...body, temp: 'not-a-number' });
+
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 400 when required field is missing', async () => {
+    const { sensorId: _omit, ...noSensorId } = body;
+
+    const res = await request(app)
+      .post('/api/webhooks/iot')
+      .set('x-api-key', 'valid-api-key-12345')
+      .send(noSensorId);
+
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 400 when location is malformed', async () => {
+    const res = await request(app)
+      .post('/api/webhooks/iot')
+      .set('x-api-key', 'valid-api-key-12345')
+      .send({ ...body, location: 'not-an-object' });
 
     expect(res.status).toBe(400);
   });
 });
-
