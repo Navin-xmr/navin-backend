@@ -222,4 +222,14 @@ describe('POST /api/webhooks/iot', () => {
 
     expect(res.status).toBe(400);
   });
+
+  it('returns 400 on malformed JSON body', async () => {
+    const res = await request(app)
+      .post('/api/webhooks/iot')
+      .set('x-api-key', 'valid-api-key-12345')
+      .set('Content-Type', 'application/json')
+      .send('{"shipmentId":');
+
+    expect(res.status).toBe(400);
+  });
 });

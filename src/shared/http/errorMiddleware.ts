@@ -6,6 +6,15 @@ export function errorMiddleware(): ErrorRequestHandler {
   return (err, _req, res, _next) => {
     const isDev = (process.env.NODE_ENV || 'development') !== 'production';
 
+    // Malformed JSON body
+    if (err instanceof SyntaxError && 'status' in err && (err as { status?: number }).status === 400) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid JSON payload',
+        ...(isDev && { stack: err.stack }),
+      });
+    }
+
     // Mongoose duplicate key error
     if (err.code === 11000) {
       const field = Object.keys(err.keyValue ?? {})[0] ?? 'field';

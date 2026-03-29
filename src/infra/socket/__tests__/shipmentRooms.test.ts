@@ -51,4 +51,42 @@ describe('shipmentRooms', () => {
       false
     );
   });
+
+  it('emits unauthorized error when joining room without organization', async () => {
+    const mod = await import('../shipmentRooms.js');
+    const socket = {
+      user: undefined,
+      emit: jest.fn(),
+      join: jest.fn(),
+    } as any;
+
+    await mod.joinShipmentRoom(socket, 's1');
+
+    expect(socket.join).not.toHaveBeenCalled();
+    expect(socket.emit).toHaveBeenCalledWith('error', {
+      code: 'UNAUTHORIZED',
+      message: 'Not allowed to view this shipment',
+    });
+  });
+
+  it('emits unauthorized error when organization is not allowed for shipment', async () => {
+    mockLean.mockResolvedValue({ enterpriseId: 'org1', logisticsId: 'org2' });
+    mockSelect.mockReturnValue({ lean: mockLean });
+    mockFindById.mockReturnValue({ select: mockSelect });
+
+    const mod = await import('../shipmentRooms.js');
+    const socket = {
+      user: { organizationId: 'org3' },
+      emit: jest.fn(),
+      join: jest.fn(),
+    } as any;
+
+    await mod.joinShipmentRoom(socket, 's1');
+
+    expect(socket.join).not.toHaveBeenCalled();
+    expect(socket.emit).toHaveBeenCalledWith('error', {
+      code: 'UNAUTHORIZED',
+      message: 'Not allowed to view this shipment',
+    });
+  });
 });
