@@ -1,14 +1,31 @@
 import request from 'supertest';
+import jwt from 'jsonwebtoken';
 import { buildApp } from '../src/app.js';
 import { connectMongo } from '../src/infra/mongo/connection.js';
 import { Anomaly } from '../src/modules/anomaly/anomaly.model.js';
 import { Shipment } from '../src/modules/shipments/shipments.model.js';
 import { Telemetry } from '../src/modules/telemetry/telemetry.model.js';
+import { UserModel } from '../src/modules/users/users.model.js';
+import { env } from '../src/env.js';
 
 const app = buildApp();
 
+let adminToken: string;
+
 beforeAll(async () => {
   await connectMongo(process.env.MONGO_URI!);
+  // Create a test admin user
+  const adminUser = await UserModel.create({
+    email: 'admin@test.com',
+    name: 'Admin User',
+    passwordHash: 'hashed',
+    role: 'ADMIN',
+    organizationId: '507f1f77bcf86cd799439011',
+  });
+  adminToken = jwt.sign(
+    { userId: adminUser._id.toString(), role: 'ADMIN', organizationId: '507f1f77bcf86cd799439011' },
+    env.JWT_SECRET
+  );
 });
 
 afterEach(async () => {
@@ -35,7 +52,9 @@ describe('GET /api/anomalies - Cursor Pagination', () => {
       message: 'Test anomaly',
     });
 
-    const res = await request(app).get('/api/anomalies?limit=10');
+    const res = await request(app)
+      .get('/api/anomalies?limit=10')
+      .set('Authorization', `Bearer ${adminToken}`);
 
     expect(res.status).toBe(200);
     expect(res.body.data).toHaveLength(1);
@@ -64,13 +83,17 @@ describe('GET /api/anomalies - Cursor Pagination', () => {
       anomalies.push(a);
     }
 
-    const firstPage = await request(app).get('/api/anomalies?limit=2');
+    const firstPage = await request(app)
+      .get('/api/anomalies?limit=2')
+      .set('Authorization', `Bearer ${adminToken}`);
     expect(firstPage.status).toBe(200);
     expect(firstPage.body.data).toHaveLength(2);
     expect(firstPage.body.hasMore).toBe(true);
     expect(firstPage.body.nextCursor).toBeTruthy();
 
-    const secondPage = await request(app).get(`/api/anomalies?limit=2&cursor=${firstPage.body.nextCursor}`);
+    const secondPage = await request(app)
+      .get(`/api/anomalies?limit=2&cursor=${firstPage.body.nextCursor}`)
+      .set('Authorization', `Bearer ${adminToken}`);
     expect(secondPage.status).toBe(200);
     expect(secondPage.body.data).toHaveLength(2);
     expect(secondPage.body.hasMore).toBe(true);
@@ -114,9 +137,40 @@ describe('GET /api/anomalies - Cursor Pagination', () => {
       message: 'Anomaly 2',
     });
 
-    const res = await request(app).get(`/api/anomalies?shipmentId=${shipment1._id}`);
+    const res = await request(app)
+      .get(`/api/anomalies?shipmentId=${shipment1._id}`)
+      .set('Authorization', `Bearer ${adminToken}`);
     expect(res.status).toBe(200);
     expect(res.body.data).toHaveLength(1);
     expect(res.body.data[0].shipmentId).toBe(shipment1._id.toString());
+  });
+
+  it('should resolve an anomaly', async () => {
+    const shipment = await Shipment.create({
+      trackingNumber: 'TEST005',
+      origin: 'A',
+      destination: 'B',
+      enterpriseId: '507f1f77bcf86cd799439011',
+      logisticsId: '507f1f77bcf86cd799439012',
+    });
+
+    const anomaly = await Anomaly.create({
+      shipmentId: shipment._id,
+      timestamp: new Date(),
+      type: 'TEMPERATURE_EXCEEDED',
+      severity: 'HIGH',
+      message: 'Test anomaly',
+      resolved: false,
+    });
+
+    const res = await request(app)
+      .patch(`/api/anomalies/${anomaly._id}/resolve`)
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.anomaly.resolved).toBe(true);
+
+    const updated = await Anomaly.findById(anomaly._id);
+    expect(updated?.resolved).toBe(true);
   });
 });

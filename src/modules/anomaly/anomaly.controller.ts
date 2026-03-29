@@ -1,5 +1,5 @@
 import type { Request, Response } from 'express';
-import { getAnomaliesService } from './anomaly.service.js';
+import { getAnomaliesService, resolveAnomalyService } from './anomaly.service.js';
 
 export const getAnomalies = async (req: Request, res: Response) => {
   const { cursor, limit = 20, shipmentId, severity } = req.query;
@@ -12,4 +12,12 @@ export const getAnomalies = async (req: Request, res: Response) => {
   });
 
   res.json(result);
+};
+
+export const resolveAnomaly = async (req: Request, res: Response) => {
+  const { id } = req.params;
+
+  const anomaly = await resolveAnomalyService(id);
+
+  res.json({ anomaly });
 };
