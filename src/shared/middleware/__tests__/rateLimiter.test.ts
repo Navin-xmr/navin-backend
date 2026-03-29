@@ -1,13 +1,14 @@
 import { describe, it, expect } from '@jest/globals';
 import express from 'express';
 import request from 'supertest';
-import { standardLimiter, strictLimiter } from '../rateLimiter.js';
+import { standardLimiter } from '../rateLimiter.js';
 
 import rateLimit from 'express-rate-limit';
+import type { RequestHandler } from 'express';
 
-function buildTestApp(limiter: unknown) {
+function buildTestApp(limiter: RequestHandler) {
   const app = express();
-  app.use(limiter as any);
+  app.use(limiter);
   app.get('/test', (_req, res) => res.json({ success: true }));
   return app;
 }
@@ -30,7 +31,11 @@ describe('standardLimiter', () => {
 describe('strictLimiter', () => {
   it('returns 429 after exceeding limit', async () => {
     const app = buildTestApp(
-      rateLimit({ windowMs: 60000, limit: 3, standardHeaders: true, legacyHeaders: false,
+      rateLimit({
+        windowMs: 60000,
+        limit: 3,
+        standardHeaders: true,
+        legacyHeaders: false,
         message: { success: false, message: 'Too many requests, please slow down.' },
       })
     );

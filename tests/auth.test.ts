@@ -1,5 +1,6 @@
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
+import type { Request, Response } from 'express';
 import { jest } from '@jest/globals';
 import { AppError } from '../src/shared/http/errors.js';
 
@@ -161,8 +162,8 @@ describe('Auth Service', () => {
 
   describe('requireAuth middleware', () => {
     it('should reject requests without a valid Bearer token', () => {
-      const req: any = { headers: {} };
-      const res: any = {};
+      const req = { headers: {} } as Request;
+      const res = {} as Response;
       const next = jest.fn();
 
       expect(() => requireAuth(req, res, next)).toThrow(AppError);

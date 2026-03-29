@@ -29,10 +29,7 @@ export async function createTelemetryRecord(input: {
   });
 }
 
-export async function updateTelemetryAnchor(
-  telemetryId: string,
-  stellarTxHash: string
-) {
+export async function updateTelemetryAnchor(telemetryId: string, stellarTxHash: string) {
   return Telemetry.findByIdAndUpdate(
     telemetryId,
     {
@@ -43,10 +40,7 @@ export async function updateTelemetryAnchor(
   );
 }
 
-export async function markTelemetryAnchorFailed(
-  telemetryId: string,
-  error: string
-) {
+export async function markTelemetryAnchorFailed(telemetryId: string, error: string) {
   return Telemetry.findByIdAndUpdate(
     telemetryId,
     {
@@ -79,4 +73,3 @@ export async function getTelemetryService(params: {
 
   return { data, nextCursor, hasMore };
 }
-

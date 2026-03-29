@@ -1,22 +1,44 @@
 import { jest } from '@jest/globals';
 import request from 'supertest';
 import { fileURLToPath } from 'node:url';
+import type { Application } from 'express';
 
-const shipmentsData: any[] = [];
+type PrimitiveId = string | number;
+type ShipmentRecord = {
+  _id: string;
+  milestones?: Array<Record<string, unknown>>;
+} & Record<string, unknown>;
+
+const shipmentsData: ShipmentRecord[] = [];
 
 await jest.unstable_mockModule('../src/modules/shipments/shipments.model.js', () => {
-  function ShipmentConstructor(this: any, doc: any) {
+  type ShipmentInput = Record<string, unknown> & {
+    milestones?: Array<Record<string, unknown>>;
+  };
+  type ShipmentCtor = {
+    new (doc: ShipmentInput): ShipmentRecord;
+    create: (doc: ShipmentInput) => Promise<ShipmentRecord>;
+    find: (_query: Record<string, unknown>) => {
+      skip: (_s: number) => {
+        limit: (_l: number) => Promise<ShipmentRecord[]>;
+      };
+    };
+    countDocuments: () => Promise<number>;
+    findByIdAndUpdate: (id: PrimitiveId, update: Record<string, unknown>, opts?: { new?: boolean }) => Promise<ShipmentRecord | null>;
+  };
+
+  const ShipmentConstructor = function (this: ShipmentRecord, doc: ShipmentInput) {
     Object.assign(this, doc);
     this.milestones = doc.milestones || [];
-  }
+  } as unknown as ShipmentCtor;
 
-  ShipmentConstructor.create = (doc: any) => {
+  ShipmentConstructor.create = (doc) => {
     const d = { ...doc, _id: String(shipmentsData.length) };
-    shipmentsData.push(d);
+    shipmentsData.push(d as ShipmentRecord);
     return Promise.resolve(d);
   };
 
-  ShipmentConstructor.find = (_query: any) => ({
+  ShipmentConstructor.find = (_query) => ({
     skip: (_s: number) => ({
       limit: (_l: number) => Promise.resolve(shipmentsData),
     }),
@@ -24,10 +46,10 @@ await jest.unstable_mockModule('../src/modules/shipments/shipments.model.js', ()
 
   ShipmentConstructor.countDocuments = () => Promise.resolve(shipmentsData.length);
 
-  ShipmentConstructor.findByIdAndUpdate = (id: any, update: any, opts: any) => {
+  ShipmentConstructor.findByIdAndUpdate = (id, update, opts) => {
     const idx = shipmentsData.findIndex((d) => String(d._id) === String(id));
     if (idx === -1) return Promise.resolve(null);
-    shipmentsData[idx] = { ...shipmentsData[idx], ...update };
+    shipmentsData[idx] = { ...shipmentsData[idx], ...update } as ShipmentRecord;
     return Promise.resolve(opts?.new ? shipmentsData[idx] : null);
   };
 
@@ -36,7 +58,7 @@ await jest.unstable_mockModule('../src/modules/shipments/shipments.model.js', ()
 });
 
 describe('POST /api/shipments/:id/proof', () => {
-  let app: any;
+  let app: Application;
 
   beforeAll(async () => {
     const appModule = await import('../src/app.js');

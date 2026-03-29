@@ -9,15 +9,15 @@ describe('generateDataHash', () => {
   });
 
   it('handles nested objects with unsorted keys', () => {
-    const a = { user: { name: "Ada", id: 1 }, role: "admin" };
-    const b = { role: "admin", user: { id: 1, name: "Ada" } };
+    const a = { user: { name: 'Ada', id: 1 }, role: 'admin' };
+    const b = { role: 'admin', user: { id: 1, name: 'Ada' } };
     expect(generateDataHash(a)).toBe(generateDataHash(b));
   });
 
   // Primitives
   it('handles primitive types', () => {
     expect(generateDataHash(42)).toBe(generateDataHash(42));
-    expect(generateDataHash("hello")).toBe(generateDataHash("hello"));
+    expect(generateDataHash('hello')).toBe(generateDataHash('hello'));
     expect(generateDataHash(true)).toBe(generateDataHash(true));
   });
 
@@ -37,7 +37,7 @@ describe('generateDataHash', () => {
 
   // Extra: Date and undefined (from existing implementation's behavior)
   it('handles Date objects', () => {
-    const d = new Date("2024-01-01T00:00:00.000Z");
+    const d = new Date('2024-01-01T00:00:00.000Z');
     expect(generateDataHash({ date: d })).toBe(generateDataHash({ date: d }));
   });
 

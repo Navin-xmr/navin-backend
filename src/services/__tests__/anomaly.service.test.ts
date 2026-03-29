@@ -9,19 +9,26 @@ describe('evaluateTelemetry', () => {
   it('returns [] for normal conditions (edge values inclusive)', () => {
     const anomalies = evaluateTelemetry(
       { ...basePayload, temperature: 10, humidity: 60, batteryLevel: 20 },
-      { maxTemp: 10, maxHumidity: 60, minBatteryLevel: 20, minTemp: 10, minHumidity: 60 },
+      { maxTemp: 10, maxHumidity: 60, minBatteryLevel: 20, minTemp: 10, minHumidity: 60 }
     );
     expect(anomalies).toEqual([]);
   });
 
   it('returns [] when thresholds are missing', () => {
-    const anomalies = evaluateTelemetry({ ...basePayload, temperature: 999, humidity: 999, batteryLevel: 0 }, {});
+    const anomalies = evaluateTelemetry(
+      { ...basePayload, temperature: 999, humidity: 999, batteryLevel: 0 },
+      {}
+    );
     expect(anomalies).toEqual([]);
   });
 
   it('returns [] when payload is missing required identity fields', () => {
-    expect(evaluateTelemetry({ shipmentId: '', timestamp: new Date() }, { maxTemp: 1 })).toEqual([]);
-    expect(evaluateTelemetry({ shipmentId: 'x', timestamp: new Date('bad') }, { maxTemp: 1 })).toEqual([]);
+    expect(evaluateTelemetry({ shipmentId: '', timestamp: new Date() }, { maxTemp: 1 })).toEqual(
+      []
+    );
+    expect(
+      evaluateTelemetry({ shipmentId: 'x', timestamp: new Date('bad') }, { maxTemp: 1 })
+    ).toEqual([]);
   });
 
   it('detects temperature above max threshold', () => {
@@ -69,7 +76,10 @@ describe('evaluateTelemetry', () => {
   });
 
   it('detects battery below threshold with deterministic severity', () => {
-    const anomalies = evaluateTelemetry({ ...basePayload, batteryLevel: 9 }, { minBatteryLevel: 20 });
+    const anomalies = evaluateTelemetry(
+      { ...basePayload, batteryLevel: 9 },
+      { minBatteryLevel: 20 }
+    );
     expect(anomalies).toHaveLength(1);
     expect(anomalies[0]).toMatchObject({
       shipmentId: basePayload.shipmentId,
@@ -82,7 +92,7 @@ describe('evaluateTelemetry', () => {
   it('can identify multiple anomalies in a single payload', () => {
     const anomalies = evaluateTelemetry(
       { ...basePayload, temperature: 40, humidity: 99, batteryLevel: 1 },
-      { maxTemp: 10, maxHumidity: 60, minBatteryLevel: 20 },
+      { maxTemp: 10, maxHumidity: 60, minBatteryLevel: 20 }
     );
     const types = anomalies.map(a => a.type).sort();
     expect(types).toEqual(['BATTERY_LOW', 'HUMIDITY_EXCEEDED', 'TEMPERATURE_EXCEEDED'].sort());
@@ -90,11 +100,14 @@ describe('evaluateTelemetry', () => {
 
   it('ignores non-finite numeric inputs', () => {
     const anomalies = evaluateTelemetry(
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      { ...basePayload, temperature: Number.NaN as any, humidity: Infinity as any, batteryLevel: null },
-      { maxTemp: 10, maxHumidity: 60, minBatteryLevel: 20 },
+      {
+        ...basePayload,
+        temperature: Number.NaN as unknown as number,
+        humidity: Infinity as unknown as number,
+        batteryLevel: null,
+      },
+      { maxTemp: 10, maxHumidity: 60, minBatteryLevel: 20 }
     );
     expect(anomalies).toEqual([]);
   });
 });
-

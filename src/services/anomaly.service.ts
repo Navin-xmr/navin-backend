@@ -36,11 +36,15 @@ function batterySeverity(batteryLevel: number, minBatteryLevel: number): Anomaly
   return 'LOW';
 }
 
-export function evaluateTelemetry(payload: TelemetryPayload, thresholds: TelemetryThresholds): EvaluatedAnomaly[] {
+export function evaluateTelemetry(
+  payload: TelemetryPayload,
+  thresholds: TelemetryThresholds
+): EvaluatedAnomaly[] {
   const anomalies: EvaluatedAnomaly[] = [];
 
   const { shipmentId, timestamp } = payload;
-  if (!shipmentId || !(timestamp instanceof Date) || Number.isNaN(timestamp.getTime())) return anomalies;
+  if (!shipmentId || !(timestamp instanceof Date) || Number.isNaN(timestamp.getTime()))
+    return anomalies;
 
   const temperature = payload.temperature;
   const humidity = payload.humidity;
@@ -94,7 +98,11 @@ export function evaluateTelemetry(payload: TelemetryPayload, thresholds: Telemet
     }
   }
 
-  if (isFiniteNumber(batteryLevel) && isFiniteNumber(thresholds.minBatteryLevel) && batteryLevel < thresholds.minBatteryLevel) {
+  if (
+    isFiniteNumber(batteryLevel) &&
+    isFiniteNumber(thresholds.minBatteryLevel) &&
+    batteryLevel < thresholds.minBatteryLevel
+  ) {
     anomalies.push({
       shipmentId,
       timestamp,
@@ -107,4 +115,3 @@ export function evaluateTelemetry(payload: TelemetryPayload, thresholds: Telemet
 
   return anomalies;
 }
-

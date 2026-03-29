@@ -40,7 +40,7 @@ export async function detectAnomaly(data: TelemetryData): Promise<AnomalyResult>
       humidity: data.humidity,
       batteryLevel: data.batteryLevel,
     },
-    thresholds,
+    thresholds
   );
 
   if (evaluated.length === 0) return { detected: false, anomalies: [] };
@@ -53,7 +53,7 @@ export async function detectAnomaly(data: TelemetryData): Promise<AnomalyResult>
       message: a.message,
       timestamp: a.timestamp,
       resolved: a.resolved,
-    })),
+    }))
   );
 
   const docs = Array.isArray(created) ? created : [created];

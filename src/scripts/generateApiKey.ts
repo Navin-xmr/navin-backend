@@ -5,7 +5,7 @@ import { config } from '../config/index.js';
 
 async function main() {
   const args = process.argv.slice(2);
-  
+
   if (args.length < 2) {
     console.error('Usage: npm run generate-api-key <name> <organizationId> [shipmentId]');
     console.error('Example: npm run generate-api-key "IoT Sensor 1" 507f1f77bcf86cd799439011');
@@ -39,7 +39,6 @@ async function main() {
     console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
     console.log('Usage: Include this header in your IoT webhook requests:');
     console.log(`x-api-key: ${result.apiKey}\n`);
-
   } catch (error) {
     console.error('Error generating API key:', error);
     process.exit(1);
