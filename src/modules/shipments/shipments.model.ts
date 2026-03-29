@@ -15,23 +15,26 @@ const MilestoneSchema = new Schema({
   walletAddress: { type: String },
 });
 
-const ShipmentSchema = new Schema({
-  trackingNumber: { type: String, required: true, unique: true },
-  origin: { type: String, required: true },
-  destination: { type: String, required: true },
-  enterpriseId: { type: Types.ObjectId, ref: 'Enterprise', required: true },
-  logisticsId: { type: Types.ObjectId, ref: 'Logistics', required: true },
-  status: { type: String, enum: Object.values(ShipmentStatus), default: ShipmentStatus.CREATED },
-  milestones: { type: [MilestoneSchema], default: [] },
-  offChainMetadata: { type: Schema.Types.Mixed },
-  stellarTokenId: { type: String },
-  stellarTxHash: { type: String },
-  deliveryProof: {
-    url: { type: String },
-    recipientSignatureName: { type: String },
-    uploadedAt: { type: Date },
+const ShipmentSchema = new Schema(
+  {
+    trackingNumber: { type: String, required: true, unique: true },
+    origin: { type: String, required: true },
+    destination: { type: String, required: true },
+    enterpriseId: { type: Types.ObjectId, ref: 'Enterprise', required: true },
+    logisticsId: { type: Types.ObjectId, ref: 'Logistics', required: true },
+    status: { type: String, enum: Object.values(ShipmentStatus), default: ShipmentStatus.CREATED },
+    milestones: { type: [MilestoneSchema], default: [] },
+    offChainMetadata: { type: Schema.Types.Mixed },
+    stellarTokenId: { type: String },
+    stellarTxHash: { type: String },
+    deliveryProof: {
+      url: { type: String },
+      recipientSignatureName: { type: String },
+      uploadedAt: { type: Date },
+    },
   },
-}, { timestamps: true });
+  { timestamps: true }
+);
 
 ShipmentSchema.index({ status: 1, createdAt: -1 });
 ShipmentSchema.index({ enterpriseId: 1, createdAt: -1 });

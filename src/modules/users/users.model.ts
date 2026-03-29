@@ -1,7 +1,6 @@
 import mongoose, { type InferSchemaType } from 'mongoose';
 import bcrypt from 'bcrypt';
 
-
 export enum OrganizationType {
   ENTERPRISE = 'ENTERPRISE',
   LOGISTICS = 'LOGISTICS',
@@ -51,8 +50,9 @@ UserSchema.methods.toJSON = function () {
   return obj;
 };
 
-
-export type Organization = InferSchemaType<typeof OrganizationSchema> & { _id: mongoose.Types.ObjectId };
+export type Organization = InferSchemaType<typeof OrganizationSchema> & {
+  _id: mongoose.Types.ObjectId;
+};
 export const OrganizationModel = mongoose.model<Organization>('Organization', OrganizationSchema);
 
 export type User = InferSchemaType<typeof UserSchema> & { _id: mongoose.Types.ObjectId };

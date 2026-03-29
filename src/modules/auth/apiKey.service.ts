@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import bcrypt from 'bcrypt';
 import { ApiKeyModel } from './apiKey.model.js';
+import type { ApiKey } from './apiKey.model.js';
 import { AppError } from '../../shared/http/errors.js';
 
 interface CreateApiKeyParams {
@@ -21,7 +22,7 @@ interface CreateApiKeyResult {
 export async function generateApiKey(params: CreateApiKeyParams): Promise<CreateApiKeyResult> {
   // Generate a secure random API key (32 bytes = 64 hex characters)
   const rawApiKey = crypto.randomBytes(32).toString('hex');
-  
+
   // Hash the API key before storing
   const salt = await bcrypt.genSalt(10);
   const keyHash = await bcrypt.hash(rawApiKey, salt);
@@ -47,7 +48,7 @@ export async function generateApiKey(params: CreateApiKeyParams): Promise<Create
 
 export async function validateApiKey(rawApiKey: string): Promise<{
   isValid: boolean;
-  apiKeyDoc?: any;
+  apiKeyDoc?: ApiKey;
 }> {
   if (!rawApiKey) {
     return { isValid: false };
@@ -60,11 +61,8 @@ export async function validateApiKey(rawApiKey: string): Promise<{
     const isMatch = await bcrypt.compare(rawApiKey, apiKeyDoc.keyHash);
     if (isMatch) {
       // Update last used timestamp
-      await ApiKeyModel.updateOne(
-        { _id: apiKeyDoc._id },
-        { lastUsedAt: new Date() }
-      );
-      
+      await ApiKeyModel.updateOne({ _id: apiKeyDoc._id }, { lastUsedAt: new Date() });
+
       return { isValid: true, apiKeyDoc };
     }
   }
@@ -73,10 +71,7 @@ export async function validateApiKey(rawApiKey: string): Promise<{
 }
 
 export async function revokeApiKey(apiKeyId: string): Promise<void> {
-  const result = await ApiKeyModel.updateOne(
-    { _id: apiKeyId },
-    { isActive: false }
-  );
+  const result = await ApiKeyModel.updateOne({ _id: apiKeyId }, { isActive: false });
 
   if (result.matchedCount === 0) {
     throw new AppError(404, 'API key not found', 'NOT_FOUND');

@@ -14,4 +14,3 @@ webhooksRouter.post(
   validate({ body: IotWebhookBodySchema }),
   asyncHandler(iotWebhookController)
 );
-

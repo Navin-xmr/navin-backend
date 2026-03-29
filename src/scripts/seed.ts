@@ -1,30 +1,41 @@
 import 'dotenv/config';
 import mongoose, { Schema, Types } from 'mongoose';
 import { faker } from '@faker-js/faker';
-import { OrganizationModel, OrganizationType, UserModel, UserRole } from '../modules/users/users.model.js';
+import {
+  OrganizationModel,
+  OrganizationType,
+  UserModel,
+  UserRole,
+} from '../modules/users/users.model.js';
 import { Shipment, ShipmentStatus } from '../modules/shipments/shipments.model.js';
 import { connectMongo, disconnectMongo } from '../infra/mongo/connection.js';
 
-const TelemetrySchema = new Schema({
-  shipmentId: { type: Types.ObjectId, ref: 'Shipment', required: true },
-  temperature: { type: Number, required: true },
-  humidity: { type: Number, required: true },
-  latitude: { type: Number, required: true },
-  longitude: { type: Number, required: true },
-  batteryLevel: { type: Number, required: true },
-  timestamp: { type: Date, required: true },
-}, { timestamps: true });
+const TelemetrySchema = new Schema(
+  {
+    shipmentId: { type: Types.ObjectId, ref: 'Shipment', required: true },
+    temperature: { type: Number, required: true },
+    humidity: { type: Number, required: true },
+    latitude: { type: Number, required: true },
+    longitude: { type: Number, required: true },
+    batteryLevel: { type: Number, required: true },
+    timestamp: { type: Date, required: true },
+  },
+  { timestamps: true }
+);
 
 const TelemetryModel = mongoose.model('Telemetry', TelemetrySchema);
 
-const PaymentSchema = new Schema({
-  shipmentId: { type: Types.ObjectId, ref: 'Shipment', required: true },
-  amount: { type: Number, required: true },
-  currency: { type: String, required: true },
-  status: { type: String, enum: ['pending', 'completed', 'failed'], required: true },
-  method: { type: String, required: true },
-  paidAt: { type: Date },
-}, { timestamps: true });
+const PaymentSchema = new Schema(
+  {
+    shipmentId: { type: Types.ObjectId, ref: 'Shipment', required: true },
+    amount: { type: Number, required: true },
+    currency: { type: String, required: true },
+    status: { type: String, enum: ['pending', 'completed', 'failed'], required: true },
+    method: { type: String, required: true },
+    paidAt: { type: Date },
+  },
+  { timestamps: true }
+);
 
 const PaymentModel = mongoose.model('Payment', PaymentSchema);
 
@@ -82,7 +93,13 @@ async function seed() {
   console.log(`\x1b[32m✔ 2 organizations created\x1b[0m`);
 
   console.log('\x1b[33m⏳ Seeding users…\x1b[0m');
-  const roles = [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER, UserRole.VIEWER, UserRole.CUSTOMER];
+  const roles = [
+    UserRole.SUPER_ADMIN,
+    UserRole.ADMIN,
+    UserRole.MANAGER,
+    UserRole.VIEWER,
+    UserRole.CUSTOMER,
+  ];
   const users: Array<InstanceType<typeof UserModel>> = [];
   for (const role of roles) {
     const org = [UserRole.CUSTOMER, UserRole.VIEWER].includes(role) ? enterprise : logistics;
@@ -104,7 +121,7 @@ async function seed() {
     const status = STATUSES[i % STATUSES.length]!;
     const names = milestoneNames(status);
     let baseDate = faker.date.recent({ days: 30 });
-    const milestones = names.map((name) => {
+    const milestones = names.map(name => {
       baseDate = new Date(baseDate.getTime() + faker.number.int({ min: 3600_000, max: 86400_000 }));
       return {
         name,
@@ -122,7 +139,10 @@ async function seed() {
       logisticsId: logistics._id,
       status,
       milestones,
-      offChainMetadata: { weight: faker.number.float({ min: 0.5, max: 500, fractionDigits: 2 }), notes: faker.lorem.sentence() },
+      offChainMetadata: {
+        weight: faker.number.float({ min: 0.5, max: 500, fractionDigits: 2 }),
+        notes: faker.lorem.sentence(),
+      },
     });
     shipments.push(shipment);
   }
@@ -172,7 +192,7 @@ async function seed() {
   console.log('\x1b[32m✔ Done — database seeded successfully\x1b[0m');
 }
 
-seed().catch((err) => {
+seed().catch(err => {
   console.error('\x1b[31m✖ Seed failed:\x1b[0m', err);
   process.exit(1);
 });

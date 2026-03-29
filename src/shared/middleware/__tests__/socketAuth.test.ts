@@ -1,11 +1,12 @@
-import { describe, it, expect, jest } from '@jest/globals';
+import { beforeEach, describe, it, expect, jest } from '@jest/globals';
+import type { Socket } from 'socket.io';
 
 jest.unstable_mockModule('../../../modules/auth/auth.service.js', () => ({
   verifyToken: jest.fn(),
 }));
 
 describe('socketAuth', () => {
-  let socketAuth: (socket: any, next: (err?: Error) => void) => void;
+  let socketAuth: (_socket: Socket, _next: (_err?: Error) => void) => void;
   let verifyToken: jest.Mock;
 
   beforeEach(async () => {
@@ -17,7 +18,7 @@ describe('socketAuth', () => {
   });
 
   it('rejects connection when no token provided', () => {
-    const socket = { handshake: { auth: {} } };
+    const socket = { handshake: { auth: {} } } as unknown as Socket;
     const next = jest.fn();
 
     socketAuth(socket, next);
@@ -26,8 +27,10 @@ describe('socketAuth', () => {
   });
 
   it('rejects connection when token is invalid', () => {
-    verifyToken.mockImplementation(() => { throw new Error('invalid'); });
-    const socket = { handshake: { auth: { token: 'bad.token' } } };
+    verifyToken.mockImplementation(() => {
+      throw new Error('invalid');
+    });
+    const socket = { handshake: { auth: { token: 'bad.token' } } } as unknown as Socket;
     const next = jest.fn();
 
     socketAuth(socket, next);
@@ -38,7 +41,7 @@ describe('socketAuth', () => {
   it('attaches user to socket and calls next on valid token', () => {
     const payload = { userId: '123', role: 'user', organizationId: 'org1' };
     verifyToken.mockReturnValue(payload);
-    const socket: any = { handshake: { auth: { token: 'valid.token' } } };
+    const socket = { handshake: { auth: { token: 'valid.token' } } } as unknown as Socket;
     const next = jest.fn();
 
     socketAuth(socket, next);

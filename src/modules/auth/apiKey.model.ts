@@ -1,5 +1,4 @@
 import mongoose, { type InferSchemaType } from 'mongoose';
-import bcrypt from 'bcrypt';
 
 const ApiKeySchema = new mongoose.Schema(
   {

@@ -1,17 +1,48 @@
 import { describe, expect, beforeEach, it, jest } from '@jest/globals';
 import request from 'supertest';
 import { generateDataHash } from '../src/shared/utils/crypto.js';
+import type { Application } from 'express';
+
+type TelemetryCreateResult = {
+  _id: string;
+  shipmentId: string;
+  temperature: number;
+  humidity: number;
+  latitude: number;
+  longitude: number;
+  batteryLevel: number;
+  timestamp: Date;
+  dataHash: string;
+  stellarTxHash: string;
+  rawPayload: Record<string, unknown>;
+};
+
+type ValidateApiKeyResult = {
+  isValid: boolean;
+  apiKeyDoc?: {
+    _id: string;
+    organizationId: string;
+    shipmentId: string;
+  };
+};
+
+type ShipmentUpdateResult = {
+  _id: string;
+  status: string;
+  milestones: Array<{ name: string; timestamp: Date; userId: string }>;
+  updatedAt: Date;
+};
 
 describe('Real-time Socket.io Events', () => {
-  let app: any;
-  const mockAnchorTelemetryHash: any = jest.fn();
-  const mockTelemetryCreate: any = jest.fn();
-  const mockValidateApiKey: any = jest.fn();
-  const mockEmitTelemetryUpdate: any = jest.fn();
-  const mockEmitStatusUpdate: any = jest.fn();
-  const mockEmitAnomalyDetected: any = jest.fn();
-  const mockShipmentFindByIdAndUpdate: any = jest.fn();
-  const mockUserModelFindById: any = jest.fn();
+  let app: Application;
+  const mockAnchorTelemetryHash = jest.fn<() => Promise<{ stellarTxHash: string }>>();
+  const mockTelemetryCreate = jest.fn<() => Promise<TelemetryCreateResult>>();
+  const mockValidateApiKey = jest.fn<() => Promise<ValidateApiKeyResult>>();
+  const mockEmitTelemetryUpdate = jest.fn();
+  const mockEmitStatusUpdate = jest.fn();
+  const mockEmitAnomalyDetected = jest.fn();
+  const mockShipmentFindByIdAndUpdate = jest.fn<() => Promise<ShipmentUpdateResult>>();
+  const mockUserModelFindById = jest.fn<() => Promise<{ _id: string; walletAddress: string } | null>>();
 
   beforeEach(async () => {
     jest.clearAllMocks();
