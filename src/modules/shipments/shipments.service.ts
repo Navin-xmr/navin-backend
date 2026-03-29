@@ -92,11 +92,25 @@ export const updateShipmentStatusService = async (
 
   if (actor?.userId) {
     milestone.userId = actor.userId;
-    const found = await UserModel.findById(actor.userId)
-      .select({ walletAddress: 1 })
-      .lean<{ walletAddress?: string }>();
-    if (found?.walletAddress) {
-      milestone.walletAddress = found.walletAddress;
+    const userLookup = UserModel.findById(actor.userId) as
+      | {
+          select?: (projection: { walletAddress: 1 }) => {
+            lean: <T>() => Promise<T | null>;
+          };
+        }
+      | Promise<{ walletAddress?: string } | null>
+      | null;
+
+    if (userLookup && typeof userLookup === 'object' && 'select' in userLookup) {
+      const found = await userLookup.select?.({ walletAddress: 1 }).lean<{ walletAddress?: string }>();
+      if (found?.walletAddress) {
+        milestone.walletAddress = found.walletAddress;
+      }
+    } else {
+      const found = await (userLookup as Promise<{ walletAddress?: string } | null>);
+      if (found?.walletAddress) {
+        milestone.walletAddress = found.walletAddress;
+      }
     }
   }
 
