@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import '../loadEnv.js';
 import mongoose, { Schema, Types } from 'mongoose';
 import { faker } from '@faker-js/faker';
 import {
@@ -9,6 +9,7 @@ import {
 } from '../modules/users/users.model.js';
 import { Shipment, ShipmentStatus } from '../modules/shipments/shipments.model.js';
 import { connectMongo, disconnectMongo } from '../infra/mongo/connection.js';
+import { env } from '../env.js';
 
 const TelemetrySchema = new Schema(
   {
@@ -58,16 +59,12 @@ function milestoneNames(status: ShipmentStatus): string[] {
 }
 
 async function seed() {
-  if (process.env.NODE_ENV === 'production') {
+  if (env.NODE_ENV === 'production') {
     console.error('\x1b[31m✖ ABORT: Seeding is not allowed in production!\x1b[0m');
     process.exit(1);
   }
 
-  const mongoUri = process.env.MONGO_URI;
-  if (!mongoUri) {
-    console.error('\x1b[31m✖ MONGO_URI is not set\x1b[0m');
-    process.exit(1);
-  }
+  const mongoUri = env.MONGO_URI;
 
   await connectMongo(mongoUri);
 

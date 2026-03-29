@@ -250,7 +250,7 @@ describe('Shipments API (mocked DB)', () => {
 
     const tokenPayload = { userId: String(user._id), role: user.role };
     const { default: { sign } } = await import('jsonwebtoken');
-    const token = sign(tokenPayload, process.env.JWT_SECRET || 'secret');
+    const token = sign(tokenPayload, process.env.JWT_SECRET!);
 
     const res = await request(app)
       .post('/api/shipments')
@@ -272,7 +272,7 @@ describe('Shipments API (mocked DB)', () => {
 
     const tokenPayload = { userId: String(user._id), role: user.role };
     const { default: { sign } } = await import('jsonwebtoken');
-    const token = sign(tokenPayload, process.env.JWT_SECRET || 'secret');
+    const token = sign(tokenPayload, process.env.JWT_SECRET!);
 
     const res = await request(app)
       .post('/api/shipments')
