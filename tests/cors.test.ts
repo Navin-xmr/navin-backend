@@ -1,29 +1,44 @@
 import request from 'supertest';
-import { buildApp } from '../src/app.js';
+import { jest } from '@jest/globals';
 
-describe('CORS Configuration', () => {
-  it('should allow default origin (*)', async () => {
-    const app = buildApp();
-    const response = await request(app)
-      .options('/api/health')
-      .set('Origin', 'http://example.com')
-      .set('Access-Control-Request-Method', 'GET');
+async function loadAppWithAllowedOrigins(allowedOrigins: string) {
+  process.env.ALLOWED_ORIGINS = allowedOrigins;
+  jest.resetModules();
+  const appModule = await import('../src/app.js');
+  return appModule.buildApp();
+}
 
-    expect(response.headers['access-control-allow-origin']).toBe('*');
+describe('CORS configuration', () => {
+  it('allows requests from configured origins', async () => {
+    const app = await loadAppWithAllowedOrigins('https://allowed.example,https://app.example');
+
+    const response = await request(app).get('/api/health').set('Origin', 'https://allowed.example');
+
+    expect(response.status).toBe(200);
+    expect(response.headers['access-control-allow-origin']).toBe('https://allowed.example');
   });
 
-  it('should allow specific origins when configured', async () => {
-    // Mocking config/env is tricky because they are loaded at startup
-    // But since buildApp calls cors({ origin: config.corsOrigin ... })
-    // we can check if it respects the current config.
-    // However, the current config is loaded from process.env.
-    
-    // For this test, we can check if the headers are present
-    const app = buildApp();
-    const response = await request(app)
-      .get('/api/health')
-      .set('Origin', 'http://example.com');
+  it('blocks requests from unlisted origins', async () => {
+    const app = await loadAppWithAllowedOrigins('https://allowed.example');
 
-    expect(response.headers['access-control-allow-origin']).toBeDefined();
+    const response = await request(app).get('/api/health').set('Origin', 'https://blocked.example');
+
+    expect(response.status).toBe(403);
+    expect(response.body).toMatchObject({
+      success: false,
+      message: 'CORS origin denied',
+    });
+  });
+
+  it('handles preflight OPTIONS requests for allowed origins', async () => {
+    const app = await loadAppWithAllowedOrigins('https://allowed.example');
+
+    const response = await request(app)
+      .options('/api/health')
+      .set('Origin', 'https://allowed.example')
+      .set('Access-Control-Request-Method', 'GET');
+
+    expect(response.status).toBe(204);
+    expect(response.headers['access-control-allow-origin']).toBe('https://allowed.example');
   });
 });

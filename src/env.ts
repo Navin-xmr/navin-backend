@@ -14,6 +14,7 @@ const EnvSchema = z.object({
     .regex(/^S[A-Z2-7]{20,}$/, 'STELLAR_SECRET_KEY must be a valid Stellar secret key')
     .optional(),
   STELLAR_NETWORK: z.enum(['testnet', 'public']).default('testnet'),
+  ALLOWED_ORIGINS: z.string().default(''),
   REDIS_URL: z
     .string()
     .url('REDIS_URL must be a valid URL')

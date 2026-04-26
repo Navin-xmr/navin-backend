@@ -94,6 +94,7 @@ describe('E2E: Shipment Lifecycle (Hash and Emit Pipeline)', () => {
         Promise.resolve({ detected: false, anomalies: [] })
       ),
       getAnomaliesService: jest.fn(),
+      resolveAnomalyService: jest.fn(),
       createAnomalyRecord: jest.fn(),
     }));
 
