@@ -95,6 +95,7 @@ describe('E2E: Shipment Lifecycle (Hash and Emit Pipeline)', () => {
       ),
       getAnomaliesService: jest.fn(),
       resolveAnomalyService: jest.fn(),
+      createAnomalyRecord: jest.fn(),
     }));
 
     // Build the Express app

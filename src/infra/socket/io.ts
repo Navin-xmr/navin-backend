@@ -8,6 +8,11 @@ import {
   leaveShipmentRoom,
   shipmentRoomName,
 } from './shipmentRooms.js';
+import type {
+  TelemetryUpdatePayload,
+  AnomalyAlertPayload,
+  StatusUpdatePayload,
+} from '../../shared/types/socketEvents.js';
 
 let io: Server | null = null;
 
@@ -38,14 +43,14 @@ export function getIO(): Server {
   return io;
 }
 
-export function emitAnomalyDetected(shipmentId: string, anomaly: unknown) {
+export function emitAnomalyDetected(shipmentId: string, anomaly: AnomalyAlertPayload) {
   getIO().to(shipmentRoomName(shipmentId)).emit('anomaly_detected', anomaly);
 }
 
-export function emitTelemetryUpdate(shipmentId: string, telemetry: unknown) {
+export function emitTelemetryUpdate(shipmentId: string, telemetry: TelemetryUpdatePayload) {
   getIO().to(shipmentRoomName(shipmentId)).emit('telemetry_update', telemetry);
 }
 
-export function emitStatusUpdate(shipmentId: string, statusData: unknown) {
+export function emitStatusUpdate(shipmentId: string, statusData: StatusUpdatePayload) {
   getIO().to(shipmentRoomName(shipmentId)).emit('status_update', statusData);
 }

@@ -114,7 +114,9 @@ async function seed() {
 
   console.log('\x1b[33m⏳ Seeding shipments…\x1b[0m');
   const shipments = [];
-  for (let i = 0; i < 20; i++) {
+  
+  // Standard shipments (happy paths and various statuses)
+  for (let i = 0; i < 17; i++) {
     const status = STATUSES[i % STATUSES.length]!;
     const names = milestoneNames(status);
     let baseDate = faker.date.recent({ days: 30 });
@@ -143,13 +145,124 @@ async function seed() {
     });
     shipments.push(shipment);
   }
-  console.log(`\x1b[32m✔ ${shipments.length} shipments created\x1b[0m`);
+
+  // Edge Case 1: Shipment stuck in transit for 5 days
+  const stuckShipment = await Shipment.create({
+    trackingNumber: `NAV-STUCK-${faker.string.alphanumeric({ length: 6, casing: 'upper' })}`,
+    origin: faker.location.city() + ', ' + faker.location.country(),
+    destination: faker.location.city() + ', ' + faker.location.country(),
+    enterpriseId: enterprise._id,
+    logisticsId: logistics._id,
+    status: ShipmentStatus.IN_TRANSIT,
+    milestones: [
+      {
+        name: 'Order Placed',
+        timestamp: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000), // 5 days ago
+        description: 'Order placed',
+        userId: faker.helpers.arrayElement(users)._id,
+      },
+      {
+        name: 'Picked Up',
+        timestamp: new Date(Date.now() - 4.5 * 24 * 60 * 60 * 1000), // 4.5 days ago
+        description: 'Package picked up from warehouse',
+        userId: faker.helpers.arrayElement(users)._id,
+      },
+      {
+        name: 'In Transit',
+        timestamp: new Date(Date.now() - 4 * 24 * 60 * 60 * 1000), // 4 days ago
+        description: 'Package in transit - STUCK HERE',
+        userId: faker.helpers.arrayElement(users)._id,
+      },
+    ],
+    offChainMetadata: {
+      weight: faker.number.float({ min: 0.5, max: 500, fractionDigits: 2 }),
+      notes: 'EDGE CASE: Shipment delayed - stuck in transit for 5 days',
+      edgeCase: 'delayed_5_days',
+    },
+  });
+  shipments.push(stuckShipment);
+
+  // Edge Case 2: Shipment with multiple anomalies
+  const anomalousShipment = await Shipment.create({
+    trackingNumber: `NAV-ANOM-${faker.string.alphanumeric({ length: 6, casing: 'upper' })}`,
+    origin: faker.location.city() + ', ' + faker.location.country(),
+    destination: faker.location.city() + ', ' + faker.location.country(),
+    enterpriseId: enterprise._id,
+    logisticsId: logistics._id,
+    status: ShipmentStatus.IN_TRANSIT,
+    milestones: [
+      {
+        name: 'Order Placed',
+        timestamp: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
+        description: 'Order placed',
+        userId: faker.helpers.arrayElement(users)._id,
+      },
+      {
+        name: 'Picked Up',
+        timestamp: new Date(Date.now() - 1.5 * 24 * 60 * 60 * 1000),
+        description: 'Package picked up',
+        userId: faker.helpers.arrayElement(users)._id,
+      },
+      {
+        name: 'In Transit',
+        timestamp: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
+        description: 'In transit with anomalies detected',
+        userId: faker.helpers.arrayElement(users)._id,
+      },
+    ],
+    offChainMetadata: {
+      weight: faker.number.float({ min: 0.5, max: 500, fractionDigits: 2 }),
+      notes: 'EDGE CASE: Shipment with 3+ anomalies',
+      edgeCase: 'multiple_anomalies',
+    },
+  });
+  shipments.push(anomalousShipment);
+
+  // Edge Case 3: Shipment with heavy pagination telemetry (100+ records)
+  const heavyTelemetryShipment = await Shipment.create({
+    trackingNumber: `NAV-HEAVY-${faker.string.alphanumeric({ length: 6, casing: 'upper' })}`,
+    origin: faker.location.city() + ', ' + faker.location.country(),
+    destination: faker.location.city() + ', ' + faker.location.country(),
+    enterpriseId: enterprise._id,
+    logisticsId: logistics._id,
+    status: ShipmentStatus.IN_TRANSIT,
+    milestones: [
+      {
+        name: 'Order Placed',
+        timestamp: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
+        description: 'Order placed',
+        userId: faker.helpers.arrayElement(users)._id,
+      },
+      {
+        name: 'Picked Up',
+        timestamp: new Date(Date.now() - 2.5 * 24 * 60 * 60 * 1000),
+        description: 'Package picked up',
+        userId: faker.helpers.arrayElement(users)._id,
+      },
+      {
+        name: 'In Transit',
+        timestamp: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
+        description: 'In transit with heavy telemetry',
+        userId: faker.helpers.arrayElement(users)._id,
+      },
+    ],
+    offChainMetadata: {
+      weight: faker.number.float({ min: 0.5, max: 500, fractionDigits: 2 }),
+      notes: 'EDGE CASE: Shipment with 100+ telemetry records for pagination testing',
+      edgeCase: 'heavy_telemetry',
+    },
+  });
+  shipments.push(heavyTelemetryShipment);
+
+  console.log(`\x1b[32m✔ ${shipments.length} shipments created (including 3 edge cases)\x1b[0m`);
 
   console.log('\x1b[33m⏳ Seeding telemetry…\x1b[0m');
   const telemetryDocs = [];
+  
+  // Regular telemetry for standard shipments
   for (let i = 0; i < 100; i++) {
     telemetryDocs.push({
-      shipmentId: faker.helpers.arrayElement(shipments)._id,
+      shipmentId: faker.helpers.arrayElement(shipments.slice(0, 17))._id,
       temperature: faker.number.float({ min: -20, max: 45, fractionDigits: 1 }),
       humidity: faker.number.float({ min: 10, max: 99, fractionDigits: 1 }),
       latitude: faker.location.latitude(),
@@ -158,6 +271,47 @@ async function seed() {
       timestamp: faker.date.recent({ days: 14 }),
     });
   }
+
+  // Heavy telemetry for edge case shipment (100+ records)
+  for (let i = 0; i < 120; i++) {
+    telemetryDocs.push({
+      shipmentId: heavyTelemetryShipment._id,
+      temperature: faker.number.float({ min: 15, max: 25, fractionDigits: 1 }),
+      humidity: faker.number.float({ min: 40, max: 60, fractionDigits: 1 }),
+      latitude: faker.location.latitude(),
+      longitude: faker.location.longitude(),
+      batteryLevel: faker.number.int({ min: 50, max: 100 }),
+      timestamp: new Date(Date.now() - faker.number.int({ min: 0, max: 3 * 24 * 60 * 60 * 1000 })),
+    });
+  }
+
+  // Anomalous telemetry for anomaly edge case (temperature and humidity spikes)
+  for (let i = 0; i < 50; i++) {
+    const isAnomaly = i % 5 === 0; // Every 5th record is anomalous
+    telemetryDocs.push({
+      shipmentId: anomalousShipment._id,
+      temperature: isAnomaly ? faker.number.float({ min: 35, max: 50, fractionDigits: 1 }) : faker.number.float({ min: 15, max: 25, fractionDigits: 1 }),
+      humidity: isAnomaly ? faker.number.float({ min: 85, max: 99, fractionDigits: 1 }) : faker.number.float({ min: 40, max: 60, fractionDigits: 1 }),
+      latitude: faker.location.latitude(),
+      longitude: faker.location.longitude(),
+      batteryLevel: isAnomaly ? faker.number.int({ min: 5, max: 15 }) : faker.number.int({ min: 50, max: 100 }),
+      timestamp: new Date(Date.now() - faker.number.int({ min: 0, max: 2 * 24 * 60 * 60 * 1000 })),
+    });
+  }
+
+  // Stuck shipment telemetry (no movement)
+  for (let i = 0; i < 30; i++) {
+    telemetryDocs.push({
+      shipmentId: stuckShipment._id,
+      temperature: faker.number.float({ min: 18, max: 22, fractionDigits: 1 }),
+      humidity: faker.number.float({ min: 45, max: 55, fractionDigits: 1 }),
+      latitude: 40.7128, // Fixed location (New York)
+      longitude: -74.006,
+      batteryLevel: faker.number.int({ min: 30, max: 80 }),
+      timestamp: new Date(Date.now() - faker.number.int({ min: 0, max: 5 * 24 * 60 * 60 * 1000 })),
+    });
+  }
+
   await TelemetryModel.insertMany(telemetryDocs);
   console.log(`\x1b[32m✔ ${telemetryDocs.length} telemetry points created\x1b[0m`);
 
@@ -180,7 +334,10 @@ async function seed() {
   console.log('\x1b[36m\n── Seed Summary ──────────────────\x1b[0m');
   console.log(`  Organizations : 2`);
   console.log(`  Users         : ${users.length}`);
-  console.log(`  Shipments     : ${shipments.length}`);
+  console.log(`  Shipments     : ${shipments.length} (including 3 edge cases)`);
+  console.log(`    • Delayed 5 days (stuck in transit)`);
+  console.log(`    • Multiple anomalies detected`);
+  console.log(`    • Heavy telemetry (100+ records)`);
   console.log(`  Telemetry     : ${telemetryDocs.length}`);
   console.log(`  Payments      : ${paymentDocs.length}`);
   console.log('\x1b[36m──────────────────────────────────\x1b[0m\n');

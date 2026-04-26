@@ -14,7 +14,7 @@ export async function findActiveShipmentBySensorId(sensorId: string) {
 }
 
 export async function createTelemetryRecord(input: {
-  sensorId: string;
+  sensorId?: string;
   shipmentId: string;
   temperature: number;
   humidity: number;
@@ -28,7 +28,7 @@ export async function createTelemetryRecord(input: {
   rawPayload: unknown;
 }) {
   return Telemetry.create({
-    sensorId: input.sensorId,
+    sensorId: input.sensorId ?? input.shipmentId,
     shipmentId: input.shipmentId,
     temperature: input.temperature,
     humidity: input.humidity,

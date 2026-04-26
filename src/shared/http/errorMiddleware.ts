@@ -46,6 +46,15 @@ export function errorMiddleware(): ErrorRequestHandler {
       });
     }
 
+    // CORS origin rejection
+    if (err instanceof Error && err.message === 'Not allowed by CORS') {
+      return res.status(403).json({
+        success: false,
+        message: 'CORS origin denied',
+        ...(isDev && { stack: err.stack }),
+      });
+    }
+
     // Fallback
     return res.status(500).json({
       success: false,

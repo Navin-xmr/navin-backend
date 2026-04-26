@@ -121,7 +121,13 @@ export const updateShipmentStatusService = async (
   emitStatusUpdate(id, {
     shipmentId: id,
     status: shipment.status,
-    milestones: shipment.milestones,
+    milestones: shipment.milestones.map(m => ({
+      name: m.name,
+      timestamp: m.timestamp,
+      description: m.description ?? undefined,
+      userId: m.userId?.toString() ?? undefined,
+      walletAddress: m.walletAddress ?? undefined,
+    })),
     updatedAt: shipment.updatedAt,
   });
 
