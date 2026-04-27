@@ -15,3 +15,12 @@ export const strictLimiter = rateLimit({
   legacyHeaders: false,
   message: { success: false, message: 'Too many requests, please slow down.' },
 });
+
+export const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  limit: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skipSuccessfulRequests: true,
+  message: { success: false, message: 'Too many login attempts, please try again later.' },
+});

@@ -7,7 +7,7 @@ import YAML from 'yamljs';
 import { requestId } from './shared/middleware/requestId.js';
 import { notFound } from './shared/middleware/notFound.js';
 import { errorMiddleware } from './shared/http/errorMiddleware.js';
-import { standardLimiter, strictLimiter } from './shared/middleware/rateLimiter.js';
+import { standardLimiter, loginLimiter } from './shared/middleware/rateLimiter.js';
 import { corsMiddleware, corsPreflight } from './config/cors.js';
 
 import { healthRouter } from './modules/health/health.routes.js';
@@ -30,7 +30,7 @@ export function buildApp() {
   app.use(express.json());
 
   app.use(standardLimiter);
-  app.use('/api/auth/login', strictLimiter);
+  app.use('/api/auth/login', loginLimiter);
 
   app.use('/api/health', healthRouter);
   app.use('/api/auth', authRouter);
