@@ -27,7 +27,8 @@ export function buildApp() {
   app.use(requestId());
   app.use(corsMiddleware);
   app.options('*', corsPreflight);
-  app.use(express.json());
+  app.use(express.json({ limit: '100kb' }));
+  app.use(express.urlencoded({ extended: true, limit: '100kb' }));
 
   app.use(standardLimiter);
   app.use('/api/auth/login', loginLimiter);
