@@ -1,18 +1,24 @@
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
+import { randomUUID } from 'crypto';
 import { AppError } from '../../shared/http/errors.js';
 import { env } from '../../env.js';
 import { UserModel, UserRole } from '../users/users.model.js';
+import { blockToken } from '../../infra/redis/tokenBlocklist.js';
 import type { SignupInput, LoginInput } from './auth.validation.js';
 
 export interface TokenPayload {
   userId: string;
   role: string;
   organizationId?: string;
+  jti: string;
 }
 
-function generateToken(payload: TokenPayload): string {
-  return jwt.sign(payload, env.JWT_SECRET, { expiresIn: '7d' });
+const TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60; // 7 days
+
+function generateToken(payload: Omit<TokenPayload, 'jti'>): string {
+  const jti = randomUUID();
+  return jwt.sign({ ...payload, jti }, env.JWT_SECRET, { expiresIn: TOKEN_TTL_SECONDS });
 }
 
 export async function signup(input: SignupInput) {
@@ -78,4 +84,21 @@ export async function login(input: LoginInput) {
 
 export function verifyToken(token: string): TokenPayload {
   return jwt.verify(token, env.JWT_SECRET) as TokenPayload;
+}
+
+export async function logout(token: string): Promise<void> {
+  let payload: TokenPayload;
+  try {
+    payload = verifyToken(token);
+  } catch {
+    // Token already invalid — nothing to revoke
+    return;
+  }
+
+  const exp = (payload as TokenPayload & { exp?: number }).exp;
+  const ttl = exp ? exp - Math.floor(Date.now() / 1000) : TOKEN_TTL_SECONDS;
+
+  if (ttl > 0) {
+    await blockToken(payload.jti, ttl);
+  }
 }
