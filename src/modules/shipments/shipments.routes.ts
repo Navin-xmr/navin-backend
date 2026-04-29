@@ -21,6 +21,8 @@ import {
   ShipmentStatusBodySchema,
 } from './shipments.validation.js';
 
+import { UserRole } from '../../shared/constants/index.js';
+
 export const shipmentsRouter = Router();
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -32,14 +34,14 @@ shipmentsRouter.get(
 shipmentsRouter.post(
   '/',
   requireAuth,
-  requireRole(...['MANAGER', 'ADMIN']),
+  requireRole(UserRole.MANAGER, UserRole.ADMIN),
   validateRequest({ body: CreateShipmentBodySchema }),
   asyncHandler(createShipment)
 );
 shipmentsRouter.patch(
   '/:id',
   requireAuth,
-  requireRole('ADMIN', 'MANAGER'),
+  requireRole(UserRole.ADMIN, UserRole.MANAGER),
   validateRequest({ params: ShipmentIdParamSchema, body: ShipmentPatchBodySchema }),
   asyncHandler(patchShipment)
 );
@@ -52,7 +54,7 @@ shipmentsRouter.patch(
 shipmentsRouter.post(
   '/:id/proof',
   requireAuth,
-  requireRole('ADMIN', 'MANAGER'),
+  requireRole(UserRole.ADMIN, UserRole.MANAGER),
   upload.single('file'),
   validateRequest({ params: ShipmentIdParamSchema, body: ShipmentProofBodySchema }),
   asyncHandler(uploadShipmentProof)
@@ -60,7 +62,7 @@ shipmentsRouter.post(
 shipmentsRouter.delete(
   '/:id',
   requireAuth,
-  requireRole('ADMIN', 'MANAGER'),
+  requireRole(UserRole.ADMIN, UserRole.MANAGER),
   validateRequest({ params: ShipmentIdParamSchema }),
   asyncHandler(deleteShipment)
 );

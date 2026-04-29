@@ -1,0 +1,51 @@
+
+> build
+> tsc -p tsconfig.json
+
+src/app.ts(4,20): error TS2307: Cannot find module 'helmet' or its corresponding type declarations.
+src/modules/analytics/analytics.service.ts(84,66): error TS7006: Parameter 'row' implicitly has an 'any' type.
+src/modules/analytics/analytics.service.ts(90,5): error TS7006: Parameter 'row' implicitly has an 'any' type.
+tests/rbac.matrix.test.ts(67,32): error TS2558: Expected 0-1 type arguments, but got 2.
+tests/rbac.matrix.test.ts(68,35): error TS2558: Expected 0-1 type arguments, but got 2.
+tests/rbac.matrix.test.ts(69,34): error TS2558: Expected 0-1 type arguments, but got 2.
+tests/rbac.matrix.test.ts(70,36): error TS2558: Expected 0-1 type arguments, but got 2.
+tests/rbac.matrix.test.ts(71,36): error TS2558: Expected 0-1 type arguments, but got 2.
+tests/rbac.matrix.test.ts(72,38): error TS2558: Expected 0-1 type arguments, but got 2.
+tests/rbac.matrix.test.ts(73,49): error TS2558: Expected 0-1 type arguments, but got 2.
+tests/rbac.matrix.test.ts(74,37): error TS2558: Expected 0-1 type arguments, but got 2.
+tests/rbac.matrix.test.ts(75,35): error TS2558: Expected 0-1 type arguments, but got 2.
+tests/rbac.matrix.test.ts(76,48): error TS2558: Expected 0-1 type arguments, but got 2.
+tests/rbac.matrix.test.ts(77,42): error TS2558: Expected 0-1 type arguments, but got 2.
+tests/rbac.matrix.test.ts(78,37): error TS2558: Expected 0-1 type arguments, but got 2.
+tests/rbac.matrix.test.ts(161,42): error TS2345: Argument of type 'never[]' is not assignable to parameter of type 'never'.
+tests/rbac.matrix.test.ts(162,41): error TS2345: Argument of type 'never[]' is not assignable to parameter of type 'never'.
+tests/rbac.matrix.test.ts(164,44): error TS2345: Argument of type 'never[]' is not assignable to parameter of type 'never'.
+tests/rbac.matrix.test.ts(165,43): error TS2345: Argument of type 'never[]' is not assignable to parameter of type 'never'.
+tests/rbac.matrix.test.ts(170,42): error TS2345: Argument of type 'never[]' is not assignable to parameter of type 'never'.
+tests/rbac.matrix.test.ts(171,41): error TS2345: Argument of type 'never[]' is not assignable to parameter of type 'never'.
+tests/rbac.matrix.test.ts(173,44): error TS2345: Argument of type 'never[]' is not assignable to parameter of type 'never'.
+tests/rbac.matrix.test.ts(174,43): error TS2345: Argument of type 'never[]' is not assignable to parameter of type 'never'.
+tests/rbac.matrix.test.ts(179,42): error TS2345: Argument of type 'never[]' is not assignable to parameter of type 'never'.
+tests/rbac.matrix.test.ts(180,41): error TS2345: Argument of type 'never[]' is not assignable to parameter of type 'never'.
+tests/rbac.matrix.test.ts(184,42): error TS2345: Argument of type 'never[]' is not assignable to parameter of type 'never'.
+tests/rbac.matrix.test.ts(185,41): error TS2345: Argument of type 'never[]' is not assignable to parameter of type 'never'.
+tests/setup.ts(19,28): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.
+  Type 'undefined' is not assignable to type 'string'.
+tests/socketio.client.integration.test.ts(114,36): error TS2558: Expected 0-1 type arguments, but got 2.
+tests/socketio.client.integration.test.ts(118,27): error TS2558: Expected 0-1 type arguments, but got 2.
+tests/socketio.client.integration.test.ts(130,27): error TS2558: Expected 0-1 type arguments, but got 2.
+tests/stellar.worker.retry.test.ts(27,20): error TS2558: Expected 0-1 type arguments, but got 2.
+tests/stellar.worker.retry.test.ts(44,49): error TS2345: Argument of type 'undefined' is not assignable to parameter of type 'never'.
+tests/stellar.worker.retry.test.ts(45,52): error TS2345: Argument of type 'undefined' is not assignable to parameter of type 'never'.
+tests/stellar.worker.retry.test.ts(71,40): error TS2558: Expected 0-1 type arguments, but got 2.
+tests/stellar.worker.retry.test.ts(83,9): error TS2322: Type 'false' is not assignable to type 'KeepJobs | undefined'.
+tests/stellar.worker.retry.test.ts(84,9): error TS2322: Type 'false' is not assignable to type 'KeepJobs | undefined'.
+tests/stellar.worker.retry.test.ts(132,40): error TS2558: Expected 0-1 type arguments, but got 2.
+tests/stellar.worker.retry.test.ts(139,9): error TS2322: Type 'false' is not assignable to type 'KeepJobs | undefined'.
+tests/stellar.worker.retry.test.ts(140,9): error TS2322: Type 'false' is not assignable to type 'KeepJobs | undefined'.
+tests/stellar.worker.retry.test.ts(164,40): error TS2558: Expected 0-1 type arguments, but got 2.
+tests/stellar.worker.retry.test.ts(172,9): error TS2322: Type 'false' is not assignable to type 'KeepJobs | undefined'.
+tests/stellar.worker.retry.test.ts(173,9): error TS2322: Type 'false' is not assignable to type 'KeepJobs | undefined'.
+tests/stellar.worker.retry.test.ts(199,40): error TS2558: Expected 0-1 type arguments, but got 2.
+tests/stellar.worker.retry.test.ts(206,9): error TS2322: Type 'false' is not assignable to type 'KeepJobs | undefined'.
+tests/stellar.worker.retry.test.ts(207,9): error TS2322: Type 'false' is not assignable to type 'KeepJobs | undefined'.

@@ -1,9 +1,6 @@
-export enum ShipmentStatus {
-  CREATED = 'CREATED',
-  IN_TRANSIT = 'IN_TRANSIT',
-  DELIVERED = 'DELIVERED',
-  CANCELLED = 'CANCELLED',
-}
+import { ShipmentStatus } from '../constants/index.js';
+
+export { ShipmentStatus };
 
 export interface IMilestone {
   name: string;

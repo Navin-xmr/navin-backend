@@ -8,12 +8,14 @@ import { asyncHandler } from '../../shared/http/asyncHandler.js';
 import { PerformanceQuerySchema } from './analytics.validation.js';
 import { getPerformanceController } from './analytics.controller.js';
 
+import { UserRole } from '../../shared/constants/index.js';
+
 export const analyticsRouter = Router();
 
 analyticsRouter.get(
   '/performance',
   requireAuth,
-  requireRole('ADMIN', 'MANAGER'),
+  requireRole(UserRole.ADMIN, UserRole.MANAGER),
   validateRequest({ query: PerformanceQuerySchema }),
   asyncHandler(getPerformanceController)
 );
