@@ -1,0 +1,22 @@
+
+> build
+> tsc -p tsconfig.json
+
+tests/rbac.matrix.test.ts(161,42): error TS2345: Argument of type 'never[]' is not assignable to parameter of type 'never'.
+tests/rbac.matrix.test.ts(162,41): error TS2345: Argument of type 'never[]' is not assignable to parameter of type 'never'.
+tests/rbac.matrix.test.ts(164,44): error TS2345: Argument of type 'never[]' is not assignable to parameter of type 'never'.
+tests/rbac.matrix.test.ts(165,43): error TS2345: Argument of type 'never[]' is not assignable to parameter of type 'never'.
+tests/rbac.matrix.test.ts(170,42): error TS2345: Argument of type 'never[]' is not assignable to parameter of type 'never'.
+tests/rbac.matrix.test.ts(171,41): error TS2345: Argument of type 'never[]' is not assignable to parameter of type 'never'.
+tests/rbac.matrix.test.ts(173,44): error TS2345: Argument of type 'never[]' is not assignable to parameter of type 'never'.
+tests/rbac.matrix.test.ts(174,43): error TS2345: Argument of type 'never[]' is not assignable to parameter of type 'never'.
+tests/rbac.matrix.test.ts(179,42): error TS2345: Argument of type 'never[]' is not assignable to parameter of type 'never'.
+tests/rbac.matrix.test.ts(180,41): error TS2345: Argument of type 'never[]' is not assignable to parameter of type 'never'.
+tests/rbac.matrix.test.ts(184,42): error TS2345: Argument of type 'never[]' is not assignable to parameter of type 'never'.
+tests/rbac.matrix.test.ts(185,41): error TS2345: Argument of type 'never[]' is not assignable to parameter of type 'never'.
+tests/stellar.worker.retry.test.ts(44,49): error TS2345: Argument of type 'undefined' is not assignable to parameter of type 'never'.
+tests/stellar.worker.retry.test.ts(45,52): error TS2345: Argument of type 'undefined' is not assignable to parameter of type 'never'.
+tests/stellar.worker.retry.test.ts(82,9): error TS2353: Object literal may only specify known properties, and 'maxRetries' does not exist in type 'WorkerOptions'.
+tests/stellar.worker.retry.test.ts(137,9): error TS2353: Object literal may only specify known properties, and 'maxRetries' does not exist in type 'WorkerOptions'.
+tests/stellar.worker.retry.test.ts(169,9): error TS2353: Object literal may only specify known properties, and 'maxRetries' does not exist in type 'WorkerOptions'.
+tests/stellar.worker.retry.test.ts(202,9): error TS2353: Object literal may only specify known properties, and 'maxRetries' does not exist in type 'WorkerOptions'.

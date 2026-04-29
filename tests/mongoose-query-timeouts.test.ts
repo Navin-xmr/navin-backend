@@ -20,7 +20,7 @@ describe('Analytics aggregation maxTimeMS', () => {
     const Schema = new mongoose.Schema({ name: String });
     const Model = mongoose.models['TimeoutTestModel'] ?? mongoose.model('TimeoutTestModel', Schema);
 
-    const agg = Model.aggregate([{ $match: {} }]).maxTimeMS(5000);
+    const agg = (Model.aggregate([{ $match: {} }]) as any).maxTimeMS(5000);
 
     // Verify maxTimeMS is set on the aggregation object
     expect((agg as unknown as { options: { maxTimeMS?: number } }).options.maxTimeMS).toBe(5000);

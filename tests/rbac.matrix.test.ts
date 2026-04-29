@@ -64,18 +64,18 @@ describe('RBAC Matrix Integration Tests', () => {
   let testUserIds: Record<Role, string>;
   let testOrganizationId: string;
   // Mock dependencies
-  const mockUserFind = jest.fn();
-  const mockUserFindOne = jest.fn();
-  const mockUserCreate = jest.fn();
-  const mockUserFindById = jest.fn();
-  const mockShipmentFind = jest.fn();
-  const mockShipmentCreate = jest.fn();
-  const mockShipmentFindByIdAndUpdate = jest.fn();
-  const mockTelemetryFind = jest.fn();
-  const mockAnomalyFind = jest.fn();
-  const mockAnomalyFindByIdAndUpdate = jest.fn();
-  const mockAnalyticsAggregate = jest.fn();
-  const mockApiKeyFindOne = jest.fn();
+  const mockUserFind = jest.fn<any>();
+  const mockUserFindOne = jest.fn<any>();
+  const mockUserCreate = jest.fn<any>();
+  const mockUserFindById = jest.fn<any>();
+  const mockShipmentFind = jest.fn<any>();
+  const mockShipmentCreate = jest.fn<any>();
+  const mockShipmentFindByIdAndUpdate = jest.fn<any>();
+  const mockTelemetryFind = jest.fn<any>();
+  const mockAnomalyFind = jest.fn<any>();
+  const mockAnomalyFindByIdAndUpdate = jest.fn<any>();
+  const mockAnalyticsAggregate = jest.fn<any>();
+  const mockApiKeyFindOne = jest.fn<any>();
 
   beforeAll(async () => {
     testOrganizationId = new mongoose.Types.ObjectId().toString();
@@ -150,6 +150,9 @@ describe('RBAC Matrix Integration Tests', () => {
 
     jest.unstable_mockModule('../src/modules/auth/apiKey.service.js', () => ({
       validateApiKey: mockApiKeyFindOne,
+      generateApiKey: jest.fn<any>(),
+      revokeApiKey: jest.fn<any>(),
+      listApiKeys: jest.fn<any>(),
     }));
 
     // Build the app
@@ -157,36 +160,36 @@ describe('RBAC Matrix Integration Tests', () => {
     app = appModule.buildApp();
 
     // Setup default mock responses
-    mockUserFind.mockReturnValue({
-      limit: jest.fn().mockResolvedValue([]),
-      skip: jest.fn().mockResolvedValue([]),
-      sort: jest.fn().mockReturnValue({
-        limit: jest.fn().mockResolvedValue([]),
-        skip: jest.fn().mockResolvedValue([]),
+    (mockUserFind as any).mockReturnValue({
+      limit: jest.fn<any>().mockResolvedValue([]),
+      skip: jest.fn<any>().mockResolvedValue([]),
+      sort: jest.fn<any>().mockReturnValue({
+        limit: jest.fn<any>().mockResolvedValue([]),
+        skip: jest.fn<any>().mockResolvedValue([]),
       }),
     });
 
-    mockShipmentFind.mockReturnValue({
-      limit: jest.fn().mockResolvedValue([]),
-      skip: jest.fn().mockResolvedValue([]),
-      sort: jest.fn().mockReturnValue({
-        limit: jest.fn().mockResolvedValue([]),
-        skip: jest.fn().mockResolvedValue([]),
+    (mockShipmentFind as any).mockReturnValue({
+      limit: jest.fn<any>().mockResolvedValue([]),
+      skip: jest.fn<any>().mockResolvedValue([]),
+      sort: jest.fn<any>().mockReturnValue({
+        limit: jest.fn<any>().mockResolvedValue([]),
+        skip: jest.fn<any>().mockResolvedValue([]),
       }),
     });
 
-    mockTelemetryFind.mockReturnValue({
-      limit: jest.fn().mockResolvedValue([]),
-      skip: jest.fn().mockResolvedValue([]),
+    (mockTelemetryFind as any).mockReturnValue({
+      limit: jest.fn<any>().mockResolvedValue([]),
+      skip: jest.fn<any>().mockResolvedValue([]),
     });
 
-    mockAnomalyFind.mockReturnValue({
-      limit: jest.fn().mockResolvedValue([]),
-      skip: jest.fn().mockResolvedValue([]),
+    (mockAnomalyFind as any).mockReturnValue({
+      limit: jest.fn<any>().mockResolvedValue([]),
+      skip: jest.fn<any>().mockResolvedValue([]),
     });
 
-    mockAnalyticsAggregate.mockResolvedValue([]);
-    mockApiKeyFindOne.mockResolvedValue({ isValid: true });
+    (mockAnalyticsAggregate as any).mockResolvedValue([]);
+    (mockApiKeyFindOne as any).mockResolvedValue({ isValid: true });
   }, 60_000);
 
   afterAll(() => {
@@ -380,7 +383,7 @@ describe('RBAC Matrix Integration Tests', () => {
     // Test POST /api/webhooks/iot (API key auth)
     describe('POST /api/webhooks/iot', () => {
       it('should accept valid API key', async () => {
-        mockApiKeyFindOne.mockResolvedValueOnce({
+        (mockApiKeyFindOne as any).mockResolvedValueOnce({
           isValid: true,
           apiKeyDoc: {
             _id: 'key123',
@@ -407,7 +410,7 @@ describe('RBAC Matrix Integration Tests', () => {
       });
 
       it('should reject invalid API key', async () => {
-        mockApiKeyFindOne.mockResolvedValueOnce({ isValid: false });
+        (mockApiKeyFindOne as any).mockResolvedValueOnce({ isValid: false });
 
         const res = await request(app)
           .post('/api/webhooks/iot')

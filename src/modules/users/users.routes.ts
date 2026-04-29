@@ -7,6 +7,8 @@ import { createUserController, deleteUserController } from './users.controller.j
 import { requireAuth } from '../../shared/middleware/requireAuth.js';
 import { requireRole } from '../../shared/middleware/requireRole.js';
 
+import { UserRole } from '../../shared/constants/index.js';
+
 export const usersRouter = Router();
 
 usersRouter.post(
@@ -17,7 +19,7 @@ usersRouter.post(
 usersRouter.delete(
   '/:id',
   requireAuth,
-  requireRole('ADMIN', 'SUPER_ADMIN'),
+  requireRole(UserRole.ADMIN, UserRole.SUPER_ADMIN),
   validateRequest({ params: z.object({ id: z.string().trim().min(1) }) }),
   asyncHandler(deleteUserController)
 );

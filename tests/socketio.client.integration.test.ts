@@ -111,11 +111,11 @@ describe('Socket.io Client Integration Tests', () => {
 
     await jest.unstable_mockModule('../src/modules/shipments/shipments.model.js', () => ({
       Shipment: {
-        findByIdAndUpdate: jest.fn().mockResolvedValue({
+        findByIdAndUpdate: jest.fn<any>().mockResolvedValue({
           _id: TEST_SHIPMENT_ID,
           status: 'IN_TRANSIT',
         }),
-        findById: jest.fn(),
+        findById: jest.fn<any>(),
       },
       ShipmentStatus: {
         CREATED: 'CREATED',
@@ -127,7 +127,7 @@ describe('Socket.io Client Integration Tests', () => {
 
     await jest.unstable_mockModule('../src/modules/users/users.model.js', () => ({
       UserModel: {
-        findById: jest.fn().mockResolvedValue({
+        findById: jest.fn<any>().mockResolvedValue({
           _id: 'user123',
           walletAddress: '0x1234567890abcdef',
         }),
@@ -193,7 +193,7 @@ describe('Socket.io Client Integration Tests', () => {
 
       // Step 2: Set up event listener for telemetry_update
       const telemetryUpdatePromise = new Promise<unknown>(resolve => {
-        socketClient.on('telemetry_update', data => {
+        socketClient.on('telemetry_update', (data: any) => {
           resolve(data);
         });
       });
@@ -238,7 +238,7 @@ describe('Socket.io Client Integration Tests', () => {
       // Don't join this shipment room
       const eventReceived: { received: boolean } = { received: false };
 
-      socketClient.on('telemetry_update', data => {
+      socketClient.on('telemetry_update', (data: any) => {
         // Check if this is for a shipment we didn't join
         if ((data as { shipmentId: string }).shipmentId === differentShipmentId) {
           eventReceived.received = true;

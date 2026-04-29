@@ -1,4 +1,15 @@
+version: '3.8'
+
 services:
+  mongo:
+    image: mongo:6.0
+    container_name: navin_mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    restart: unless-stopped
+
   redis:
     image: redis:7-alpine
     container_name: navin_redis
@@ -6,17 +17,28 @@ services:
       - "6379:6379"
     restart: unless-stopped
 
-  backend:
+  app:
     build: .
-    container_name: navin_backend
+    container_name: navin_app
     ports:
       - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+      - MONGO_URI=mongodb://mongo:27017/navin_dev
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=dev-secret-key-replace-in-prod
+      - STELLAR_NETWORK=testnet
     depends_on:
+      - mongo
       - redis
-    # Compose-level healthcheck mapping to the same endpoint
+    restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 10s
+      start_period: 15s
+
+volumes:
+  mongo_data:

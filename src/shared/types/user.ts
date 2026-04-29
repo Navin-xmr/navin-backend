@@ -1,7 +1,6 @@
-export enum OrganizationType {
-  ENTERPRISE = 'ENTERPRISE',
-  LOGISTICS = 'LOGISTICS',
-}
+import { OrganizationType, UserRole } from '../constants/index.js';
+
+export { OrganizationType, UserRole };
 
 export interface IOrganization {
   _id: string;
@@ -11,13 +10,6 @@ export interface IOrganization {
   updatedAt: Date;
 }
 
-export enum UserRole {
-  SUPER_ADMIN = 'SUPER_ADMIN',
-  ADMIN = 'ADMIN',
-  MANAGER = 'MANAGER',
-  VIEWER = 'VIEWER',
-  CUSTOMER = 'CUSTOMER',
-}
 
 export interface IUser {
   _id: string;

@@ -129,7 +129,7 @@ describe('io.ts — disconnect cleanup handlers', () => {
       const { activeUsers, simulateConnection } = await setupWithMockedServer();
       const socket = makeSocket({
         id: 'sock-1' as unknown as string,
-        user: { userId: 'user-1', role: 'admin' },
+        user: { userId: 'user-1', role: 'admin', jti: 'mock-jti' },
       });
       (socket as unknown as { id: string }).id = 'sock-1';
 
@@ -140,7 +140,7 @@ describe('io.ts — disconnect cleanup handlers', () => {
 
     it('removes userId from activeUsers on disconnect', async () => {
       const { activeUsers, simulateConnection } = await setupWithMockedServer();
-      const socket = makeSocket({ user: { userId: 'user-2', role: 'user' } });
+      const socket = makeSocket({ user: { userId: 'user-2', role: 'user', jti: 'mock-jti' } });
       (socket as unknown as { id: string }).id = 'sock-2';
 
       simulateConnection(socket);
@@ -163,8 +163,8 @@ describe('io.ts — disconnect cleanup handlers', () => {
     it('handles multiple sockets independently', async () => {
       const { activeUsers, simulateConnection } = await setupWithMockedServer();
 
-      const s1 = makeSocket({ user: { userId: 'u1', role: 'admin' } });
-      const s2 = makeSocket({ user: { userId: 'u2', role: 'user' } });
+      const s1 = makeSocket({ user: { userId: 'u1', role: 'admin', jti: 'mock-jti' } });
+      const s2 = makeSocket({ user: { userId: 'u2', role: 'user', jti: 'mock-jti' } });
       (s1 as unknown as { id: string }).id = 'sock-a';
       (s2 as unknown as { id: string }).id = 'sock-b';
 
@@ -182,7 +182,7 @@ describe('io.ts — disconnect cleanup handlers', () => {
 
     it('disconnect is idempotent — double-disconnect does not throw', async () => {
       const { activeUsers, simulateConnection } = await setupWithMockedServer();
-      const socket = makeSocket({ user: { userId: 'u3', role: 'user' } });
+      const socket = makeSocket({ user: { userId: 'u3', role: 'user', jti: 'mock-jti' } });
       (socket as unknown as { id: string }).id = 'sock-c';
 
       simulateConnection(socket);
@@ -196,7 +196,7 @@ describe('io.ts — disconnect cleanup handlers', () => {
     it('logs rooms before they are cleared', async () => {
       const consoleSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
 
-      const socket = makeSocket({ user: { userId: 'u4', role: 'user' } });
+      const socket = makeSocket({ user: { userId: 'u4', role: 'user', jti: 'mock-jti' } });
       (socket as unknown as { id: string }).id = 'sock-d';
       (socket as unknown as { rooms: Set<string> }).rooms = new Set(['sock-d', 'shipment_abc']);
 

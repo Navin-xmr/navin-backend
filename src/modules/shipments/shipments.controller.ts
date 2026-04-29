@@ -54,42 +54,34 @@ export const patchShipmentStatus = async (req: Request, res: Response) => {
 
   const user = req.user;
 
-  try {
-    const updated = await updateShipmentStatusService(id, status as ShipmentStatus, {
-      userId: user?.userId,
-    });
-    if (!updated) {
-      sendResponse(res, 404, false, 'Shipment not found', null);
-      return;
-    }
-    sendResponse(res, 200, true, 'Shipment status updated', updated);
-  } catch (err) {
-    sendResponse(res, 400, false, (err as Error).message || 'Failed to update status', null);
+  const updated = await updateShipmentStatusService(id, status as ShipmentStatus, {
+    userId: user?.userId,
+  });
+  if (!updated) {
+    sendResponse(res, 404, false, 'Shipment not found', null);
+    return;
   }
+  sendResponse(res, 200, true, 'Shipment status updated', updated);
 };
 
 export const uploadShipmentProof = async (req: Request, res: Response) => {
-  try {
-    const { id } = req.params;
-    const { recipientSignatureName } = req.body;
-    const file = req.file;
+  const { id } = req.params;
+  const { recipientSignatureName } = req.body;
+  const file = req.file;
 
-    if (!file) {
-      sendResponse(res, 400, false, 'No file uploaded', null);
-      return;
-    }
-
-    const shipment = await uploadShipmentProofService(id, file, recipientSignatureName);
-
-    if (!shipment) {
-      sendResponse(res, 404, false, 'Shipment not found', null);
-      return;
-    }
-
-    sendResponse(res, 200, true, 'Proof uploaded', shipment);
-  } catch {
-    sendResponse(res, 500, false, 'Server error', null);
+  if (!file) {
+    sendResponse(res, 400, false, 'No file uploaded', null);
+    return;
   }
+
+  const shipment = await uploadShipmentProofService(id, file, recipientSignatureName);
+
+  if (!shipment) {
+    sendResponse(res, 404, false, 'Shipment not found', null);
+    return;
+  }
+
+  sendResponse(res, 200, true, 'Proof uploaded', shipment);
 };
 
 export const deleteShipment = async (req: Request, res: Response) => {

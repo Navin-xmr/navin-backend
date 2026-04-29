@@ -13,12 +13,31 @@ process.env.MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/test
  * Global test setup - runs before each test file
  * Clears all collections to ensure test isolation
  */
+import { MongoMemoryServer } from 'mongodb-memory-server';
+
+let mongoServer: MongoMemoryServer;
+
 beforeAll(async () => {
+  // Use MongoDB Memory Server if MONGO_URI is not set
+  if (!process.env.MONGO_URI || process.env.MONGO_URI.includes('127.0.0.1:27017')) {
+    mongoServer = await MongoMemoryServer.create();
+    process.env.MONGO_URI = mongoServer.getUri();
+  }
+
   // Ensure we're connected to MongoDB
   if (mongoose.connection.readyState === 0) {
     await mongoose.connect(process.env.MONGO_URI);
   }
-}, 30_000);
+}, 60_000);
+
+afterAll(async () => {
+  if (mongoose.connection.readyState === 1) {
+    await mongoose.disconnect();
+  }
+  if (mongoServer) {
+    await mongoServer.stop();
+  }
+}, 60_000);
 
 /**
  * Clear all collections between test files to prevent data bleeding
