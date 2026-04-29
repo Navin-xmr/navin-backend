@@ -134,7 +134,9 @@ describe('API Schema Snapshot Tests', () => {
         milestones: [],
       });
 
-      const res = await request(app).get('/api/shipments?limit=10');
+      const res = await request(app)
+        .get('/api/shipments?limit=10')
+        .set('Authorization', `Bearer ${authToken}`);
 
       expect(res.status).toBe(200);
       expect(res.body).toMatchSnapshot();

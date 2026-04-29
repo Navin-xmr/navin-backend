@@ -1,5 +1,6 @@
 import { jest, describe, beforeAll, beforeEach, it, expect } from '@jest/globals';
 import request from 'supertest';
+import jwt from 'jsonwebtoken';
 import process from 'process';
 import type { Application } from 'express';
 
@@ -153,11 +154,16 @@ await jest.unstable_mockModule('../src/infra/socket/io.js', () => {
 describe('Shipments API (mocked DB)', () => {
   let app: Application;
   let buildApp: () => Application;
+  let authToken: string;
 
   beforeAll(async () => {
     const appModule = await import('../src/app.js');
     buildApp = appModule.buildApp as () => Application;
     app = buildApp();
+    authToken = jwt.sign(
+      { userId: 'test-user-id', role: 'MANAGER' },
+      process.env.JWT_SECRET!
+    );
   });
 
   beforeEach(async () => {
@@ -176,13 +182,17 @@ describe('Shipments API (mocked DB)', () => {
         status: 'CREATED',
       });
     }
-    const first = await request(app).get('/api/shipments?limit=5');
+    const first = await request(app)
+      .get('/api/shipments?limit=5')
+      .set('Authorization', `Bearer ${authToken}`);
     expect(first.status).toBe(200);
     expect(first.body.data).toHaveLength(5);
     expect(first.body.meta.hasMore).toBe(true);
     expect(first.body.meta.nextCursor).toBeTruthy();
 
-    const second = await request(app).get(`/api/shipments?limit=5&cursor=${first.body.meta.nextCursor}`);
+    const second = await request(app)
+      .get(`/api/shipments?limit=5&cursor=${first.body.meta.nextCursor}`)
+      .set('Authorization', `Bearer ${authToken}`);
     expect(second.status).toBe(200);
     expect(second.body.data).toHaveLength(5);
     const firstIds = first.body.data.map((s: { _id: string }) => s._id);
@@ -194,7 +204,9 @@ describe('Shipments API (mocked DB)', () => {
     const mod = await import('../src/modules/shipments/shipments.model.js');
     await mod.Shipment.create({ trackingNumber: 'TN1', origin: 'A', destination: 'B', enterpriseId: 'ent1', logisticsId: 'log1', status: 'IN_TRANSIT' });
     await mod.Shipment.create({ trackingNumber: 'TN2', origin: 'A', destination: 'B', enterpriseId: 'ent2', logisticsId: 'log2', status: 'DELIVERED' });
-    const res = await request(app).get('/api/shipments?status=IN_TRANSIT&limit=20');
+    const res = await request(app)
+      .get('/api/shipments?status=IN_TRANSIT&limit=20')
+      .set('Authorization', `Bearer ${authToken}`);
     expect(res.status).toBe(200);
     expect(res.body.data.length).toBe(1);
     expect(res.body.data[0].status).toBe('IN_TRANSIT');

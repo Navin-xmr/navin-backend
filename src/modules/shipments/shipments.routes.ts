@@ -26,6 +26,8 @@ const upload = multer({ storage: multer.memoryStorage() });
 
 shipmentsRouter.get(
   '/',
+  requireAuth,
+  requireRole('SUPER_ADMIN', 'ADMIN', 'MANAGER', 'VIEWER', 'CUSTOMER'),
   validateRequest({ query: ShipmentsQuerySchema }),
   asyncHandler(getShipments)
 );

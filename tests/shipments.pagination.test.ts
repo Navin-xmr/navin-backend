@@ -1,12 +1,18 @@
 import request from 'supertest';
+import jwt from 'jsonwebtoken';
 import { buildApp } from '../src/app.js';
 import { connectMongo } from '../src/infra/mongo/connection.js';
 import { Shipment } from '../src/modules/shipments/shipments.model.js';
 
 const app = buildApp();
+let authToken: string;
 
 beforeAll(async () => {
   await connectMongo(process.env.MONGO_URI!);
+  authToken = jwt.sign(
+    { userId: 'test-user-id', role: 'MANAGER' },
+    process.env.JWT_SECRET!
+  );
 });
 
 afterEach(async () => {
@@ -23,7 +29,9 @@ describe('GET /api/shipments - Cursor Pagination', () => {
       logisticsId: '507f1f77bcf86cd799439012',
     });
 
-    const res = await request(app).get('/api/shipments?limit=10');
+    const res = await request(app)
+      .get('/api/shipments?limit=10')
+      .set('Authorization', `Bearer ${authToken}`);
 
     expect(res.status).toBe(200);
     expect(res.body.data).toHaveLength(1);
@@ -42,13 +50,17 @@ describe('GET /api/shipments - Cursor Pagination', () => {
       });
     }
 
-    const firstPage = await request(app).get('/api/shipments?limit=2');
+    const firstPage = await request(app)
+      .get('/api/shipments?limit=2')
+      .set('Authorization', `Bearer ${authToken}`);
     expect(firstPage.status).toBe(200);
     expect(firstPage.body.data).toHaveLength(2);
     expect(firstPage.body.meta.hasMore).toBe(true);
     expect(firstPage.body.meta.nextCursor).toBeTruthy();
 
-    const secondPage = await request(app).get(`/api/shipments?limit=2&cursor=${firstPage.body.meta.nextCursor}`);
+    const secondPage = await request(app)
+      .get(`/api/shipments?limit=2&cursor=${firstPage.body.meta.nextCursor}`)
+      .set('Authorization', `Bearer ${authToken}`);
     expect(secondPage.status).toBe(200);
     expect(secondPage.body.data).toHaveLength(2);
 
@@ -77,7 +89,9 @@ describe('GET /api/shipments - Cursor Pagination', () => {
       status: 'IN_TRANSIT',
     });
 
-    const res = await request(app).get('/api/shipments?status=CREATED');
+    const res = await request(app)
+      .get('/api/shipments?status=CREATED')
+      .set('Authorization', `Bearer ${authToken}`);
     expect(res.status).toBe(200);
     expect(res.body.data).toHaveLength(1);
     expect(res.body.data[0].status).toBe('CREATED');
