@@ -54,9 +54,11 @@ describe('GET /api/analytics/performance', () => {
   ];
 
   let app: Application;
+  let capturedPipeline: Array<Record<string, unknown>> = [];
 
   beforeEach(async () => {
     const mockAggregate = jest.fn(async (pipeline: Array<Record<string, unknown>>) => {
+      capturedPipeline = pipeline;
       // Very small, purpose-built aggregation evaluator for this test.
       const matchStage = pipeline.find((s) => '$match' in s)?.$match as
         | { createdAt?: { $gte: Date; $lte: Date } }
@@ -153,6 +155,10 @@ describe('GET /api/analytics/performance', () => {
     );
 
     expect(res.body.data.totalDelayedShipments).toBe(2);
+
+    const serializedPipeline = JSON.stringify(capturedPipeline);
+    expect(serializedPipeline).not.toContain('$unwind');
+    expect(serializedPipeline).toContain('deliveredTimestamp');
   });
 
   it('returns 403 when role is not ADMIN or MANAGER', async () => {

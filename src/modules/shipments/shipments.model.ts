@@ -40,6 +40,7 @@ ShipmentSchema.index({ status: 1, createdAt: -1 });
 ShipmentSchema.index({ enterpriseId: 1, createdAt: -1 });
 ShipmentSchema.index({ logisticsId: 1, createdAt: -1 });
 ShipmentSchema.index({ createdAt: -1, _id: -1 });
+ShipmentSchema.index({ createdAt: -1, logisticsId: 1, 'milestones.name': 1 });
 
 // Soft delete middleware
 ShipmentSchema.pre(['find', 'findOne', 'findOneAndUpdate', 'countDocuments'], function () {

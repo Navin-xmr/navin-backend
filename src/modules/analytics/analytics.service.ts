@@ -42,8 +42,25 @@ export async function getAnalyticsPerformance(
       $project: {
         status: 1,
         logisticsId: 1,
-        milestones: 1,
         createdAt: 1,
+        deliveredTimestamp: {
+          $arrayElemAt: [
+            {
+              $map: {
+                input: {
+                  $filter: {
+                    input: '$milestones',
+                    as: 'milestone',
+                    cond: { $eq: ['$$milestone.name', 'DELIVERED'] },
+                  },
+                },
+                as: 'deliveredMilestone',
+                in: '$$deliveredMilestone.timestamp',
+              },
+            },
+            0,
+          ],
+        },
       },
     },
     {
@@ -57,14 +74,12 @@ export async function getAnalyticsPerformance(
           },
         ],
         averageDeliveryTimeByLogisticsId: [
-          { $match: { 'milestones.name': 'DELIVERED' } },
-          { $unwind: '$milestones' },
-          { $match: { 'milestones.name': 'DELIVERED' } },
+          { $match: { deliveredTimestamp: { $ne: null } } },
           {
             $group: {
               _id: '$logisticsId',
               averageDeliveryTimeMs: {
-                $avg: { $subtract: ['$milestones.timestamp', '$createdAt'] },
+                $avg: { $subtract: ['$deliveredTimestamp', '$createdAt'] },
               },
             },
           },
