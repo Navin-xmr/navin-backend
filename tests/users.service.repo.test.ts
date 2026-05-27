@@ -13,10 +13,12 @@ describe('users service and repo', () => {
       ...input,
     }));
     const findUserByEmail = jest.fn(async () => null);
+    const findUsersByOrganizationId = jest.fn(async () => []);
 
     await jest.unstable_mockModule('../src/modules/users/users.repo.js', () => ({
       createUser,
       findUserByEmail,
+      findUsersByOrganizationId,
     }));
 
     const { registerUser } = await import('../src/modules/users/users.service.js');
@@ -30,10 +32,12 @@ describe('users service and repo', () => {
   it('registerUser throws when email is already in use', async () => {
     const createUser = jest.fn();
     const findUserByEmail = jest.fn(async () => ({ _id: 'u1', email: 'existing@example.com' }));
+    const findUsersByOrganizationId = jest.fn(async () => []);
 
     await jest.unstable_mockModule('../src/modules/users/users.repo.js', () => ({
       createUser,
       findUserByEmail,
+      findUsersByOrganizationId,
     }));
 
     const { registerUser } = await import('../src/modules/users/users.service.js');

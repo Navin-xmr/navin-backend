@@ -3,7 +3,7 @@ import { asyncHandler } from '../../shared/http/asyncHandler.js';
 import { validateRequest } from '../../shared/validation/validate.js';
 import { z } from 'zod';
 import { CreateUserBodySchema } from './users.validation.js';
-import { createUserController, deleteUserController } from './users.controller.js';
+import { createUserController, deleteUserController, listUsersController } from './users.controller.js';
 import { requireAuth } from '../../shared/middleware/requireAuth.js';
 import { requireRole } from '../../shared/middleware/requireRole.js';
 
@@ -15,6 +15,12 @@ usersRouter.post(
   '/',
   validateRequest({ body: CreateUserBodySchema }),
   asyncHandler(createUserController)
+);
+usersRouter.get(
+  '/',
+  requireAuth,
+  requireRole(UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPER_ADMIN),
+  asyncHandler(listUsersController)
 );
 usersRouter.delete(
   '/:id',
