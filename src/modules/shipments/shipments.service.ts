@@ -4,6 +4,9 @@ import { tokenizeShipment } from '../../services/stellar.service.js';
 import { mockUploadToStorage } from '../../services/mockStorageService.js';
 import { UserModel } from '../users/users.model.js';
 import { emitStatusUpdate } from '../../infra/socket/io.js';
+import { Anomaly } from '../anomaly/anomaly.model.js';
+import { Telemetry } from '../telemetry/telemetry.model.js';
+import { AppError } from '../../shared/http/errors.js';
 
 type ShipmentListResult = {
   data: Awaited<ReturnType<typeof findShipments>>;
@@ -137,15 +140,23 @@ export const updateShipmentStatusService = async (
 export const uploadShipmentProofService = async (
   id: string,
   file: Express.Multer.File,
-  recipientSignatureName: string
+  proof: { recipientSignatureName?: string; notes?: string }
 ) => {
-  const fakeUrl = await mockUploadToStorage(file);
+  let proofUrl: string;
+
+  try {
+    proofUrl = await mockUploadToStorage(file);
+  } catch (error) {
+    throw new AppError(503, 'Storage bucket unavailable, please try again later.', 'SERVICE_UNAVAILABLE');
+  }
+
   const shipment = await Shipment.findByIdAndUpdate(
     id,
     {
       deliveryProof: {
-        url: fakeUrl,
-        recipientSignatureName,
+        url: proofUrl,
+        recipientSignatureName: proof.recipientSignatureName,
+        notes: proof.notes,
         uploadedAt: new Date(),
       },
     },
@@ -157,5 +168,11 @@ export const uploadShipmentProofService = async (
 export const deleteShipmentService = async (id: string) => {
   const shipment = await Shipment.findByIdAndUpdate(id, { deletedAt: new Date() }, { new: true });
   if (!shipment) return null;
+
+  await Promise.all([
+    Anomaly.updateMany({ shipmentId: id }, { deletedAt: new Date() }),
+    Telemetry.updateMany({ shipmentId: id }, { deletedAt: new Date() }),
+  ]);
+
   return shipment;
 };

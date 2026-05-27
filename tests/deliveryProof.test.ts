@@ -1,4 +1,4 @@
-import { jest } from '@jest/globals';
+import { jest, describe, beforeAll, beforeEach, it, expect } from '@jest/globals';
 import request from 'supertest';
 import { fileURLToPath } from 'node:url';
 import type { Application } from 'express';
@@ -8,6 +8,10 @@ type ShipmentRecord = {
   _id: string;
   milestones?: Array<Record<string, unknown>>;
 } & Record<string, unknown>;
+
+type UserRecord = { _id: string; email: string; passwordHash: string; role: string } & Record<string, unknown>;
+
+const authUsers: UserRecord[] = [];
 
 const shipmentsData: ShipmentRecord[] = [];
 
@@ -59,10 +63,13 @@ await jest.unstable_mockModule('../src/modules/shipments/shipments.model.js', ()
 
 describe('POST /api/shipments/:id/proof', () => {
   let app: Application;
+  let managerToken: string;
 
   beforeAll(async () => {
     const appModule = await import('../src/app.js');
     app = appModule.buildApp();
+    const { default: jwt } = await import('jsonwebtoken');
+    managerToken = jwt.sign({ userId: 'manager-1', role: 'MANAGER' }, process.env.JWT_SECRET || 'secret');
   });
 
   beforeEach(() => {
@@ -83,6 +90,7 @@ describe('POST /api/shipments/:id/proof', () => {
     const imagePath = fileURLToPath(new URL('./fixtures/test-image.jpg', import.meta.url));
     const res = await request(app)
       .post(`/api/shipments/${shipment._id}/proof`)
+      .set('Authorization', `Bearer ${managerToken}`)
       .field('recipientSignatureName', 'John Doe')
       .attach('file', imagePath);
 
@@ -90,6 +98,29 @@ describe('POST /api/shipments/:id/proof', () => {
     expect(res.body.data.deliveryProof.url).toMatch(/^https:\/\/mock-storage\.com\/proof/);
     expect(res.body.data.deliveryProof.recipientSignatureName).toBe('John Doe');
     expect(res.body.data.deliveryProof.uploadedAt).toBeDefined();
+  });
+
+  it('should save optional notes when uploading proof', async () => {
+    const shipmentModel = await import('../src/modules/shipments/shipments.model.js');
+    const shipment = await shipmentModel.Shipment.create({
+      trackingNumber: 'TN-PROOF-NOTE',
+      origin: 'A',
+      destination: 'B',
+      enterpriseId: 'ent1',
+      logisticsId: 'log1',
+      status: 'CREATED',
+    });
+
+    const imagePath = fileURLToPath(new URL('./fixtures/test-image.jpg', import.meta.url));
+    const res = await request(app)
+      .post(`/api/shipments/${shipment._id}/proof`)
+      .set('Authorization', `Bearer ${managerToken}`)
+      .field('recipientSignatureName', 'Jane Doe')
+      .field('notes', 'Package delivered with signature')
+      .attach('file', imagePath);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.deliveryProof.notes).toBe('Package delivered with signature');
   });
 
   it('should return 400 when file is missing', async () => {
@@ -105,6 +136,7 @@ describe('POST /api/shipments/:id/proof', () => {
 
     const res = await request(app)
       .post(`/api/shipments/${shipment._id}/proof`)
+      .set('Authorization', `Bearer ${managerToken}`)
       .field('recipientSignatureName', 'John Doe');
 
     expect(res.status).toBe(400);

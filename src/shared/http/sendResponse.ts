@@ -23,11 +23,16 @@ export function sendResponse(
   message: string,
   data: unknown,
   meta?: ResponseMeta,
+  extra?: Record<string, unknown>
 ): void {
   const body: Record<string, unknown> = { success, message, data };
 
   if (meta !== undefined) {
     body.meta = meta;
+  }
+
+  if (extra !== undefined) {
+    Object.assign(body, extra);
   }
 
   res.status(statusCode).json(body);

@@ -1,4 +1,6 @@
 import rateLimit from 'express-rate-limit';
+import type { Request, Response } from 'express';
+import { sendResponse } from '../http/sendResponse.js';
 
 export const standardLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
@@ -22,5 +24,22 @@ export const loginLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   skipSuccessfulRequests: true,
-  message: { success: false, message: 'Too many login attempts, please try again later.' },
+  handler: (req: Request, res: Response) => {
+    const rateLimitState = (req as Request & { rateLimit?: { resetTime?: Date } }).rateLimit;
+    const retryAfter = rateLimitState?.resetTime
+      ? Math.max(1, Math.ceil((rateLimitState.resetTime.getTime() - Date.now()) / 1000))
+      : Math.ceil(15 * 60);
+
+    res.setHeader('Retry-After', String(retryAfter));
+
+    sendResponse(
+      res,
+      429,
+      false,
+      'Too many login attempts, please try again later.',
+      null,
+      undefined,
+      { retryAfter }
+    );
+  },
 });

@@ -62,4 +62,18 @@ describe('Soft Delete Functionality', () => {
       findSpy.mockRestore();
     });
   });
+
+  describe('Anomaly and Telemetry Soft Delete', () => {
+    it('should preserve deletedAt fields on models', async () => {
+      const anomalyModule = await import('../src/modules/anomaly/anomaly.model.js');
+      const telemetryModule = await import('../src/modules/telemetry/telemetry.model.js');
+      const anomalySchema = anomalyModule.Anomaly.schema;
+      const telemetrySchema = telemetryModule.Telemetry.schema;
+
+      expect(anomalySchema.paths.deletedAt).toBeDefined();
+      expect(anomalySchema.paths.deletedAt.instance).toBe('Date');
+      expect(telemetrySchema.paths.deletedAt).toBeDefined();
+      expect(telemetrySchema.paths.deletedAt.instance).toBe('Date');
+    });
+  });
 });

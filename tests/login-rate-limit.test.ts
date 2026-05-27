@@ -54,6 +54,9 @@ describe('Login Rate Limiting', () => {
     expect(res.status).toBe(429);
     expect(res.body.success).toBe(false);
     expect(res.body.message).toContain('Too many');
+    expect(typeof res.body.retryAfter).toBe('number');
+    expect(res.headers['retry-after']).toBeDefined();
+    expect(res.body.data).toBeNull();
   });
 
   it('should include rate limit headers in response', async () => {

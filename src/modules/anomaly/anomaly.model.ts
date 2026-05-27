@@ -21,6 +21,7 @@ const AnomalySchema = new Schema(
     message: { type: String, required: true },
     timestamp: { type: Date, required: true },
     resolved: { type: Boolean, default: false, required: true },
+    deletedAt: { type: Date, default: null },
   },
   { timestamps: true, strict: true }
 );
@@ -31,5 +32,13 @@ AnomalySchema.index({ shipmentId: 1, timestamp: -1, _id: -1 });
 AnomalySchema.index({ resolved: 1, timestamp: -1, _id: -1 });
 AnomalySchema.index({ severity: 1, timestamp: -1, _id: -1 });
 AnomalySchema.index({ severity: 1, shipmentId: 1, timestamp: -1, _id: -1 });
+
+AnomalySchema.pre(['find', 'findOne', 'findOneAndUpdate', 'countDocuments'], function () {
+  this.where({ deletedAt: null });
+});
+
+AnomalySchema.pre('aggregate', function () {
+  this.pipeline().unshift({ $match: { deletedAt: null } });
+});
 
 export const Anomaly = model('Anomaly', AnomalySchema);

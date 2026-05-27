@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { asyncHandler } from '../../shared/http/asyncHandler.js';
+import { validate } from '../../shared/validation/validate.js';
 import {
   getShipments,
   createShipment,
@@ -11,6 +12,7 @@ import {
 import { requireRole } from '../../shared/middleware/requireRole.js';
 import { requireAuth } from '../../shared/middleware/requireAuth.js';
 import multer from 'multer';
+import { ShipmentProofBodySchema } from './shipments.validation.js';
 
 export const shipmentsRouter = Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -24,7 +26,14 @@ shipmentsRouter.post(
 );
 shipmentsRouter.patch('/:id', asyncHandler(patchShipment));
 shipmentsRouter.patch('/:id/status', requireAuth, asyncHandler(patchShipmentStatus));
-shipmentsRouter.post('/:id/proof', upload.single('file'), asyncHandler(uploadShipmentProof));
+shipmentsRouter.post(
+  '/:id/proof',
+  requireAuth,
+  requireRole('ADMIN', 'MANAGER'),
+  upload.single('file'),
+  validate({ body: ShipmentProofBodySchema }),
+  asyncHandler(uploadShipmentProof)
+);
 shipmentsRouter.delete(
   '/:id',
   requireAuth,
