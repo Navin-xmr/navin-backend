@@ -7,3 +7,7 @@ export async function createUser(input: { email: string; name: string }) {
 export async function findUserByEmail(email: string) {
   return UserModel.findOne({ email }).lean();
 }
+
+export async function findUsersByOrganizationId(organizationId: string) {
+  return UserModel.find({ organizationId }).select('-passwordHash').lean();
+}
