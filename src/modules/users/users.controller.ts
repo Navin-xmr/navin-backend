@@ -37,4 +37,11 @@ export const acceptInvitationController: RequestHandler = async (req, res) => {
   });
 
   sendResponse(res, 201, true, 'Invitation accepted successfully', user);
+export const listUsersController: RequestHandler = async (req, res) => {
+  const users = await usersService.listOrganizationUsers({
+    organizationId: req.user?.organizationId,
+    role: req.user?.role,
+  });
+
+  sendResponse(res, 200, true, 'Users retrieved successfully', users);
 };

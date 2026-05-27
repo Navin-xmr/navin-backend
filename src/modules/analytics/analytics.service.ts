@@ -1,4 +1,9 @@
 import { Shipment } from '../shipments/shipments.model.js';
+import {
+  analyticsPerformanceCacheKey,
+  readAnalyticsPerformanceCache,
+  writeAnalyticsPerformanceCache,
+} from './analytics.cache.js';
 
 import type { PerformanceQuery } from './analytics.validation.js';
 
@@ -30,6 +35,12 @@ export async function getAnalyticsPerformance(
 ): Promise<AnalyticsDashboardPayload> {
   const startDate = query.startDate;
   const endDate = query.endDate;
+  const cacheKey = analyticsPerformanceCacheKey(startDate.toISOString(), endDate.toISOString());
+
+  const cached = await readAnalyticsPerformanceCache(cacheKey);
+  if (cached) {
+    return cached;
+  }
 
   // Performance window is based on shipment `createdAt` (the document timestamp).
   const pipeline = [
@@ -42,8 +53,25 @@ export async function getAnalyticsPerformance(
       $project: {
         status: 1,
         logisticsId: 1,
-        milestones: 1,
         createdAt: 1,
+        deliveredTimestamp: {
+          $arrayElemAt: [
+            {
+              $map: {
+                input: {
+                  $filter: {
+                    input: '$milestones',
+                    as: 'milestone',
+                    cond: { $eq: ['$$milestone.name', 'DELIVERED'] },
+                  },
+                },
+                as: 'deliveredMilestone',
+                in: '$$deliveredMilestone.timestamp',
+              },
+            },
+            0,
+          ],
+        },
       },
     },
     {
@@ -57,14 +85,12 @@ export async function getAnalyticsPerformance(
           },
         ],
         averageDeliveryTimeByLogisticsId: [
-          { $match: { 'milestones.name': 'DELIVERED' } },
-          { $unwind: '$milestones' },
-          { $match: { 'milestones.name': 'DELIVERED' } },
+          { $match: { deliveredTimestamp: { $ne: null } } },
           {
             $group: {
               _id: '$logisticsId',
               averageDeliveryTimeMs: {
-                $avg: { $subtract: ['$milestones.timestamp', '$createdAt'] },
+                $avg: { $subtract: ['$deliveredTimestamp', '$createdAt'] },
               },
             },
           },
@@ -97,11 +123,15 @@ export async function getAnalyticsPerformance(
 
   const totalDelayedShipments = Number(facet?.delayedShipments?.[0]?.totalDelayed ?? 0);
 
-  return {
+  const result = {
     startDate: startDate.toISOString(),
     endDate: endDate.toISOString(),
     shipmentsByStatus,
     averageDeliveryTimeByLogisticsId,
     totalDelayedShipments,
   };
+
+  await writeAnalyticsPerformanceCache(cacheKey, result);
+
+  return result;
 }

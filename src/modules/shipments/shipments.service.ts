@@ -6,6 +6,7 @@ import { UserModel } from '../users/users.model.js';
 import { emitStatusUpdate } from '../../infra/socket/io.js';
 import { IShipment, ShipmentStatus } from '../../shared/types/shipment.js';
 import { auditLog } from '../../shared/utils/auditLog.js';
+import { invalidateAnalyticsPerformanceCache } from '../analytics/analytics.cache.js';
 
 type ShipmentListResult = {
   data: IShipment[];
@@ -133,6 +134,7 @@ export const updateShipmentStatusService = async (
   shipment.milestones.push(milestone);
 
   await shipment.save();
+  await invalidateAnalyticsPerformanceCache();
 
   if (actor?.userId) {
     auditLog({
