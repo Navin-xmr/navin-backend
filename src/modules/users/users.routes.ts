@@ -13,10 +13,9 @@ import {
   createInvitationController,
   createUserController,
   deleteUserController,
+  listUsersController,
   verifyInvitationController,
 } from './users.controller.js';
-import { CreateUserBodySchema } from './users.validation.js';
-import { createUserController, deleteUserController, listUsersController } from './users.controller.js';
 import { requireAuth } from '../../shared/middleware/requireAuth.js';
 import { requireRole } from '../../shared/middleware/requireRole.js';
 
@@ -45,6 +44,8 @@ usersRouter.post(
   '/invitations/accept',
   validateRequest({ body: AcceptInvitationBodySchema }),
   asyncHandler(acceptInvitationController)
+);
+
 usersRouter.get(
   '/',
   requireAuth,

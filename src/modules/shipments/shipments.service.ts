@@ -13,33 +13,35 @@ import { invalidateAnalyticsPerformanceCache } from '../analytics/analytics.cach
 
 type ShipmentListResult = {
   data: IShipment[];
-  nextCursor: string | null;
-  hasMore: boolean;
+  page: number;
+  limit: number;
+  total: number;
 };
 
 export const findShipments = async (
   query: FilterQuery<unknown>,
+  skip: number,
   limit: number
 ): Promise<IShipment[]> => {
   return Shipment.find(query)
     .sort({ createdAt: -1, _id: -1 })
-    .limit(limit + 1)
+    .skip(skip)
+    .limit(limit)
     .lean();
 };
 
 export const getShipmentsService = async (params: {
   status?: string;
-  cursor?: string;
+  page: number;
   limit: number;
   origin?: string;
   destination?: string;
   filters: Record<string, unknown>;
 }): Promise<ShipmentListResult> => {
-  const { status, cursor, limit, origin, destination, filters } = params;
+  const { status, page, limit, origin, destination, filters } = params;
   const query: FilterQuery<unknown> = { ...filters };
 
   if (status) query.status = status;
-  if (cursor) query._id = { $lt: cursor };
   if (origin) {
     const escapedOrigin = origin.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     query.origin = { $regex: escapedOrigin, $options: 'i' };
@@ -49,12 +51,13 @@ export const getShipmentsService = async (params: {
     query.destination = { $regex: escapedDestination, $options: 'i' };
   }
 
-  const shipments = await findShipments(query, limit);
-  const hasMore = shipments.length > limit;
-  const data = hasMore ? shipments.slice(0, limit) : shipments;
-  const nextCursor = hasMore && data.length > 0 ? data[data.length - 1]._id.toString() : null;
+  const skip = (page - 1) * limit;
+  const [data, total] = await Promise.all([
+    findShipments(query, skip, limit),
+    Shipment.countDocuments(query),
+  ]);
 
-  return { data, nextCursor, hasMore };
+  return { data, page, limit, total };
 };
 
 export const createShipmentService = async (data: {
