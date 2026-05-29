@@ -14,6 +14,7 @@ import {
   createUserController,
   createTeamMemberController,
   deleteUserController,
+  listUsersController,
   verifyInvitationController,
   listUsersController,
 } from './users.controller.js';
@@ -53,6 +54,7 @@ usersRouter.post(
   validateRequest({ body: AcceptInvitationBodySchema }),
   asyncHandler(acceptInvitationController)
 );
+
 usersRouter.get(
   '/',
   requireAuth,

@@ -8,7 +8,7 @@ interface RequestWithId extends Request {
 export function requestId(): RequestHandler {
   return (req, res, next) => {
     const id = req.header('x-request-id') ?? randomUUID();
-    res.setHeader('x-request-id', id);
+    res.setHeader('X-Request-ID', id);
     (req as RequestWithId).requestId = id;
     next();
   };

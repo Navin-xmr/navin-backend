@@ -3,7 +3,7 @@ import { z } from 'zod';
 export const SignupBodySchema = z.object({
   email: z.string().email(),
   name: z.string().min(1),
-  password: z.string().min(6),
+  password: z.string().min(8, 'Password must be at least 8 characters long'),
   organizationId: z.string().min(1).optional(),
 });
 

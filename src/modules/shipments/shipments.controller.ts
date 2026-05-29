@@ -13,17 +13,21 @@ import type { GetShipmentsQuery } from './shipments.validation.js';
 
 export const getShipments = async (req: Request, res: Response) => {
   const query = req.query as unknown as GetShipmentsQuery;
-  const { status, cursor, limit = 20, origin, destination, ...filters } = query;
-  const { data, nextCursor, hasMore } = await getShipmentsService({
+  const { status, page = 1, limit = 20, origin, destination, ...filters } = query;
+  const { data, page: currentPage, limit: currentLimit, total } = await getShipmentsService({
     status,
-    cursor,
+    page: Number(page),
     limit: Number(limit),
     origin,
     destination,
     filters: filters as Record<string, unknown>,
   });
 
-  sendResponse(res, 200, true, 'Shipments retrieved', data, { nextCursor, hasMore });
+  sendResponse(res, 200, true, 'Shipments retrieved', data, { 
+    page: currentPage, 
+    limit: currentLimit, 
+    total 
+  });
 };
 
 export const createShipment = async (req: Request, res: Response) => {
@@ -87,6 +91,7 @@ export const uploadShipmentProof = async (req: Request, res: Response) => {
       notes,
     });
 
+  sendResponse(res, 200, true, 'Proof uploaded', shipment);
     sendResponse(res, 200, true, 'Proof uploaded', shipment);
   } catch {
     sendResponse(res, 500, false, 'Server error', null);
