@@ -17,6 +17,7 @@ export function errorMiddleware(): ErrorRequestHandler {
       return res.status(status).json({
         success: false,
         message,
+        data: null,
         error: { code }, // Standardized envelope for frontend
         ...(details && { details }),
         ...(isDev && { stack: err.stack }),

@@ -3,7 +3,7 @@ import jwt from 'jsonwebtoken';
 import type { Request, Response } from 'express';
 import { jest } from '@jest/globals';
 import { AppError } from '../src/shared/http/errors.js';
-import { OrganizationType } from '../src/modules/users/users.model.js';
+import { OrganizationType } from '../src/shared/types/user.js';
 
 type UserDoc = {
   _id: { toString(): string };

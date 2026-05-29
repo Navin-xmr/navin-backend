@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ShipmentStatus } from './shipments.model.js';
 import { ShipmentStatus } from '../../shared/constants/shipments.js';
 
 export const getShipmentsQuerySchema = z.object({
@@ -26,11 +27,18 @@ export const CreateShipmentBodySchema = z.object({
   offChainMetadata: z.record(z.unknown()).optional(),
 });
 
+export type CreateShipmentInput = z.infer<typeof CreateShipmentBodySchema>;
+
 export const ShipmentIdParamSchema = z.object({
   id: z.string().min(1),
 });
 
 export const ShipmentPatchBodySchema = z.object({
+  offChainMetadata: z.record(z.unknown()).optional(),
+});
+
+export const ShipmentStatusBodySchema = z.object({
+  status: z.nativeEnum(ShipmentStatus),
   offChainMetadata: z.record(z.unknown()),
 });
 
@@ -48,6 +56,8 @@ export const ShipmentProofBodySchema = z.object({
   notes: z.string().optional(),
 });
 
+// Alias for backward compatibility
+export const ShipmentsQuerySchema = getShipmentsQuerySchema;
 export const ShipmentsQuerySchema = getShipmentsQuerySchema;
 
 export const ShipmentStatusBodySchema = z.object({

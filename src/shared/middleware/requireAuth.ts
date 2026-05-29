@@ -31,7 +31,7 @@ export const requireAuth: RequestHandler = async (req, res, next) => {
     return next(new AppError(401, 'Invalid or expired token', ErrorCodes.UNAUTHORIZED));
   }
 
-  if (await isTokenBlocked(payload.jti)) {
+  if (payload.jti && (await isTokenBlocked(payload.jti))) {
     return next(new AppError(401, 'Token has been revoked', 'TOKEN_REVOKED'));
   }
 

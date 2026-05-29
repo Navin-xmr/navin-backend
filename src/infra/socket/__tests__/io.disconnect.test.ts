@@ -2,7 +2,9 @@ import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import type { Socket } from 'socket.io';
 
 // Minimal fake socket factory
-function makeSocket(overrides: Partial<Socket> & { user?: { userId: string; role: string } } = {}) {
+function makeSocket(
+  overrides: Partial<Socket> & { user?: { userId: string; role: string; jti?: string } } = {}
+) {
   const handlers: Record<string, ((...args: unknown[]) => void)[]> = {};
   const socket = {
     id: 'socket-abc',
