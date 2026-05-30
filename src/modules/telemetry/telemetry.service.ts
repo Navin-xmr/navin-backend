@@ -12,6 +12,7 @@ import type {
 import type { BulkTelemetryItem } from './telemetry.validation.js';
 import { AppError } from '../../shared/http/errors.js';
 import { pushStellarAnchorJob, pushAlertJob } from '../../infra/redis/queue.js';
+import logger from '../../shared/logger/logger.js';
 
 /**
  * Finds the active (IN_TRANSIT) shipment linked to a given sensorId.
@@ -117,10 +118,9 @@ export async function getTelemetryService(params: {
   page?: number;
   limit: number;
   shipmentId?: string;
-  from?: Date;
-  to?: Date;
+  organizationId?: string;
 }) {
-  const { cursor, page, limit, shipmentId, from, to } = params;
+  const { cursor, limit, shipmentId, organizationId } = params;
   const query: FilterQuery<unknown> = {};
 
   if (shipmentId) query.shipmentId = shipmentId;
@@ -131,6 +131,17 @@ export async function getTelemetryService(params: {
   if (from || to) query.timestamp = timestampFilter;
 
   if (cursor) query._id = { $lt: cursor };
+  if (organizationId) {
+    // Find shipments belonging to the user's organization and filter telemetry by those shipment IDs
+    const shipments = await Shipment.find({ organizationId }).select('_id').lean();
+    const shipmentIds = shipments.map((s: any) => s._id);
+    if (shipmentIds.length > 0) {
+      query.shipmentId = { $in: shipmentIds };
+    } else {
+      // No shipments for this organization, return empty result early
+      return { data: [], nextCursor: null, hasMore: false };
+    }
+  }
 
   const telemetryQuery = Telemetry.find(query)
     .select('-__v -rawPayload')
@@ -221,45 +232,48 @@ export async function bulkIngestTelemetry(items: BulkTelemetryItem[]) {
     emitTelemetryUpdate(shipmentId, telemetryPayload);
 
     setImmediate(async () => {
-      const result = await detectAnomaly({
-        _id: telemetry._id.toString(),
-        shipmentId: telemetry.shipmentId.toString(),
-        temperature: telemetry.temperature,
-        humidity: telemetry.humidity,
-        batteryLevel: telemetry.batteryLevel,
-        timestamp: telemetry.timestamp,
-      });
+      try {
+        const result = await detectAnomaly({
+          _id: telemetry._id.toString(),
+          shipmentId: telemetry.shipmentId.toString(),
+          temperature: telemetry.temperature,
+          humidity: telemetry.humidity,
+          batteryLevel: telemetry.batteryLevel,
+          timestamp: telemetry.timestamp,
+        });
 
-      if (result.detected) {
-        await Promise.all(
-          result.anomalies.map(async anomaly => {
-            const anomalyPayload: AnomalyAlertPayload = {
-              anomalyId: anomaly._id,
-              shipmentId: anomaly.shipmentId,
-              type: anomaly.type as
-                | 'TEMPERATURE_EXCEEDED'
-                | 'TEMPERATURE_BELOW_MIN'
-                | 'HUMIDITY_EXCEEDED'
-                | 'HUMIDITY_BELOW_MIN'
-                | 'BATTERY_LOW',
-              severity: anomaly.severity as 'LOW' | 'MEDIUM' | 'HIGH',
-              message: anomaly.message,
-              timestamp: anomaly.timestamp,
-              resolved: anomaly.resolved,
-            };
+        if (result.detected) {
+          await Promise.all(
+            result.anomalies.map(async (anomaly) => {
+              const anomalyPayload: AnomalyAlertPayload = {
+                anomalyId: anomaly._id,
+                shipmentId: anomaly.shipmentId,
+                type: anomaly.type as
+                  | 'TEMPERATURE_EXCEEDED'
+                  | 'TEMPERATURE_BELOW_MIN'
+                  | 'HUMIDITY_EXCEEDED'
+                  | 'HUMIDITY_BELOW_MIN'
+                  | 'BATTERY_LOW',
+                severity: anomaly.severity as 'LOW' | 'MEDIUM' | 'HIGH',
+                message: anomaly.message,
+                timestamp: anomaly.timestamp,
+                resolved: anomaly.resolved,
+              };
 
-            emitAnomalyDetected(anomaly.shipmentId, anomalyPayload);
-            await pushAlertJob({
-              shipmentId: anomaly.shipmentId,
-              type: anomaly.type,
-              severity: anomaly.severity,
-              message: anomaly.message,
-            });
-          })
-        );
+              emitAnomalyDetected(anomaly.shipmentId, anomalyPayload);
+              await pushAlertJob({
+                shipmentId: anomaly.shipmentId,
+                type: anomaly.type,
+                severity: anomaly.severity,
+                message: anomaly.message,
+              });
+            })
+          );
+        }
+      } catch (err) {
+        logger.error({ err, shipmentId }, 'Background anomaly detection failed');
       }
-    });
-  }
+    });  }
 
   return { insertedCount: createdIds.length, insertedIds: createdIds };
 }

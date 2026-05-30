@@ -5,6 +5,7 @@ import { AppError } from '../../shared/http/errors.js';
 import { detectAnomaly } from '../anomaly/anomaly.service.js';
 import { emitAnomalyDetected, emitTelemetryUpdate } from '../../infra/socket/io.js';
 import { pushAlertJob, pushStellarAnchorJob } from '../../infra/redis/queue.js';
+import logger from '../../shared/logger/logger.js';
 import type { IotWebhookBody } from './iot.validation.js';
 import type {
   AnomalyAlertPayload,
@@ -115,42 +116,46 @@ export async function processIotWebhook(body: IotWebhookBody) {
   emitTelemetryUpdate(shipmentId, telemetryPayload);
 
   setImmediate(async () => {
-    const result = await detectAnomaly({
-      _id: telemetry._id.toString(),
-      shipmentId: telemetry.shipmentId.toString(),
-      temperature: telemetry.temperature,
-      humidity: telemetry.humidity,
-      batteryLevel: telemetry.batteryLevel,
-      timestamp: telemetry.timestamp,
-    });
+    try {
+      const result = await detectAnomaly({
+        _id: telemetry._id.toString(),
+        shipmentId: telemetry.shipmentId.toString(),
+        temperature: telemetry.temperature,
+        humidity: telemetry.humidity,
+        batteryLevel: telemetry.batteryLevel,
+        timestamp: telemetry.timestamp,
+      });
 
-    if (result.detected) {
-      await Promise.all(
-        result.anomalies.map(async anomaly => {
-          const anomalyPayload: AnomalyAlertPayload = {
-            anomalyId: anomaly._id,
-            shipmentId: anomaly.shipmentId,
-            type: anomaly.type as
-              | 'TEMPERATURE_EXCEEDED'
-              | 'TEMPERATURE_BELOW_MIN'
-              | 'HUMIDITY_EXCEEDED'
-              | 'HUMIDITY_BELOW_MIN'
-              | 'BATTERY_LOW',
-            severity: anomaly.severity as 'LOW' | 'MEDIUM' | 'HIGH',
-            message: anomaly.message,
-            timestamp: anomaly.timestamp,
-            resolved: anomaly.resolved,
-          };
+      if (result.detected) {
+        await Promise.all(
+          result.anomalies.map(async anomaly => {
+            const anomalyPayload: AnomalyAlertPayload = {
+              anomalyId: anomaly._id,
+              shipmentId: anomaly.shipmentId,
+              type: anomaly.type as
+                | 'TEMPERATURE_EXCEEDED'
+                | 'TEMPERATURE_BELOW_MIN'
+                | 'HUMIDITY_EXCEEDED'
+                | 'HUMIDITY_BELOW_MIN'
+                | 'BATTERY_LOW',
+              severity: anomaly.severity as 'LOW' | 'MEDIUM' | 'HIGH',
+              message: anomaly.message,
+              timestamp: anomaly.timestamp,
+              resolved: anomaly.resolved,
+            };
 
-          emitAnomalyDetected(anomaly.shipmentId, anomalyPayload);
-          await pushAlertJob({
-            shipmentId: anomaly.shipmentId,
-            type: anomaly.type,
-            severity: anomaly.severity,
-            message: anomaly.message,
-          });
-        })
-      );
+            emitAnomalyDetected(anomaly.shipmentId, anomalyPayload);
+            await pushAlertJob({
+              shipmentId: anomaly.shipmentId,
+              type: anomaly.type,
+              severity: anomaly.severity,
+              message: anomaly.message,
+            });
+          })
+        );
+      }
+    } catch (err) {
+      logger.error({ err, shipmentId }, 'Background anomaly detection failed');
     }
   });
 

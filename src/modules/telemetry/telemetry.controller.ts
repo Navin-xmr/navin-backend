@@ -4,16 +4,15 @@ import { sendResponse } from '../../shared/http/sendResponse.js';
 import type { BulkTelemetryBody } from './telemetry.validation.js';
 
 export const getTelemetry = async (req: Request, res: Response) => {
-  const { cursor, limit = 20, shipmentId, from, to, page } = req.query;
-
-  const pageNumber = page ? Number(page) : undefined;
+  const { cursor, limit = 20, shipmentId } = req.query;
+  const user = (req as any).user;
+  const organizationId = user?.organizationId;
   const { data, nextCursor, hasMore } = await getTelemetryService({
     cursor: cursor as string | undefined,
     page: pageNumber,
     limit: Number(limit),
     shipmentId: shipmentId as string | undefined,
-    from: from ? new Date(String(from)) : undefined,
-    to: to ? new Date(String(to)) : undefined,
+    organizationId: organizationId as string | undefined,
   });
 
   sendResponse(res, 200, true, 'Telemetry retrieved', data, {

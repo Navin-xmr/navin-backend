@@ -9,6 +9,7 @@ export const telemetryRouter = Router();
 
 telemetryRouter.get(
   '/',
+  requireAuth,
   validateRequest({ query: TelemetryQuerySchema }),
   asyncHandler(getTelemetry)
 );

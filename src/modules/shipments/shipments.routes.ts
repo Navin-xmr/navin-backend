@@ -27,7 +27,7 @@ import { UserRole } from '../../shared/constants/index.js';
 export const shipmentsRouter = Router();
 const upload = multer({ storage: multer.memoryStorage() });
 
-shipmentsRouter.get('/', validate({ query: getShipmentsQuerySchema }), asyncHandler(getShipments));
+shipmentsRouter.get('/', requireAuth, requireRole(UserRole.ADMIN, UserRole.MANAGER, UserRole.VIEWER), validate({ query: getShipmentsQuerySchema }), asyncHandler(getShipments));
 shipmentsRouter.post(
   '/',
   requireAuth,
