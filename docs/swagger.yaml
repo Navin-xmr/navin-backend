@@ -162,6 +162,37 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /api/health:
+    get:
+      summary: Health check
+      description: Public health endpoint used by load balancers and uptime monitors.
+      responses:
+        '200':
+          description: Service health metadata
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: OK
+                  data:
+                    type: object
+                    properties:
+                      status:
+                        type: string
+                        example: active
+                      uptime:
+                        type: number
+                        description: Process uptime in seconds
+                      timestamp:
+                        type: string
+                        format: date-time
+                        description: Current UTC timestamp
   /api/auth/api-keys:
     post:
       summary: Create a new API key
@@ -552,6 +583,176 @@ paths:
                               type: number
                       totalDelayedShipments:
                         type: integer
+  /api/payments:
+    get:
+      summary: Get payments history
+      description: Returns settlement records for the authenticated user's organization.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [Pending, Escrowed, Released, Failed]
+          description: Filter payments by status.
+        - in: query
+          name: cursor
+          schema:
+            type: string
+          description: Cursor for pagination.
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+          description: Maximum number of records to return.
+      responses:
+        '200':
+          description: Payments retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        _id:
+                          type: string
+                        shipmentId:
+                          type: string
+                        organizationId:
+                          type: string
+                        amount:
+                          type: number
+                        tokenType:
+                          type: string
+                        status:
+                          type: string
+                        stellarTxHash:
+                          type: string
+                        createdAt:
+                          type: string
+                          format: date-time
+                        updatedAt:
+                          type: string
+                          format: date-time
+                  meta:
+                    type: object
+                    properties:
+                      count:
+                        type: integer
+  /api/telemetry:
+    get:
+      summary: Get telemetry records
+      description: Retrieve telemetry time-series points with optional shipment filtering and pagination.
+      parameters:
+        - in: query
+          name: shipmentId
+          schema:
+            type: string
+          description: Filter telemetry records by shipment ID.
+        - in: query
+          name: from
+          schema:
+            type: string
+            format: date-time
+          description: Return telemetry recorded at or after this timestamp.
+        - in: query
+          name: to
+          schema:
+            type: string
+            format: date-time
+          description: Return telemetry recorded at or before this timestamp.
+        - in: query
+          name: cursor
+          schema:
+            type: string
+          description: Cursor for cursor-based pagination.
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+          description: Page number for offset-based pagination.
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+          description: Number of records to return.
+      responses:
+        '200':
+          description: Telemetry retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        _id:
+                          type: string
+                        shipmentId:
+                          type: string
+                        sensorId:
+                          type: string
+                        temperature:
+                          type: number
+                        humidity:
+                          type: number
+                        latitude:
+                          type: number
+                        longitude:
+                          type: number
+                        batteryLevel:
+                          type: number
+                        timestamp:
+                          type: string
+                          format: date-time
+                        dataHash:
+                          type: string
+                        stellarTxHash:
+                          type: string
+                        anchorStatus:
+                          type: string
+                        anchorError:
+                          type: string
+                        createdAt:
+                          type: string
+                          format: date-time
+                        updatedAt:
+                          type: string
+                          format: date-time
+                  meta:
+                    type: object
+                    properties:
+                      nextCursor:
+                        type: string
+                        nullable: true
+                      hasMore:
+                        type: boolean
+                      page:
+                        type: integer
   /api/shipments:
     get:
       summary: Get paginated shipments with offset-based pagination
@@ -767,6 +968,17 @@ paths:
             type: string
             enum: [LOW, MEDIUM, HIGH]
           description: Filter by severity
+        - in: query
+          name: type
+          schema:
+            type: string
+            enum: [TEMPERATURE_EXCEEDED, TEMPERATURE_BELOW_MIN, HUMIDITY_EXCEEDED, HUMIDITY_BELOW_MIN, BATTERY_LOW]
+          description: Filter by anomaly type
+        - in: query
+          name: resolved
+          schema:
+            type: boolean
+          description: Filter by whether an anomaly has been resolved
       responses:
         '200':
           description: Paginated anomalies

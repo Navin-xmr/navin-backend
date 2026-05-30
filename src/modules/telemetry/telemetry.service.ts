@@ -5,7 +5,10 @@ import type { FilterQuery } from 'mongoose';
 import { generateDataHash } from '../../shared/utils/crypto.js';
 import { detectAnomaly } from '../anomaly/anomaly.service.js';
 import { emitAnomalyDetected, emitTelemetryUpdate } from '../../infra/socket/io.js';
-import type { AnomalyAlertPayload, TelemetryUpdatePayload } from '../../shared/types/socketEvents.js';
+import type {
+  AnomalyAlertPayload,
+  TelemetryUpdatePayload,
+} from '../../shared/types/socketEvents.js';
 import type { BulkTelemetryItem } from './telemetry.validation.js';
 import { AppError } from '../../shared/http/errors.js';
 import { pushStellarAnchorJob, pushAlertJob } from '../../infra/redis/queue.js';
@@ -112,6 +115,7 @@ export async function markTelemetryAnchorFailed(telemetryId: string, error: stri
  */
 export async function getTelemetryService(params: {
   cursor?: string;
+  page?: number;
   limit: number;
   shipmentId?: string;
   organizationId?: string;
@@ -120,6 +124,12 @@ export async function getTelemetryService(params: {
   const query: FilterQuery<unknown> = {};
 
   if (shipmentId) query.shipmentId = shipmentId;
+
+  const timestampFilter: { $gte?: Date; $lte?: Date } = {};
+  if (from) timestampFilter.$gte = from;
+  if (to) timestampFilter.$lte = to;
+  if (from || to) query.timestamp = timestampFilter;
+
   if (cursor) query._id = { $lt: cursor };
   if (organizationId) {
     // Find shipments belonging to the user's organization and filter telemetry by those shipment IDs
@@ -133,11 +143,18 @@ export async function getTelemetryService(params: {
     }
   }
 
-  const telemetry = await Telemetry.find(query)
+  const telemetryQuery = Telemetry.find(query)
     .select('-__v -rawPayload')
-    .sort({ timestamp: -1, _id: -1 })
-    .limit(limit + 1)
-    .lean();
+    .sort({ timestamp: -1, _id: -1 });
+
+  if (page) {
+    const skip = (page - 1) * limit;
+    telemetryQuery.skip(skip).limit(limit + 1);
+  } else {
+    telemetryQuery.limit(limit + 1);
+  }
+
+  const telemetry = await telemetryQuery.lean();
 
   const hasMore = telemetry.length > limit;
   const data = hasMore ? telemetry.slice(0, limit) : telemetry;
@@ -160,7 +177,11 @@ export async function bulkIngestTelemetry(items: BulkTelemetryItem[]) {
     if (!shipmentId && item.sensorId) {
       const shipment = await findActiveShipmentBySensorId(item.sensorId);
       if (!shipment?._id) {
-        throw new AppError(404, `No active shipment found for sensor ${item.sensorId}`, 'NOT_FOUND');
+        throw new AppError(
+          404,
+          `No active shipment found for sensor ${item.sensorId}`,
+          'NOT_FOUND'
+        );
       }
       shipmentId = shipment._id.toString();
     }

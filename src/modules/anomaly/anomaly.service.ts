@@ -92,12 +92,16 @@ export async function getAnomaliesService(params: {
   limit: number;
   shipmentId?: string;
   severity?: string;
+  type?: string;
+  resolved?: boolean;
 }) {
-  const { cursor, limit, shipmentId, severity } = params;
+  const { cursor, limit, shipmentId, severity, type, resolved } = params;
   const query: FilterQuery<unknown> = {};
 
   if (shipmentId) query.shipmentId = shipmentId;
   if (severity) query.severity = severity;
+  if (type) query.type = type;
+  if (resolved !== undefined) query.resolved = resolved;
   if (cursor) query._id = { $lt: cursor };
 
   const anomalies = await Anomaly.find(query)
