@@ -49,6 +49,12 @@ function normalizeIotWebhookBody(body: IotWebhookBody): NormalizedBody {
   };
 }
 
+/**
+ * Processes IoT webhook payloads, normalizes the body, stores telemetry, and emits real-time events.
+ * @param {IotWebhookBody} body - Raw webhook payload from the IoT device.
+ * @returns {Promise<unknown>} Persisted telemetry document.
+ * @throws {AppError} When shipment cannot be resolved for the payload.
+ */
 export async function processIotWebhook(body: IotWebhookBody) {
   const normalizedBody = normalizeIotWebhookBody(body);
 

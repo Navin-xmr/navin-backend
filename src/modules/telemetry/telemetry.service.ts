@@ -14,6 +14,11 @@ import { pushStellarAnchorJob, pushAlertJob } from '../../infra/redis/queue.js';
  * Finds the active (IN_TRANSIT) shipment linked to a given sensorId.
  * The sensorId is stored in offChainMetadata.sensorId on the Shipment document.
  */
+/**
+ * Finds the active shipment associated with a sensor ID.
+ * @param {string} sensorId - Sensor identifier from IoT telemetry.
+ * @returns {Promise<unknown>} Active shipment document or null.
+ */
 export async function findActiveShipmentBySensorId(sensorId: string) {
   return Shipment.findOne({
     'offChainMetadata.sensorId': sensorId,
@@ -21,6 +26,23 @@ export async function findActiveShipmentBySensorId(sensorId: string) {
   }).lean();
 }
 
+/**
+ * Persists a telemetry record to the database.
+ * @param {object} input - Telemetry record payload.
+ * @param {string=} input.sensorId - Optional sensor identifier.
+ * @param {string} input.shipmentId - Shipment associated with the telemetry.
+ * @param {number} input.temperature - Temperature reading.
+ * @param {number} input.humidity - Humidity reading.
+ * @param {number} input.latitude - GPS latitude.
+ * @param {number} input.longitude - GPS longitude.
+ * @param {number} input.batteryLevel - Battery level percentage.
+ * @param {Date} input.timestamp - Reading timestamp.
+ * @param {string} input.dataHash - Hash of the telemetry payload.
+ * @param {string=} input.stellarTxHash - Optional Stellar transaction hash.
+ * @param {string=} input.anchorStatus - Telemetry anchor status.
+ * @param {unknown} input.rawPayload - Original payload from the source.
+ * @returns {Promise<unknown>} Persisted telemetry document.
+ */
 export async function createTelemetryRecord(input: {
   sensorId?: string;
   shipmentId: string;
@@ -51,6 +73,12 @@ export async function createTelemetryRecord(input: {
   });
 }
 
+/**
+ * Marks a telemetry record as anchored on Stellar.
+ * @param {string} telemetryId - Telemetry document ObjectId.
+ * @param {string} stellarTxHash - Stellar transaction hash.
+ * @returns {Promise<unknown>} Updated telemetry document.
+ */
 export async function updateTelemetryAnchor(telemetryId: string, stellarTxHash: string) {
   return Telemetry.findByIdAndUpdate(
     telemetryId,
@@ -59,6 +87,12 @@ export async function updateTelemetryAnchor(telemetryId: string, stellarTxHash: 
   );
 }
 
+/**
+ * Marks a telemetry record as failed to anchor.
+ * @param {string} telemetryId - Telemetry document ObjectId.
+ * @param {string} error - Failure reason.
+ * @returns {Promise<unknown>} Updated telemetry document.
+ */
 export async function markTelemetryAnchorFailed(telemetryId: string, error: string) {
   return Telemetry.findByIdAndUpdate(
     telemetryId,
@@ -67,6 +101,14 @@ export async function markTelemetryAnchorFailed(telemetryId: string, error: stri
   );
 }
 
+/**
+ * Retrieves telemetry records with cursor-based pagination.
+ * @param {object} params - Pagination and filter parameters.
+ * @param {string=} params.cursor - Optional cursor for paging.
+ * @param {number} params.limit - Maximum number of records to return.
+ * @param {string=} params.shipmentId - Optional shipment filter.
+ * @returns {Promise<{data: unknown[]; nextCursor: string | null; hasMore: boolean}>} Paginated telemetry results.
+ */
 export async function getTelemetryService(params: {
   cursor?: string;
   limit: number;
@@ -91,6 +133,12 @@ export async function getTelemetryService(params: {
   return { data, nextCursor, hasMore };
 }
 
+/**
+ * Ingests multiple telemetry items in bulk and schedules downstream processing.
+ * @param {BulkTelemetryItem[]} items - List of telemetry payloads to ingest.
+ * @returns {Promise<{insertedCount: number; insertedIds: string[]}>} Summary of inserted telemetry documents.
+ * @throws {AppError} When a matching active shipment cannot be resolved.
+ */
 export async function bulkIngestTelemetry(items: BulkTelemetryItem[]) {
   const createdIds: string[] = [];
 

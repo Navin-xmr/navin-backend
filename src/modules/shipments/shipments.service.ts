@@ -21,6 +21,13 @@ type ShipmentListResult = {
   total: number;
 };
 
+/**
+ * Queries shipments directly by filter, skip, and limit.
+ * @param {FilterQuery<unknown>} query - MongoDB filter query.
+ * @param {number} skip - Number of records to skip.
+ * @param {number} limit - Maximum number of records to return.
+ * @returns {Promise<IShipment[]>} Matching shipment documents.
+ */
 export const findShipments = async (
   query: FilterQuery<unknown>,
   skip: number,
@@ -29,6 +36,17 @@ export const findShipments = async (
   return Shipment.find(query).sort({ createdAt: -1, _id: -1 }).skip(skip).limit(limit).lean();
 };
 
+/**
+ * Retrieves a paginated list of shipments using filters and optional search criteria.
+ * @param {object} params - Pagination and filter parameters.
+ * @param {string=} params.status - Optional shipment status filter.
+ * @param {number} params.page - Page number starting at 1.
+ * @param {number} params.limit - Page size.
+ * @param {string=} params.origin - Optional origin substring filter.
+ * @param {string=} params.destination - Optional destination substring filter.
+ * @param {Record<string, unknown>} params.filters - Additional query filters.
+ * @returns {Promise<ShipmentListResult>} Paginated shipment results.
+ */
 export const getShipmentsService = async (params: {
   status?: string;
   page: number;
@@ -59,6 +77,14 @@ export const getShipmentsService = async (params: {
   return { data, page, limit, total };
 };
 
+/**
+ * Creates a new shipment record and attempts Stellar tokenization.
+ * @param {object} data - Shipment creation payload.
+ * @param {string=} data.trackingNumber - Optional tracking number.
+ * @param {string} data.origin - Shipment origin.
+ * @param {string} data.destination - Shipment destination.
+ * @returns {Promise<unknown>} Created shipment document.
+ */
 export const createShipmentService = async (data: {
   trackingNumber?: string;
   origin: string;
@@ -87,10 +113,23 @@ export const createShipmentService = async (data: {
   return shipment;
 };
 
+/**
+ * Updates shipment off-chain metadata.
+ * @param {string} id - Shipment ObjectId.
+ * @param {unknown} offChainMetadata - Off-chain metadata payload.
+ * @returns {Promise<unknown>} Updated shipment document.
+ */
 export const patchShipmentService = async (id: string, offChainMetadata: unknown) => {
   return Shipment.findByIdAndUpdate(id, { offChainMetadata }, { new: true });
 };
 
+/**
+ * Updates a shipment's status, records a milestone, and emits status events.
+ * @param {string} id - Shipment ObjectId.
+ * @param {ShipmentStatus} status - New shipment status.
+ * @param {{userId?: string; walletAddress?: string}=} actor - Optional actor metadata.
+ * @returns {Promise<unknown>} Updated shipment document or null when not found.
+ */
 export const updateShipmentStatusService = async (
   id: string,
   status: ShipmentStatus,
@@ -207,6 +246,14 @@ export const updateShipmentStatusService = async (
   return shipment;
 };
 
+/**
+ * Uploads delivery proof and attaches it to a shipment.
+ * @param {string} id - Shipment ObjectId.
+ * @param {Express.Multer.File} file - Proof file upload.
+ * @param {{recipientSignatureName?: string; notes?: string}} proof - Proof metadata.
+ * @returns {Promise<unknown>} Updated shipment document.
+ * @throws {AppError} When storage upload fails.
+ */
 export const uploadShipmentProofService = async (
   id: string,
   file: Express.Multer.File,
@@ -239,6 +286,11 @@ export const uploadShipmentProofService = async (
   return shipment;
 };
 
+/**
+ * Soft deletes a shipment and cascades deletion markers to related telemetry and anomaly documents.
+ * @param {string} id - Shipment ObjectId.
+ * @returns {Promise<unknown>} Deleted shipment document or null.
+ */
 export const deleteShipmentService = async (id: string) => {
   const shipment = await Shipment.findByIdAndUpdate(id, { deletedAt: new Date() }, { new: true });
   if (!shipment) return null;

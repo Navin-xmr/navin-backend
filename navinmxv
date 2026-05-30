@@ -1,0 +1,127 @@
+#219 [API-QA] Standardize error response schemas across all Swagger paths
+Repo Avatar
+Navin-xmr/navin-backend
+Domain: Documentation
+Issue [API-QA] Standardize error response schemas across all Swagger paths
+Tier: 🟡 Medium
+
+Description:
+
+Problem: Error responses in docs/swagger.yaml are inconsistent. Some endpoints document 400 with no schema, others with a bare object, and none explicitly reference the standardized { success: false, message: string, data: null } envelope used by the errorMiddleware.
+Implementation: Define a reusable ErrorResponse component schema under components/schemas. Update every path in docs/swagger.yaml to reference it for 400, 401, 403, 404, and 422 responses.
+Dependencies:
+
+Depends on None
+Acceptance Criteria:
+
+ components/schemas/ErrorResponse defined with success, message, data fields.
+ All 400 responses reference ErrorResponse.
+ All 401 responses reference ErrorResponse.
+ All 403 responses reference ErrorResponse.
+ All 404 and 422 responses reference ErrorResponse.
+Testing Requirements:
+
+ Swagger UI validates all updated paths without YAML syntax errors.
+ npm run build passes with zero warnings.
+PR Checklist:
+
+ Branch is named conventionally (e.g., docs/issue-62-standardize-error-schemas).
+ npm run lint and npm run build pass with zero warnings.
+
+..................................................................................................................
+
+#220 [API-QA] Add comprehensive JSDoc to all Service layer functions
+Repo Avatar
+Navin-xmr/navin-backend
+Domain: Documentation
+Issue [API-QA] Add comprehensive JSDoc to all Service layer functions
+Tier: 🟡 Medium
+
+Description:
+
+Problem: Service functions in src/modules/*/services/ and src/services/ contain minimal or no JSDoc. This slows onboarding and makes IDE IntelliSense less useful for downstream consumers.
+Implementation: Add JSDoc blocks to every public service method. Each block must include: @param with types, @returns with description, @throws if AppError is thrown, and a one-line summary. Use import type for param types where needed.
+Dependencies:
+
+Depends on None
+Acceptance Criteria:
+
+ Every exported function in src/modules/*/services/ has JSDoc.
+ Every exported function in src/services/ has JSDoc.
+ @param tags include descriptive names and link to shared types.
+ @throws tags document specific AppError codes where applicable.
+ No any types introduced in JSDoc.
+Testing Requirements:
+
+ npm run build passes with zero warnings.
+ Spot-check 3+ files to confirm JSDoc renders correctly in VS Code hover.
+PR Checklist:
+
+ Branch is named conventionally (e.g., docs/issue-63-service-jsdoc).
+ npm run lint and npm run build pass with zero warnings.
+
+.........................................................................................................................
+
+#221 [API-QA] Document Socket.IO real-time events and payload schemas
+Repo Avatar
+Navin-xmr/navin-backend
+Domain: Documentation
+Issue [API-QA] Document Socket.IO real-time events and payload schemas
+Tier: 🟡 Medium
+
+Description:
+
+Problem: The backend broadcasts real-time events (telemetry, status updates, anomalies) via Socket.IO, but there is no documentation for event names, payload shapes, or authentication flow. Frontend engineers must reverse-engineer the websocket contract from source code.
+Implementation: Create a new docs/websockets.md file documenting: (1) connection URL and auth handshake, (2) emitted event catalog with payload schemas, (3) client subscription patterns, (4) error handling. Reference the Socket.IO setup in src/infra/socket/.
+Dependencies:
+
+Depends on None
+Acceptance Criteria:
+
+ docs/websockets.md created and committed.
+ All emitted event names listed with descriptions.
+ Payload schemas provided as TypeScript interfaces or JSON examples.
+ Auth handshake (token verification) documented.
+ Disconnect/cleanup behavior noted.
+Testing Requirements:
+
+ Markdown renders correctly in GitHub preview.
+ Event list cross-referenced against src/infra/socket/ event emitters.
+PR Checklist:
+
+ Branch is named conventionally (e.g., docs/issue-64-websocket-docs).
+ npm run lint and npm run build pass with zero warnings.
+
+........................................................................................................................................
+
+#222 [API-QA] Document Stellar proof-of-delivery webhook in Swagger
+Repo Avatar
+Navin-xmr/navin-backend
+Domain: Documentation
+Issue [API-QA] Document Stellar proof-of-delivery webhook in Swagger
+Tier: 🟢 Easy
+
+Description:
+
+Problem: The Stellar webhook endpoint (POST /api/webhooks/stellar) receives blockchain proof-of-delivery callbacks but is not present in docs/swagger.yaml. Integrators and auditors have no documented contract for this critical settlement trigger.
+Implementation: Add an OpenAPI path definition for POST /api/webhooks/stellar in docs/swagger.yaml. Document the expected Stellar payload (tx hash, memo, event type), signature verification requirements, and response codes.
+Dependencies:
+
+Depends on None
+Acceptance Criteria:
+
+ POST /api/webhooks/stellar present in docs/swagger.yaml.
+ Request body documents Stellar-specific fields (tx hash, memo, event type).
+ security block uses apiKeyAuth or notes HMAC signature verification if applicable.
+ 200 and 400 response schemas documented.
+ Cross-references src/modules/webhooks/stellar.webhook.service.ts for field accuracy.
+Testing Requirements:
+
+ Swagger UI renders the new path without YAML syntax errors.
+ npm run build passes with zero warnings.
+ Payload fields verified against actual service handler.
+PR Checklist:
+
+ Branch is named conventionally (e.g., docs/issue-65-stellar-webhook-swagger).
+ npm run lint and npm run build pass with zero warnings.
+

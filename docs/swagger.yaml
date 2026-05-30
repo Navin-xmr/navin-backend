@@ -80,8 +80,88 @@ paths:
                         type: string
         '400':
           description: Invalid request payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '401':
           description: Missing or invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/webhooks/stellar:
+    post:
+      summary: Stellar proof-of-delivery webhook
+      description: Receives Stellar settlement callbacks for proof-of-delivery events. The webhook payload must include the transaction hash and event type, and may include an optional HMAC signature header for verification.
+      security:
+        - stellarSignature: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - id
+                - type
+                - paymentId
+                - transactionHash
+                - amount
+                - timestamp
+              properties:
+                id:
+                  type: string
+                  description: Unique Stellar webhook event identifier
+                type:
+                  type: string
+                  enum: [release, escrow, failed]
+                  description: Stellar webhook event type
+                paymentId:
+                  type: string
+                  description: Payment identifier linked to the shipment
+                transactionHash:
+                  type: string
+                  description: Stellar transaction hash for the settlement event
+                amount:
+                  type: number
+                  description: Amount associated with the Stellar event
+                timestamp:
+                  type: string
+                  format: date-time
+                  description: ISO 8601 timestamp for the webhook event
+                signature:
+                  type: string
+                  description: Optional HMAC signature value for webhook verification
+      responses:
+        '200':
+          description: Stellar webhook received and processed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      event:
+                        type: string
+                      paymentId:
+                        type: string
+                      status:
+                        type: string
+                      transactionHash:
+                        type: string
+        '400':
+          description: Invalid Stellar webhook payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/auth/api-keys:
     post:
       summary: Create a new API key
@@ -136,8 +216,16 @@ paths:
                         format: date-time
         '400':
           description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '401':
           description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/auth/signup:
     post:
       summary: Register a new user
@@ -194,14 +282,7 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                  message:
-                    type: string
-                  data:
-                    type: 'null'
+                $ref: '#/components/schemas/ErrorResponse'
   /api/auth/login:
     post:
       summary: Authenticate a user
@@ -237,6 +318,10 @@ paths:
                     type: object
         '401':
           description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '429':
           description: Too many login attempts
           content:
@@ -296,6 +381,10 @@ paths:
                           format: date-time
         '401':
           description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/auth/api-keys/{apiKeyId}:
     delete:
       summary: Revoke an API key
@@ -321,8 +410,16 @@ paths:
                     type: string
         '401':
           description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '404':
           description: API key not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/users/invitations:
     post:
       summary: Generate user invitation link
@@ -350,6 +447,10 @@ paths:
           description: Invitation generated
         '403':
           description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/users/invitations/verify:
     get:
       summary: Verify invitation token
@@ -364,6 +465,10 @@ paths:
           description: Invitation token is valid
         '401':
           description: Invalid or expired invitation token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/users/invitations/accept:
     post:
       summary: Accept invitation and create account
@@ -523,6 +628,10 @@ paths:
                         example: 150
         '400':
           description: Invalid query parameters (e.g., page < 1, limit > 100)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
     post:
       summary: Create a shipment
       security:
@@ -611,10 +720,22 @@ paths:
                             format: date-time
         '400':
           description: Missing file or invalid payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '401':
           description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '403':
           description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '503':
           description: Storage unavailable
   /api/anomalies:
@@ -665,8 +786,16 @@ paths:
                     type: boolean
         '401':
           description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '403':
           description: Forbidden - insufficient role
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/anomalies/{id}/resolve:
     patch:
       summary: Resolve an anomaly
@@ -692,12 +821,41 @@ paths:
                     $ref: '#/components/schemas/Anomaly'
         '401':
           description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '403':
           description: Forbidden - insufficient role
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '404':
           description: Anomaly not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 components:
   schemas:
+    ErrorResponse:
+      type: object
+      required:
+        - success
+        - message
+        - data
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+          description: Error message describing why the request failed.
+        data:
+          type: object
+          nullable: true
+          description: Null payload for error responses.
     Shipment:
       type: object
       properties:
@@ -754,15 +912,20 @@ components:
         updatedAt:
           type: string
           format: date-time
-securitySchemes:
-  bearerAuth:
-    type: http
-    scheme: bearer
-  apiKeyAuth:
-    type: apiKey
-    in: header
-    name: x-api-key
-    description: API key for IoT device authentication
+  securitySchemes:
+    stellarSignature:
+      type: apiKey
+      in: header
+      name: x-stellar-signature
+      description: Optional HMAC signature header for Stellar webhook verification.
+    bearerAuth:
+      type: http
+      scheme: bearer
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key
+      description: API key for IoT device authentication
   headers:
     X-Request-ID:
       description: All API responses include an X-Request-ID header containing a unique identifier for request tracking and debugging. Clients can provide their own X-Request-ID in the request header, which will be echoed back in the response.

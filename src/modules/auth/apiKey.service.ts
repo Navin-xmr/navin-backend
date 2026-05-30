@@ -21,6 +21,11 @@ interface CreateApiKeyResult {
   createdAt: Date;
 }
 
+/**
+ * Generates and persists a new API key for an organization or shipment.
+ * @param {CreateApiKeyParams} params - API key creation parameters.
+ * @returns {Promise<CreateApiKeyResult>} The generated raw API key and stored record metadata.
+ */
 export async function generateApiKey(params: CreateApiKeyParams): Promise<CreateApiKeyResult> {
   // Generate a secure random API key (32 bytes = 64 hex characters)
   const rawApiKey = crypto.randomBytes(32).toString('hex');
@@ -58,6 +63,11 @@ export async function generateApiKey(params: CreateApiKeyParams): Promise<Create
   };
 }
 
+/**
+ * Validates a raw API key against active stored keys.
+ * @param {string} rawApiKey - The inbound raw API key value.
+ * @returns {Promise<{isValid: boolean; apiKeyDoc?: IApiKey}>} Validation result and matched document if valid.
+ */
 export async function validateApiKey(rawApiKey: string): Promise<{
   isValid: boolean;
   apiKeyDoc?: IApiKey;
@@ -82,6 +92,11 @@ export async function validateApiKey(rawApiKey: string): Promise<{
   return { isValid: false };
 }
 
+/**
+ * Revokes an API key by marking it inactive.
+ * @param {string} apiKeyId - ObjectId of the API key to revoke.
+ * @throws {AppError} When the API key cannot be found.
+ */
 export async function revokeApiKey(apiKeyId: string): Promise<void> {
   const result = await ApiKeyModel.updateOne({ _id: apiKeyId }, { isActive: false });
 
@@ -90,6 +105,11 @@ export async function revokeApiKey(apiKeyId: string): Promise<void> {
   }
 }
 
+/**
+ * Lists active API keys for a given organization.
+ * @param {string} organizationId - Organization ObjectId to list keys for.
+ * @returns {Promise<unknown[]>} Active API keys filtered by organization.
+ */
 export async function listApiKeys(organizationId: string) {
   return ApiKeyModel.find({ organizationId, isActive: true })
     .select('-keyHash -__v')

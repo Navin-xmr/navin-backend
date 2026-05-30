@@ -38,6 +38,12 @@ function determineUserRole(email: string): UserRole {
   return UserRole.VIEWER;
 }
 
+/**
+ * Registers a new user and returns an auth token.
+ * @param {SignupInput} input - User signup input payload.
+ * @returns {Promise<{user: {id: string; email: string; name: string; role: string}; token: string}>} The created user and JWT token.
+ * @throws {AppError} When the email is already in use.
+ */
 export async function signup(input: SignupInput) {
   const existing = await UserModel.findOne({ email: input.email });
   if (existing) {
@@ -79,6 +85,12 @@ export async function signup(input: SignupInput) {
   };
 }
 
+/**
+ * Authenticates a user and returns a JWT.
+ * @param {LoginInput} input - User login credentials.
+ * @returns {Promise<{user: {id: string; email: string; name: string; role: string}; token: string}>} Authenticated user data and token.
+ * @throws {AppError} When credentials are invalid.
+ */
 export async function login(input: LoginInput) {
   const user = await UserModel.findOne({ email: input.email });
   if (!user) {
@@ -114,10 +126,20 @@ export async function login(input: LoginInput) {
   };
 }
 
+/**
+ * Verifies a JWT and returns its payload.
+ * @param {string} token - JWT string to verify.
+ * @returns {TokenPayload} Verified token payload.
+ */
 export function verifyToken(token: string): TokenPayload {
   return jwt.verify(token, env.JWT_SECRET) as TokenPayload;
 }
 
+/**
+ * Revokes a JWT by adding its jti to the blocklist.
+ * @param {string} token - JWT to revoke.
+ * @returns {Promise<void>} Resolves once the token is blocked.
+ */
 export async function logout(token: string): Promise<void> {
   let payload: TokenPayload;
   try {

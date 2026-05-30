@@ -5,12 +5,24 @@ import jwt from 'jsonwebtoken';
 import { env } from '../../env.js';
 import { UserRole } from '../../shared/constants/index.js';
 
+/**
+ * Registers a new user account.
+ * @param {{email: string; name: string; role?: string}} input - New user information.
+ * @returns {Promise<unknown>} Created user document.
+ * @throws {AppError} When the email is already in use.
+ */
 export async function registerUser(input: { email: string; name: string; role?: string }) {
   const existing = await findUserByEmail(input.email);
   if (existing) throw new AppError(409, 'Email already in use', 'EMAIL_TAKEN');
   return createUser(input);
 }
 
+/**
+ * Creates a team member under the caller's organization.
+ * @param {{email: string; name: string; role?: string; callerOrganizationId: string}} input - Team member details.
+ * @returns {Promise<unknown>} Created team member user document.
+ * @throws {AppError} When the email is already in use.
+ */
 export async function createTeamMember(input: {
   email: string;
   name: string;
@@ -30,6 +42,12 @@ export async function createTeamMember(input: {
   });
 }
 
+/**
+ * Lists users within an organization for an authorized role.
+ * @param {{organizationId?: string; role?: string}} input - Organization and role scope.
+ * @returns {Promise<unknown[]>} Organization users matching the role and org.
+ * @throws {AppError} When authorization or organization context is missing.
+ */
 export async function listOrganizationUsers(input: {
   organizationId?: string;
   role?: string;
@@ -51,6 +69,12 @@ export async function listOrganizationUsers(input: {
   return findUsersByOrganizationId(input.organizationId);
 }
 
+/**
+ * Soft deletes a user by setting deletedAt.
+ * @param {string} id - User ObjectId.
+ * @returns {Promise<unknown>} The deleted user document.
+ * @throws {AppError} When the user is not found.
+ */
 export async function deleteUser(id: string) {
   const user = await UserModel.findByIdAndUpdate(id, { deletedAt: new Date() }, { new: true });
   if (!user) throw new AppError(404, 'User not found', 'USER_NOT_FOUND');
@@ -68,6 +92,12 @@ type InviteTokenPayload = {
   invitedBy: string;
 };
 
+/**
+ * Generates an invitation link and signed token for onboarding a new user.
+ * @param {{email: string; role: string; inviterUserId: string; inviterRole?: string; organizationId?: string}} input - Invitation generation details.
+ * @returns {Promise<{token: string; inviteLink: string; expiresInSeconds: number}>} Invitation payload.
+ * @throws {AppError} When authorization fails or email is already registered.
+ */
 export async function generateInvitationLink(input: {
   email: string;
   role: string;
@@ -116,6 +146,12 @@ export async function generateInvitationLink(input: {
   return { token, inviteLink, expiresInSeconds: INVITE_EXPIRY_SECONDS };
 }
 
+/**
+ * Verifies an invitation JWT and returns token claims.
+ * @param {string} token - Invitation JWT.
+ * @returns {{email: string; role: string; organizationId: string; invitedBy: string | null; expiresAt: string | null}} Verified invitation payload.
+ * @throws {AppError} When the token is invalid or expired.
+ */
 export function verifyInvitationToken(token: string) {
   let payload: jwt.JwtPayload;
 
@@ -144,6 +180,12 @@ export function verifyInvitationToken(token: string) {
   };
 }
 
+/**
+ * Accepts an invitation token and creates a new user account.
+ * @param {{token: string; name: string; password: string}} input - Invitation acceptance payload.
+ * @returns {Promise<unknown>} Created user document.
+ * @throws {AppError} When the invitation is invalid or the email is already in use.
+ */
 export async function acceptInvitation(input: { token: string; name: string; password: string }) {
   const invitation = verifyInvitationToken(input.token);
 

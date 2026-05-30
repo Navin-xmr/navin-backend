@@ -24,6 +24,11 @@ interface AnomalyResult {
   }>;
 }
 
+/**
+ * Detects anomalies from telemetry data and persists any findings.
+ * @param {TelemetryData} data - Telemetry values used for anomaly evaluation.
+ * @returns {Promise<AnomalyResult>} Detection result and created anomaly records.
+ */
 export async function detectAnomaly(data: TelemetryData): Promise<AnomalyResult> {
   const timestamp = data.timestamp ?? new Date();
   const thresholds = {
@@ -73,6 +78,15 @@ export async function detectAnomaly(data: TelemetryData): Promise<AnomalyResult>
   return { detected: true, anomalies };
 }
 
+/**
+ * Retrieves anomalies with cursor-based pagination and optional filters.
+ * @param {object} params - Query options for anomalies.
+ * @param {string=} params.cursor - Optional cursor for pagination.
+ * @param {number} params.limit - Maximum number of records to return.
+ * @param {string=} params.shipmentId - Optional shipment filter.
+ * @param {string=} params.severity - Optional severity filter.
+ * @returns {Promise<{data: unknown[]; nextCursor: string | null; hasMore: boolean}>} Paginated anomalies.
+ */
 export async function getAnomaliesService(params: {
   cursor?: string;
   limit: number;
@@ -99,6 +113,12 @@ export async function getAnomaliesService(params: {
   return { data, nextCursor, hasMore };
 }
 
+/**
+ * Resolves an existing anomaly record.
+ * @param {string} id - Anomaly ObjectId.
+ * @returns {Promise<unknown>} Updated anomaly document.
+ * @throws {Error} When the anomaly cannot be found.
+ */
 export async function resolveAnomalyService(id: string) {
   const anomaly = await Anomaly.findByIdAndUpdate(
     id,
