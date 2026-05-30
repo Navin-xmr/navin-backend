@@ -497,6 +497,73 @@ paths:
           description: Invalid or expired invitation token
         '409':
           description: Email already in use
+  /api/users/{id}:
+    delete:
+      summary: Delete a user (soft delete)
+      description: Soft-deletes a user by setting deletedAt. Requires ADMIN or SUPER_ADMIN role.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: MongoDB ObjectId of the user to delete
+      responses:
+        '200':
+          description: User deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: User deleted successfully
+                  data:
+                    type: object
+                    properties:
+                      _id:
+                        type: string
+                      email:
+                        type: string
+                      name:
+                        type: string
+                      role:
+                        type: string
+                      organizationId:
+                        type: string
+                      deletedAt:
+                        type: string
+                        format: date-time
+        '400':
+          description: Invalid or missing id parameter
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Missing or invalid auth token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden – insufficient role
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/analytics/performance:
     get:
       summary: Get analytics performance dashboard

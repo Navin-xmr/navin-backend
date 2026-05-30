@@ -18,8 +18,8 @@ export const createTeamMemberController: RequestHandler = async (req, res) => {
 };
 
 export const deleteUserController: RequestHandler = async (req, res) => {
-  await usersService.deleteUser(req.params.id);
-  res.json({ success: true, message: 'User deleted successfully' });
+  const result = await usersService.deleteUser(req.params.id);
+  sendResponse(res, 200, true, 'User deleted successfully', result);
 };
 
 export const createInvitationController: RequestHandler = async (req, res) => {
