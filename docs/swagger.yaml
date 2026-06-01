@@ -368,6 +368,33 @@ paths:
                     type: integer
                   data:
                     type: 'null'
+  /api/auth/logout:
+    post:
+      summary: Logout current user
+      description: Invalidates the current JWT (server-side revocation). Requires Authorization header.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Logout successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    nullable: true
+        '401':
+          description: Missing or invalid auth token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/auth/api-keys/{organizationId}:
     get:
       summary: List API keys for an organization
@@ -595,6 +622,112 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /api/users:
+    post:
+      summary: Create a new user (self-service)
+      description: Register a new user account. Public endpoint for self-signup or admin-created users depending on auth context.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, name, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                name:
+                  type: string
+                password:
+                  type: string
+                  minLength: 6
+                organizationId:
+                  type: string
+      responses:
+        '201':
+          description: User created
+        '400':
+          description: Validation error
+    get:
+      summary: List users
+      description: Returns a paginated list of users. Requires authentication and role (ADMIN/MANAGER/SUPER_ADMIN).
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Users retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        _id:
+                          type: string
+                        email:
+                          type: string
+                        name:
+                          type: string
+                        role:
+                          type: string
+                        organizationId:
+                          type: string
+                  meta:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                      limit:
+                        type: integer
+                      total:
+                        type: integer
+  /api/users/team:
+    post:
+      summary: Create a user as a team member (admin only)
+      description: Create a user within the organization. Requires ADMIN or SUPER_ADMIN role.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, name]
+              properties:
+                email:
+                  type: string
+                  format: email
+                name:
+                  type: string
+                role:
+                  type: string
+                  enum: [ADMIN, MANAGER, VIEWER, CUSTOMER]
+      responses:
+        '201':
+          description: Team member created
+        '403':
+          description: Forbidden
   /api/analytics/performance:
     get:
       summary: Get analytics performance dashboard
@@ -934,6 +1067,32 @@ paths:
       responses:
         '200':
           description: Shipment updated
+    delete:
+      summary: Delete a shipment
+      description: Soft-delete a shipment. Requires ADMIN or MANAGER role.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Shipment deleted
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/shipments/{id}/proof:
     post:
       summary: Upload proof of delivery for a shipment
@@ -1006,6 +1165,34 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '503':
           description: Storage unavailable
+  /api/shipments/{id}/status:
+    patch:
+      summary: Update shipment status
+      description: Update the current shipment status (e.g., IN_TRANSIT, DELIVERED). Requires authentication.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [CREATED, IN_TRANSIT, DELIVERED, CANCELLED]
+      responses:
+        '200':
+          description: Shipment status updated
+        '400':
+          description: Invalid request
   /api/anomalies:
     get:
       summary: Get anomalies with pagination and filtering
