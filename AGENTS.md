@@ -107,3 +107,4 @@ Treat violations as hard errors. Stop and fix.
 - Read before writing. Batch parallel reads. Cite file:line.
 - Minimal diffs — don't rewrite files for one-line fixes.
 - No filler prose. Tables/checklists over paragraphs.
+
