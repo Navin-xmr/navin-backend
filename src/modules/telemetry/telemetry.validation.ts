@@ -41,3 +41,11 @@ export const BulkTelemetryBodySchema = z.object({
 
 export type BulkTelemetryItem = z.infer<typeof BulkTelemetryItemSchema>;
 export type BulkTelemetryBody = z.infer<typeof BulkTelemetryBodySchema>;
+
+export const TelemetryThresholdsSchema = z.object({
+  maxTemp: z.number(),
+  maxHumidity: z.number(),
+  minBatteryLevel: z.number(),
+});
+
+export type TelemetryThresholds = z.infer<typeof TelemetryThresholdsSchema>;
