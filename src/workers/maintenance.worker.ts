@@ -1,5 +1,5 @@
 import { Worker, Job, Queue } from 'bullmq';
-import { getRedisConnection } from '../infra/redis/connection.js';
+import { getBullMQConnection } from '../infra/redis/connection.js';
 import { logger } from '../shared/logger/logger.js';
 import { Anomaly } from '../modules/anomaly/anomaly.model.js';
 
@@ -70,7 +70,7 @@ async function processMaintenance(job: Job<MaintenanceJobData>): Promise<void> {
  */
 export function startMaintenanceWorker(): Worker<MaintenanceJobData> {
   const worker = new Worker<MaintenanceJobData>('maintenance_queue', processMaintenance, {
-    connection: getRedisConnection() as any, // eslint-disable-line @typescript-eslint/no-explicit-any
+    connection: getBullMQConnection(),
   });
 
   worker.on('failed', (job, err) => {
@@ -96,7 +96,7 @@ export function startMaintenanceWorker(): Worker<MaintenanceJobData> {
 export async function scheduleMaintenanceJobs(): Promise<void> {
   try {
     const queue = new Queue('maintenance_queue', {
-      connection: getRedisConnection() as any, // eslint-disable-line @typescript-eslint/no-explicit-any
+      connection: getBullMQConnection(),
     });
 
     // Schedule daily cleanup job at 2 AM UTC (can be configured)
