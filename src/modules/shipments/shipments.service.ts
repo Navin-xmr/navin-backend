@@ -56,7 +56,11 @@ export const getShipmentsService = async (params: {
   filters: Record<string, unknown>;
 }): Promise<ShipmentListResult> => {
   const { status, page, limit, origin, destination, filters } = params;
-  const query: FilterQuery<unknown> = { ...filters };
+  const query: FilterQuery<unknown> = {};
+
+  if (filters.organizationId) {
+    query.organizationId = filters.organizationId;
+  }
 
   if (status) query.status = status;
   if (origin) {

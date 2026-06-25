@@ -19,22 +19,15 @@ function augmentPayment(payment: IPayment): IPayment & { explorerUrl?: string } 
  * @throws {AppError} When payment data is invalid or creation fails.
  */
 export async function createPaymentService(input: CreatePaymentInput & { organizationId: string }) {
-  try {
-    const payment = await paymentsRepo.createPayment({
-      shipmentId: input.shipmentId,
-      organizationId: input.organizationId,
-      amount: input.amount,
-      tokenType: input.tokenType,
-      status: input.status || PaymentStatus.PENDING,
-    });
+  const payment = await paymentsRepo.createPayment({
+    shipmentId: input.shipmentId,
+    organizationId: input.organizationId,
+    amount: input.amount,
+    tokenType: input.tokenType,
+    status: input.status || PaymentStatus.PENDING,
+  });
 
-    return augmentPayment(payment);
-  } catch (error) {
-    if (error instanceof Error && error.message.includes('validation')) {
-      throw new AppError(400, 'Invalid payment data', 'INVALID_PAYMENT_DATA');
-    }
-    throw new AppError(500, 'Failed to create payment', 'PAYMENT_CREATE_FAILED');
-  }
+  return augmentPayment(payment);
 }
 
 /**
