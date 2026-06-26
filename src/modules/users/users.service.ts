@@ -8,15 +8,33 @@ import { env } from '../../env.js';
 import { UserRole } from '../../shared/constants/index.js';
 
 /**
- * Registers a new user account.
- * @param {{email: string; name: string; role?: string}} input - New user information.
- * @returns {Promise<unknown>} Created user document.
- * @throws {AppError} When the email is already in use.
+ * Creates a new user account under the caller's organization.
+ * Password-less — user must complete the invitation flow to authenticate.
  */
-export async function registerUser(input: { email: string; name: string; role?: string }) {
+export async function registerUser(input: {
+  email: string;
+  name: string;
+  role?: string;
+  organizationId?: string;
+}) {
+  if (input.role === UserRole.SUPER_ADMIN) {
+    throw new AppError(400, 'Cannot create SUPER_ADMIN users via this endpoint', 'INVALID_ROLE');
+  }
+
   const existing = await findUserByEmail(input.email);
   if (existing) throw new AppError(409, 'Email already in use', 'EMAIL_TAKEN');
-  return createUser(input);
+
+  // Locked placeholder so bcrypt.compare(anything, lockedHash) always returns false
+  // until the user sets a real password through the invitation flow.
+  const lockedHash = await bcrypt.hash(randomBytes(32).toString('hex'), 10);
+
+  return createUser({
+    email: input.email,
+    name: input.name,
+    passwordHash: lockedHash,
+    role: input.role ?? UserRole.VIEWER,
+    organizationId: input.organizationId,
+  });
 }
 
 /**
