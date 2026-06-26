@@ -7,11 +7,7 @@ import { requireAuth } from '../../shared/middleware/requireAuth.js';
 
 export const telemetryRouter = Router();
 
-telemetryRouter.get(
-  '/thresholds',
-  requireAuth,
-  asyncHandler(getThresholds)
-);
+telemetryRouter.get('/thresholds', requireAuth, asyncHandler(getThresholds));
 
 telemetryRouter.get(
   '/',

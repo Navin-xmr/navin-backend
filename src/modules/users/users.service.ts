@@ -73,15 +73,8 @@ export async function createTeamMember(input: {
  * @returns {Promise<unknown[]>} Organization users matching the role and org.
  * @throws {AppError} When authorization or organization context is missing.
  */
-export async function listOrganizationUsers(input: {
-  organizationId?: string;
-  role?: string;
-}) {
-  const allowedRoles = [
-    UserRole.SUPER_ADMIN,
-    UserRole.ADMIN,
-    UserRole.MANAGER,
-  ];
+export async function listOrganizationUsers(input: { organizationId?: string; role?: string }) {
+  const allowedRoles = [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER];
 
   if (!input.role || !allowedRoles.includes(input.role as UserRole)) {
     throw new AppError(403, 'Forbidden: insufficient role', 'FORBIDDEN');

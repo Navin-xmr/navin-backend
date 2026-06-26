@@ -29,5 +29,5 @@ webhooksRouter.post(
   }),
   asyncHandler(verifyStellarSignature),
   validateRequest({ body: StellarWebhookPayloadSchema }),
-  asyncHandler(handleStellarWebhookController),
+  asyncHandler(handleStellarWebhookController)
 );
