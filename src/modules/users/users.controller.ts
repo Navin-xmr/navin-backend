@@ -3,7 +3,12 @@ import * as usersService from './users.service.js';
 import { sendResponse } from '../../shared/http/sendResponse.js';
 
 export const createUserController: RequestHandler = async (req, res) => {
-  const user = await usersService.registerUser(req.body);
+  const user = await usersService.registerUser({
+    email: req.body.email,
+    name: req.body.name,
+    role: req.body.role,
+    organizationId: req.user?.organizationId,
+  });
   sendResponse(res, 201, true, 'User registered successfully', user);
 };
 
