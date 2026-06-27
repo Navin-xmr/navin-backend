@@ -1,13 +1,15 @@
 import { z } from 'zod';
 import { ShipmentStatus } from './shipments.model.js';
 
-export const getShipmentsQuerySchema = z.object({
-  status: z.string().optional(),
-  page: z.coerce.number().min(1).default(1),
-  limit: z.coerce.number().min(1).max(100).default(20),
-  origin: z.string().optional(),
-  destination: z.string().optional(),
-});
+export const getShipmentsQuerySchema = z
+  .object({
+    status: z.string().optional(),
+    page: z.coerce.number().min(1).default(1),
+    limit: z.coerce.number().min(1).max(100).default(20),
+    origin: z.string().optional(),
+    destination: z.string().optional(),
+  })
+  .strict();
 
 export type GetShipmentsQuery = z.infer<typeof getShipmentsQuerySchema>;
 

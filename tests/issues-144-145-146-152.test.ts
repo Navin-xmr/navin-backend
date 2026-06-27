@@ -1,6 +1,6 @@
 import request from 'supertest';
 import { buildApp } from '../src/app.js';
-import { connectDB, disconnectDB } from '../src/infra/db/mongoose.js';
+import { connectMongo, disconnectMongo } from '../src/infra/mongo/connection.js';
 import { UserModel, OrganizationModel } from '../src/modules/users/users.model.js';
 import { Shipment } from '../src/modules/shipments/shipments.model.js';
 import jwt from 'jsonwebtoken';
@@ -12,7 +12,7 @@ describe('Issues 144, 145, 146, 152 - Combined Tests', () => {
   let orgId: string;
 
   beforeAll(async () => {
-    await connectDB();
+    await connectMongo(process.env.MONGO_URI!);
     app = buildApp();
 
     // Create test organization
@@ -31,18 +31,16 @@ describe('Issues 144, 145, 146, 152 - Combined Tests', () => {
       organizationId: orgId,
     });
 
-    adminToken = jwt.sign(
-      { userId: adminUser._id.toString(), role: 'ADMIN', organizationId: orgId },
-      env.JWT_SECRET,
-      { expiresIn: '1h' }
-    );
+    adminToken = jwt.sign({ userId: adminUser._id.toString(), role: 'ADMIN' }, env.JWT_SECRET, {
+      expiresIn: '1h',
+    });
   });
 
   afterAll(async () => {
     await UserModel.deleteMany({});
     await OrganizationModel.deleteMany({});
     await Shipment.deleteMany({});
-    await disconnectDB();
+    await disconnectMongo();
   });
 
   describe('Issue #144 - Request ID in Response Headers', () => {
@@ -56,9 +54,7 @@ describe('Issues 144, 145, 146, 152 - Combined Tests', () => {
 
     it('should use provided X-Request-ID if sent in request', async () => {
       const customRequestId = 'custom-request-id-12345';
-      const response = await request(app)
-        .get('/api/health')
-        .set('x-request-id', customRequestId);
+      const response = await request(app).get('/api/health').set('x-request-id', customRequestId);
 
       expect(response.headers['x-request-id']).toBe(customRequestId);
     });
@@ -75,13 +71,11 @@ describe('Issues 144, 145, 146, 152 - Combined Tests', () => {
 
   describe('Issue #145 - organizationId Optional in Signup', () => {
     it('should allow signup without organizationId', async () => {
-      const response = await request(app)
-        .post('/api/auth/signup')
-        .send({
-          email: 'newuser@test.com',
-          name: 'New User',
-          password: 'password123',
-        });
+      const response = await request(app).post('/api/auth/signup').send({
+        email: 'newuser@test.com',
+        name: 'New User',
+        password: 'password123',
+      });
 
       expect(response.status).toBe(201);
       expect(response.body.success).toBe(true);
@@ -89,26 +83,22 @@ describe('Issues 144, 145, 146, 152 - Combined Tests', () => {
     });
 
     it('should allow signup with organizationId', async () => {
-      const response = await request(app)
-        .post('/api/auth/signup')
-        .send({
-          email: 'newuser2@test.com',
-          name: 'New User 2',
-          password: 'password123',
-          organizationId: orgId,
-        });
+      const response = await request(app).post('/api/auth/signup').send({
+        email: 'newuser2@test.com',
+        name: 'New User 2',
+        password: 'password123',
+        organizationId: orgId,
+      });
 
       expect(response.status).toBe(201);
       expect(response.body.success).toBe(true);
     });
 
     it('should reject signup with missing required fields', async () => {
-      const response = await request(app)
-        .post('/api/auth/signup')
-        .send({
-          email: 'incomplete@test.com',
-          // missing name and password
-        });
+      const response = await request(app).post('/api/auth/signup').send({
+        email: 'incomplete@test.com',
+        // missing name and password
+      });
 
       expect(response.status).toBe(400);
       expect(response.body.success).toBe(false);
@@ -117,13 +107,11 @@ describe('Issues 144, 145, 146, 152 - Combined Tests', () => {
 
   describe('Issue #146 - Password Minimum 8 Characters', () => {
     it('should reject password with less than 8 characters', async () => {
-      const response = await request(app)
-        .post('/api/auth/signup')
-        .send({
-          email: 'shortpass@test.com',
-          name: 'Short Pass User',
-          password: 'pass123', // 7 characters
-        });
+      const response = await request(app).post('/api/auth/signup').send({
+        email: 'shortpass@test.com',
+        name: 'Short Pass User',
+        password: 'pass123', // 7 characters
+      });
 
       expect(response.status).toBe(400);
       expect(response.body.success).toBe(false);
@@ -131,26 +119,22 @@ describe('Issues 144, 145, 146, 152 - Combined Tests', () => {
     });
 
     it('should accept password with exactly 8 characters', async () => {
-      const response = await request(app)
-        .post('/api/auth/signup')
-        .send({
-          email: 'eightchar@test.com',
-          name: 'Eight Char User',
-          password: 'pass1234', // 8 characters
-        });
+      const response = await request(app).post('/api/auth/signup').send({
+        email: 'eightchar@test.com',
+        name: 'Eight Char User',
+        password: 'pass1234', // 8 characters
+      });
 
       expect(response.status).toBe(201);
       expect(response.body.success).toBe(true);
     });
 
     it('should accept password with more than 8 characters', async () => {
-      const response = await request(app)
-        .post('/api/auth/signup')
-        .send({
-          email: 'longpass@test.com',
-          name: 'Long Pass User',
-          password: 'password12345', // 13 characters
-        });
+      const response = await request(app).post('/api/auth/signup').send({
+        email: 'longpass@test.com',
+        name: 'Long Pass User',
+        password: 'password12345', // 13 characters
+      });
 
       expect(response.status).toBe(201);
       expect(response.body.success).toBe(true);
@@ -168,7 +152,7 @@ describe('Issues 144, 145, 146, 152 - Combined Tests', () => {
           destination: `Destination ${i}`,
           enterpriseId: orgId,
           logisticsId: orgId,
-          status: 'PENDING',
+          status: 'CREATED',
         });
       }
       await Shipment.insertMany(shipments);
@@ -181,6 +165,7 @@ describe('Issues 144, 145, 146, 152 - Combined Tests', () => {
     it('should return shipments with page, limit, and total in meta', async () => {
       const response = await request(app)
         .get('/api/shipments')
+        .set('Authorization', `Bearer ${adminToken}`)
         .query({ page: 1, limit: 10 });
 
       expect(response.status).toBe(200);
@@ -197,6 +182,7 @@ describe('Issues 144, 145, 146, 152 - Combined Tests', () => {
     it('should return correct page 2 results', async () => {
       const response = await request(app)
         .get('/api/shipments')
+        .set('Authorization', `Bearer ${adminToken}`)
         .query({ page: 2, limit: 10 });
 
       expect(response.status).toBe(200);
@@ -208,6 +194,7 @@ describe('Issues 144, 145, 146, 152 - Combined Tests', () => {
     it('should handle page beyond available data', async () => {
       const response = await request(app)
         .get('/api/shipments')
+        .set('Authorization', `Bearer ${adminToken}`)
         .query({ page: 100, limit: 10 });
 
       expect(response.status).toBe(200);
@@ -217,7 +204,9 @@ describe('Issues 144, 145, 146, 152 - Combined Tests', () => {
     });
 
     it('should default to page 1 and limit 20 when not specified', async () => {
-      const response = await request(app).get('/api/shipments');
+      const response = await request(app)
+        .get('/api/shipments')
+        .set('Authorization', `Bearer ${adminToken}`);
 
       expect(response.status).toBe(200);
       expect(response.body.meta.page).toBe(1);
@@ -227,6 +216,7 @@ describe('Issues 144, 145, 146, 152 - Combined Tests', () => {
     it('should respect custom limit parameter', async () => {
       const response = await request(app)
         .get('/api/shipments')
+        .set('Authorization', `Bearer ${adminToken}`)
         .query({ page: 1, limit: 5 });
 
       expect(response.status).toBe(200);
@@ -237,6 +227,7 @@ describe('Issues 144, 145, 146, 152 - Combined Tests', () => {
     it('should return total count of all shipments', async () => {
       const response = await request(app)
         .get('/api/shipments')
+        .set('Authorization', `Bearer ${adminToken}`)
         .query({ page: 1, limit: 10 });
 
       expect(response.status).toBe(200);
@@ -247,16 +238,20 @@ describe('Issues 144, 145, 146, 152 - Combined Tests', () => {
     it('should work with status filter and pagination', async () => {
       const response = await request(app)
         .get('/api/shipments')
-        .query({ page: 1, limit: 10, status: 'PENDING' });
+        .set('Authorization', `Bearer ${adminToken}`)
+        .query({ page: 1, limit: 10, status: 'CREATED' });
 
       expect(response.status).toBe(200);
       expect(response.body.meta.page).toBe(1);
-      expect(response.body.data.every((s: { status: string }) => s.status === 'PENDING')).toBe(true);
+      expect(response.body.data.every((s: { status: string }) => s.status === 'CREATED')).toBe(
+        true
+      );
     });
 
     it('should reject invalid page numbers', async () => {
       const response = await request(app)
         .get('/api/shipments')
+        .set('Authorization', `Bearer ${adminToken}`)
         .query({ page: 0, limit: 10 });
 
       expect(response.status).toBe(400);
@@ -265,6 +260,7 @@ describe('Issues 144, 145, 146, 152 - Combined Tests', () => {
     it('should reject limit exceeding maximum', async () => {
       const response = await request(app)
         .get('/api/shipments')
+        .set('Authorization', `Bearer ${adminToken}`)
         .query({ page: 1, limit: 101 });
 
       expect(response.status).toBe(400);

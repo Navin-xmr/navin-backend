@@ -30,6 +30,11 @@ type AggregationFacet = {
   delayedShipments?: Array<{ totalDelayed?: unknown }>;
 };
 
+/**
+ * Builds analytics dashboard payload for a date range.
+ * @param {PerformanceQuery} query - Analytics window parameters.
+ * @returns {Promise<AnalyticsDashboardPayload>} Aggregated analytics dashboard data.
+ */
 export async function getAnalyticsPerformance(
   query: PerformanceQuery
 ): Promise<AnalyticsDashboardPayload> {

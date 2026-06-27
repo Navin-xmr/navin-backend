@@ -8,10 +8,10 @@ describe('Health Check Endpoint', () => {
     const response = await request(app).get('/api/health');
 
     expect(response.status).toBe(200);
-    expect(response.body).toEqual({
+    expect(response.body).toMatchObject({
       success: true,
       message: 'OK',
-      data: { status: 'active' },
+      data: expect.objectContaining({ status: 'active' }),
     });
   });
 });

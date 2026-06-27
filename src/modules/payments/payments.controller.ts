@@ -10,45 +10,36 @@ export const createPaymentController = asyncHandler(
       organizationId: req.user?.organizationId ?? '',
     });
     sendResponse(res, 201, true, 'Payment created successfully', payment);
-  },
+  }
 );
 
 export const getPaymentController = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
     const payment = await paymentsService.getPaymentByIdService(req.params.id);
     sendResponse(res, 200, true, 'Payment retrieved successfully', payment);
-  },
+  }
 );
 
 export const getPaymentsController = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
-    const payments = await paymentsService.getPaymentsService({
+    const query = req.query as unknown as import('./payments.validation.js').GetPaymentsQuery;
+    const result = await paymentsService.getPaymentsService({
       organizationId: req.user?.organizationId ?? '',
-      status:
-        (req.query.status as string | undefined) as
-          | import('./payments.model.js').PaymentStatus
-          | undefined,
-      limit: req.query.limit ? parseInt(req.query.limit as string) : undefined,
-      cursor: req.query.cursor as string | undefined,
+      status: query.status,
+      limit: query.limit,
+      cursor: query.cursor,
     });
-    sendResponse(res, 200, true, 'Payments retrieved successfully', payments, {
-      count: payments.length,
+    sendResponse(res, 200, true, 'Payments retrieved successfully', result.data, {
+      total: result.total,
+      hasMore: result.hasMore,
+      nextCursor: result.nextCursor,
     });
-  },
+  }
 );
 
 export const updatePaymentStatusController = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
-    const payment = await paymentsService.updatePaymentStatusService(
-      req.params.id,
-      req.body,
-    );
-    sendResponse(
-      res,
-      200,
-      true,
-      'Payment status updated successfully',
-      payment,
-    );
-  },
+    const payment = await paymentsService.updatePaymentStatusService(req.params.id, req.body);
+    sendResponse(res, 200, true, 'Payment status updated successfully', payment);
+  }
 );

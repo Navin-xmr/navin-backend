@@ -80,8 +80,119 @@ paths:
                         type: string
         '400':
           description: Invalid request payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '401':
           description: Missing or invalid API key
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/webhooks/stellar:
+    post:
+      summary: Stellar proof-of-delivery webhook
+      description: Receives Stellar settlement callbacks for proof-of-delivery events. The webhook payload must include the transaction hash and event type, and may include an optional HMAC signature header for verification.
+      security:
+        - stellarSignature: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - id
+                - type
+                - paymentId
+                - transactionHash
+                - amount
+                - timestamp
+              properties:
+                id:
+                  type: string
+                  description: Unique Stellar webhook event identifier
+                type:
+                  type: string
+                  enum: [release, escrow, failed]
+                  description: Stellar webhook event type
+                paymentId:
+                  type: string
+                  description: Payment identifier linked to the shipment
+                transactionHash:
+                  type: string
+                  description: Stellar transaction hash for the settlement event
+                amount:
+                  type: number
+                  description: Amount associated with the Stellar event
+                timestamp:
+                  type: string
+                  format: date-time
+                  description: ISO 8601 timestamp for the webhook event
+                signature:
+                  type: string
+                  description: Optional HMAC signature value for webhook verification
+      responses:
+        '200':
+          description: Stellar webhook received and processed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      event:
+                        type: string
+                      paymentId:
+                        type: string
+                      status:
+                        type: string
+                      transactionHash:
+                        type: string
+        '400':
+          description: Invalid Stellar webhook payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/health:
+    get:
+      summary: Health check
+      description: Public health endpoint used by load balancers and uptime monitors.
+      responses:
+        '200':
+          description: Service health metadata
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: OK
+                  data:
+                    type: object
+                    properties:
+                      status:
+                        type: string
+                        example: active
+                      uptime:
+                        type: number
+                        description: Process uptime in seconds
+                      timestamp:
+                        type: string
+                        format: date-time
+                        description: Current UTC timestamp
   /api/auth/api-keys:
     post:
       summary: Create a new API key
@@ -136,8 +247,16 @@ paths:
                         format: date-time
         '400':
           description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '401':
           description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/auth/signup:
     post:
       summary: Register a new user
@@ -294,6 +413,7 @@ paths:
           description: Unauthorized
         '403':
           description: Forbidden
+                $ref: '#/components/schemas/ErrorResponse'
   /api/auth/login:
     post:
       summary: Authenticate a user
@@ -329,6 +449,10 @@ paths:
                     type: object
         '401':
           description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '429':
           description: Too many login attempts
           content:
@@ -344,6 +468,33 @@ paths:
                     type: integer
                   data:
                     type: 'null'
+  /api/auth/logout:
+    post:
+      summary: Logout current user
+      description: Invalidates the current JWT (server-side revocation). Requires Authorization header.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Logout successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    nullable: true
+        '401':
+          description: Missing or invalid auth token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/auth/api-keys/{organizationId}:
     get:
       summary: List API keys for an organization
@@ -388,6 +539,10 @@ paths:
                           format: date-time
         '401':
           description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/auth/api-keys/{apiKeyId}:
     delete:
       summary: Revoke an API key
@@ -413,8 +568,16 @@ paths:
                     type: string
         '401':
           description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '404':
           description: API key not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/users/invitations:
     post:
       summary: Generate user invitation link
@@ -442,6 +605,10 @@ paths:
           description: Invitation generated
         '403':
           description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/users/invitations/verify:
     get:
       summary: Verify invitation token
@@ -456,6 +623,10 @@ paths:
           description: Invitation token is valid
         '401':
           description: Invalid or expired invitation token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/users/invitations/accept:
     post:
       summary: Accept invitation and create account
@@ -484,6 +655,230 @@ paths:
           description: Invalid or expired invitation token
         '409':
           description: Email already in use
+  /api/users/{id}:
+    delete:
+      summary: Delete a user (soft delete)
+      description: Soft-deletes a user by setting deletedAt. Requires ADMIN or SUPER_ADMIN role.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: MongoDB ObjectId of the user to delete
+      responses:
+        '200':
+          description: User deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: User deleted successfully
+                  data:
+                    type: object
+                    properties:
+                      _id:
+                        type: string
+                      email:
+                        type: string
+                      name:
+                        type: string
+                      role:
+                        type: string
+                      organizationId:
+                        type: string
+                      deletedAt:
+                        type: string
+                        format: date-time
+        '400':
+          description: Invalid or missing id parameter
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Missing or invalid auth token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden – insufficient role
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/users:
+    post:
+      summary: Create a new user (admin only)
+      description: >
+        Creates a new user within the authenticated admin's organization.
+        Requires ADMIN or SUPER_ADMIN role. The organizationId is always
+        taken from the authenticated JWT token — it cannot be supplied in
+        the request body, preventing cross-organisation user creation.
+      security:
+        - bearerAuth: []
+      tags:
+        - Users
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, name]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  description: User email address
+                name:
+                  type: string
+                  minLength: 1
+                  description: User full name
+                role:
+                  type: string
+                  enum: [ADMIN, MANAGER, VIEWER, CUSTOMER]
+                  default: VIEWER
+                  description: Role to assign to the new user
+      responses:
+        '201':
+          description: User created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: User registered successfully
+                  data:
+                    type: object
+                    properties:
+                      _id:
+                        type: string
+                      email:
+                        type: string
+                      name:
+                        type: string
+                      role:
+                        type: string
+                      organizationId:
+                        type: string
+        '400':
+          description: Validation error — missing or invalid fields
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized — missing or invalid token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden — insufficient role (must be ADMIN or SUPER_ADMIN)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    get:
+      summary: List users
+      description: Returns a paginated list of users. Requires authentication and role (ADMIN/MANAGER/SUPER_ADMIN).
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Users retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        _id:
+                          type: string
+                        email:
+                          type: string
+                        name:
+                          type: string
+                        role:
+                          type: string
+                        organizationId:
+                          type: string
+                  meta:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                      limit:
+                        type: integer
+                      total:
+                        type: integer
+  /api/users/team:
+    post:
+      summary: Create a user as a team member (admin only)
+      description: Create a user within the organization. Requires ADMIN or SUPER_ADMIN role.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, name]
+              properties:
+                email:
+                  type: string
+                  format: email
+                name:
+                  type: string
+                role:
+                  type: string
+                  enum: [ADMIN, MANAGER, VIEWER, CUSTOMER]
+      responses:
+        '201':
+          description: Team member created
+        '403':
+          description: Forbidden
   /api/analytics/performance:
     get:
       summary: Get analytics performance dashboard
@@ -538,6 +933,202 @@ paths:
                             averageDeliveryTimeMs:
                               type: number
                       totalDelayedShipments:
+                        type: integer
+  /api/payments:
+    get:
+      summary: Get payments history
+      description: Returns settlement records for the authenticated user's organization.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [Pending, Escrowed, Released, Failed]
+          description: Filter payments by status.
+        - in: query
+          name: cursor
+          schema:
+            type: string
+          description: Cursor for pagination.
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+          description: Maximum number of records to return.
+      responses:
+        '200':
+          description: Payments retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        _id:
+                          type: string
+                        shipmentId:
+                          type: string
+                        organizationId:
+                          type: string
+                        amount:
+                          type: number
+                        tokenType:
+                          type: string
+                        status:
+                          type: string
+                        stellarTxHash:
+                          type: string
+                        createdAt:
+                          type: string
+                          format: date-time
+                        updatedAt:
+                          type: string
+                          format: date-time
+                  meta:
+                    type: object
+                    properties:
+                      total:
+                        type: integer
+                        description: Total number of matching payments for the organization.
+                      hasMore:
+                        type: boolean
+                        description: Whether more pages are available.
+                      nextCursor:
+                        type: string
+                        nullable: true
+                        description: Cursor to pass as `cursor` query param to fetch the next page.
+        '400':
+          description: Invalid query parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Missing or invalid authorization token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Insufficient role permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/telemetry:
+    get:
+      summary: Get telemetry records
+      description: Retrieve telemetry time-series points with optional shipment filtering and pagination.
+      parameters:
+        - in: query
+          name: shipmentId
+          schema:
+            type: string
+          description: Filter telemetry records by shipment ID.
+        - in: query
+          name: from
+          schema:
+            type: string
+            format: date-time
+          description: Return telemetry recorded at or after this timestamp.
+        - in: query
+          name: to
+          schema:
+            type: string
+            format: date-time
+          description: Return telemetry recorded at or before this timestamp.
+        - in: query
+          name: cursor
+          schema:
+            type: string
+          description: Cursor for cursor-based pagination.
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+          description: Page number for offset-based pagination.
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+          description: Number of records to return.
+      responses:
+        '200':
+          description: Telemetry retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        _id:
+                          type: string
+                        shipmentId:
+                          type: string
+                        sensorId:
+                          type: string
+                        temperature:
+                          type: number
+                        humidity:
+                          type: number
+                        latitude:
+                          type: number
+                        longitude:
+                          type: number
+                        batteryLevel:
+                          type: number
+                        timestamp:
+                          type: string
+                          format: date-time
+                        dataHash:
+                          type: string
+                        stellarTxHash:
+                          type: string
+                        anchorStatus:
+                          type: string
+                        anchorError:
+                          type: string
+                        createdAt:
+                          type: string
+                          format: date-time
+                        updatedAt:
+                          type: string
+                          format: date-time
+                  meta:
+                    type: object
+                    properties:
+                      nextCursor:
+                        type: string
+                        nullable: true
+                      hasMore:
+                        type: boolean
+                      page:
                         type: integer
   /api/shipments:
     get:
@@ -615,6 +1206,10 @@ paths:
                         example: 150
         '400':
           description: Invalid query parameters (e.g., page < 1, limit > 100)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
     post:
       summary: Create a shipment
       security:
@@ -649,6 +1244,32 @@ paths:
       responses:
         '200':
           description: Shipment updated
+    delete:
+      summary: Delete a shipment
+      description: Soft-delete a shipment. Requires ADMIN or MANAGER role.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Shipment deleted
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/shipments/{id}/proof:
     post:
       summary: Upload proof of delivery for a shipment
@@ -703,16 +1324,32 @@ paths:
                             format: date-time
         '400':
           description: Missing file or invalid payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '401':
           description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '403':
           description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '503':
           description: Storage unavailable
   /api/shipments/{id}/eta:
     get:
       summary: Get shipment ETA from recent telemetry
       description: Returns ETA, distance remaining, average speed, and confidence when shipment is in transit.
+  /api/shipments/{id}/status:
+    patch:
+      summary: Update shipment status
+      description: Update the current shipment status (e.g., IN_TRANSIT, DELIVERED). Requires authentication.
       security:
         - bearerAuth: []
       parameters:
@@ -759,6 +1396,22 @@ paths:
           description: Unauthorized
         '404':
           description: Shipment or telemetry data not found
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [CREATED, IN_TRANSIT, DELIVERED, CANCELLED]
+      responses:
+        '200':
+          description: Shipment status updated
+        '400':
+          description: Invalid request
   /api/anomalies:
     get:
       summary: Get anomalies with pagination and filtering
@@ -788,6 +1441,17 @@ paths:
             type: string
             enum: [LOW, MEDIUM, HIGH]
           description: Filter by severity
+        - in: query
+          name: type
+          schema:
+            type: string
+            enum: [TEMPERATURE_EXCEEDED, TEMPERATURE_BELOW_MIN, HUMIDITY_EXCEEDED, HUMIDITY_BELOW_MIN, BATTERY_LOW]
+          description: Filter by anomaly type
+        - in: query
+          name: resolved
+          schema:
+            type: boolean
+          description: Filter by whether an anomaly has been resolved
       responses:
         '200':
           description: Paginated anomalies
@@ -807,8 +1471,16 @@ paths:
                     type: boolean
         '401':
           description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '403':
           description: Forbidden - insufficient role
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/anomalies/{id}/resolve:
     patch:
       summary: Resolve an anomaly
@@ -834,12 +1506,41 @@ paths:
                     $ref: '#/components/schemas/Anomaly'
         '401':
           description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '403':
           description: Forbidden - insufficient role
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '404':
           description: Anomaly not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 components:
   schemas:
+    ErrorResponse:
+      type: object
+      required:
+        - success
+        - message
+        - data
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+          description: Error message describing why the request failed.
+        data:
+          type: object
+          nullable: true
+          description: Null payload for error responses.
     Shipment:
       type: object
       properties:
@@ -896,15 +1597,20 @@ components:
         updatedAt:
           type: string
           format: date-time
-securitySchemes:
-  bearerAuth:
-    type: http
-    scheme: bearer
-  apiKeyAuth:
-    type: apiKey
-    in: header
-    name: x-api-key
-    description: API key for IoT device authentication
+  securitySchemes:
+    stellarSignature:
+      type: apiKey
+      in: header
+      name: x-stellar-signature
+      description: Optional HMAC signature header for Stellar webhook verification.
+    bearerAuth:
+      type: http
+      scheme: bearer
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key
+      description: API key for IoT device authentication
   headers:
     X-Request-ID:
       description: All API responses include an X-Request-ID header containing a unique identifier for request tracking and debugging. Clients can provide their own X-Request-ID in the request header, which will be echoed back in the response.

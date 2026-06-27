@@ -38,8 +38,9 @@ exports[`API Schema Snapshot Tests GET /api/shipments should match response sche
   ],
   "message": "Shipments retrieved",
   "meta": {
-    "hasMore": false,
-    "nextCursor": null,
+    "limit": 10,
+    "page": 1,
+    "total": 1,
   },
   "success": true,
 }

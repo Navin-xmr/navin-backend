@@ -28,6 +28,13 @@ describe('POST /api/webhooks/iot', () => {
     mockPushStellarAnchorJob.mockResolvedValue(undefined);
 
     await jest.unstable_mockModule('../src/modules/telemetry/telemetry.model.js', () => ({
+      Telemetry: {
+        create: jest.fn(),
+        find: jest.fn(),
+        findById: jest.fn(),
+        updateMany: jest.fn(),
+        deleteMany: jest.fn(),
+      },
       TelemetryAnchorStatus: {
         PENDING_ANCHOR: 'PENDING_ANCHOR',
         ANCHORED: 'ANCHORED',
@@ -53,6 +60,10 @@ describe('POST /api/webhooks/iot', () => {
       updateTelemetryAnchor: jest.fn(),
       markTelemetryAnchorFailed: jest.fn(),
       getTelemetryService: jest.fn(),
+      bulkIngestTelemetry: jest.fn().mockResolvedValue([]),
+      getTelemetryThresholds: jest
+        .fn()
+        .mockReturnValue({ minBatteryLevel: 20, maxTemperature: 25, maxHumidity: 80 }),
     }));
 
     await jest.unstable_mockModule('../src/modules/auth/apiKey.service.js', () => ({
@@ -77,12 +88,38 @@ describe('POST /api/webhooks/iot', () => {
       getRedisClient: jest.fn(),
     }));
 
+    await jest.unstable_mockModule('../src/services/stellar.service.js', () => ({
+      tokenizeShipment: jest.fn(),
+      anchorTelemetryHash: jest.fn(),
+      releaseEscrow: jest.fn(),
+      getStellarExplorerUrl: jest.fn(() => 'https://stellar.expert/explorer/testnet/tx/mock'),
+    }));
+
+    await jest.unstable_mockModule('../src/modules/users/users.model.js', () => ({
+      UserModel: { findById: jest.fn(), findOne: jest.fn(), create: jest.fn() },
+      OrganizationModel: { findById: jest.fn() },
+      UserRole: {
+        SUPER_ADMIN: 'SUPER_ADMIN',
+        ADMIN: 'ADMIN',
+        MANAGER: 'MANAGER',
+        VIEWER: 'VIEWER',
+        CUSTOMER: 'CUSTOMER',
+      },
+      OrganizationType: {
+        ENTERPRISE: 'ENTERPRISE',
+        LOGISTICS: 'LOGISTICS',
+      },
+    }));
+
     const appModule = await import('../src/app.js');
     app = appModule.buildApp();
   });
 
   it('returns 202 and queues Stellar anchoring job', async () => {
-    const res = await request(app).post('/api/webhooks/iot').set('x-api-key', 'valid-api-key').send(body);
+    const res = await request(app)
+      .post('/api/webhooks/iot')
+      .set('x-api-key', 'valid-api-key')
+      .send(body);
 
     expect(res.status).toBe(202);
     expect(mockPushStellarAnchorJob).toHaveBeenCalled();

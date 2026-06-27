@@ -3,8 +3,14 @@ import request from 'supertest';
 import type { Application } from 'express';
 import jwt from 'jsonwebtoken';
 
-type ShipmentRecord = { _id: string; status?: string; milestones: unknown[] } & Record<string, unknown>;
-type AnomalyRecord = { _id: string; shipmentId: string; severity?: string } & Record<string, unknown>;
+type ShipmentRecord = { _id: string; status?: string; milestones: unknown[] } & Record<
+  string,
+  unknown
+>;
+type AnomalyRecord = { _id: string; shipmentId: string; severity?: string } & Record<
+  string,
+  unknown
+>;
 type UserRecord = { _id: string; role?: string; walletAddress?: string } & Record<string, unknown>;
 
 const shipmentsData: ShipmentRecord[] = [];
@@ -27,6 +33,11 @@ await jest.unstable_mockModule('../src/modules/shipments/shipments.model.js', ()
 
     return {
       sort: () => ({
+        skip: (s: number) => ({
+          limit: (l: number) => ({
+            lean: () => Promise.resolve(arr.slice(s, s + l)),
+          }),
+        }),
         limit: (l: number) => ({
           lean: () => Promise.resolve(arr.slice(0, l)),
         }),
@@ -40,7 +51,12 @@ await jest.unstable_mockModule('../src/modules/shipments/shipments.model.js', ()
     return Promise.resolve();
   };
 
-  const ShipmentStatus = { CREATED: 'CREATED', IN_TRANSIT: 'IN_TRANSIT', DELIVERED: 'DELIVERED', CANCELLED: 'CANCELLED' };
+  const ShipmentStatus = {
+    CREATED: 'CREATED',
+    IN_TRANSIT: 'IN_TRANSIT',
+    DELIVERED: 'DELIVERED',
+    CANCELLED: 'CANCELLED',
+  };
   return { Shipment: ShipmentConstructor, ShipmentStatus };
 });
 
@@ -72,7 +88,11 @@ await jest.unstable_mockModule('../src/modules/anomaly/anomaly.model.js', () => 
     },
   };
 
-  return { Anomaly: AnomalyConstructor, ANOMALY_SEVERITIES: ['LOW', 'MEDIUM', 'HIGH'], ANOMALY_TYPES: ['TEMPERATURE_EXCEEDED'] };
+  return {
+    Anomaly: AnomalyConstructor,
+    ANOMALY_SEVERITIES: ['LOW', 'MEDIUM', 'HIGH'],
+    ANOMALY_TYPES: ['TEMPERATURE_EXCEEDED'],
+  };
 });
 
 await jest.unstable_mockModule('../src/modules/users/users.model.js', () => {
@@ -82,13 +102,32 @@ await jest.unstable_mockModule('../src/modules/users/users.model.js', () => {
       usersData.push(user as UserRecord);
       return Promise.resolve(user);
     },
-    findById: (id: string) => Promise.resolve(usersData.find(u => String(u._id) === String(id)) || null),
+    findById: (id: string) =>
+      Promise.resolve(usersData.find(u => String(u._id) === String(id)) || null),
   };
   const OrganizationModel = {
     findById: () => Promise.resolve(null),
   };
-  return { UserModel, OrganizationModel };
+  const UserRole = {
+    SUPER_ADMIN: 'SUPER_ADMIN',
+    ADMIN: 'ADMIN',
+    MANAGER: 'MANAGER',
+    VIEWER: 'VIEWER',
+    CUSTOMER: 'CUSTOMER',
+  };
+  const OrganizationType = {
+    ENTERPRISE: 'ENTERPRISE',
+    LOGISTICS: 'LOGISTICS',
+  };
+  return { UserModel, OrganizationModel, UserRole, OrganizationType };
 });
+
+await jest.unstable_mockModule('../src/services/stellar.service.js', () => ({
+  tokenizeShipment: jest.fn(),
+  anchorTelemetryHash: jest.fn(),
+  releaseEscrow: jest.fn(),
+  getStellarExplorerUrl: jest.fn(() => 'https://stellar.expert/explorer/testnet/tx/mock'),
+}));
 
 await jest.unstable_mockModule('../src/infra/socket/io.js', () => ({
   initSocketIO: jest.fn(),

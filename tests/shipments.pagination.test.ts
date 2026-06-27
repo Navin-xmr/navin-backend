@@ -9,18 +9,15 @@ let authToken: string;
 
 beforeAll(async () => {
   await connectMongo(process.env.MONGO_URI!);
-  authToken = jwt.sign(
-    { userId: 'test-user-id', role: 'MANAGER' },
-    process.env.JWT_SECRET!
-  );
+  authToken = jwt.sign({ userId: 'test-user-id', role: 'MANAGER' }, process.env.JWT_SECRET!);
 });
 
 afterEach(async () => {
   await Shipment.deleteMany({});
 });
 
-describe('GET /api/shipments - Cursor Pagination', () => {
-  it('should return first page without cursor', async () => {
+describe('GET /api/shipments - Offset Pagination', () => {
+  it('should return first page', async () => {
     await Shipment.create({
       trackingNumber: 'SHIP001',
       origin: 'New York',
@@ -35,11 +32,12 @@ describe('GET /api/shipments - Cursor Pagination', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.data).toHaveLength(1);
-    expect(res.body.meta.hasMore).toBe(false);
-    expect(res.body.meta.nextCursor).toBeNull();
+    expect(res.body.meta.page).toBe(1);
+    expect(res.body.meta.limit).toBe(10);
+    expect(res.body.meta.total).toBe(1);
   });
 
-  it('should paginate correctly with cursor and no duplicates', async () => {
+  it('should paginate correctly with page parameter and no duplicates', async () => {
     for (let i = 0; i < 5; i++) {
       await Shipment.create({
         trackingNumber: `SHIP00${i}`,
@@ -51,15 +49,15 @@ describe('GET /api/shipments - Cursor Pagination', () => {
     }
 
     const firstPage = await request(app)
-      .get('/api/shipments?limit=2')
+      .get('/api/shipments?limit=2&page=1')
       .set('Authorization', `Bearer ${authToken}`);
     expect(firstPage.status).toBe(200);
     expect(firstPage.body.data).toHaveLength(2);
-    expect(firstPage.body.meta.hasMore).toBe(true);
-    expect(firstPage.body.meta.nextCursor).toBeTruthy();
+    expect(firstPage.body.meta.total).toBe(5);
+    expect(firstPage.body.meta.page).toBe(1);
 
     const secondPage = await request(app)
-      .get(`/api/shipments?limit=2&cursor=${firstPage.body.meta.nextCursor}`)
+      .get('/api/shipments?limit=2&page=2')
       .set('Authorization', `Bearer ${authToken}`);
     expect(secondPage.status).toBe(200);
     expect(secondPage.body.data).toHaveLength(2);

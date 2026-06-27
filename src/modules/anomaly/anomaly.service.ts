@@ -24,6 +24,11 @@ interface AnomalyResult {
   }>;
 }
 
+/**
+ * Detects anomalies from telemetry data and persists any findings.
+ * @param {TelemetryData} data - Telemetry values used for anomaly evaluation.
+ * @returns {Promise<AnomalyResult>} Detection result and created anomaly records.
+ */
 export async function detectAnomaly(data: TelemetryData): Promise<AnomalyResult> {
   const timestamp = data.timestamp ?? new Date();
   const thresholds = {
@@ -73,17 +78,30 @@ export async function detectAnomaly(data: TelemetryData): Promise<AnomalyResult>
   return { detected: true, anomalies };
 }
 
+/**
+ * Retrieves anomalies with cursor-based pagination and optional filters.
+ * @param {object} params - Query options for anomalies.
+ * @param {string=} params.cursor - Optional cursor for pagination.
+ * @param {number} params.limit - Maximum number of records to return.
+ * @param {string=} params.shipmentId - Optional shipment filter.
+ * @param {string=} params.severity - Optional severity filter.
+ * @returns {Promise<{data: unknown[]; nextCursor: string | null; hasMore: boolean}>} Paginated anomalies.
+ */
 export async function getAnomaliesService(params: {
   cursor?: string;
   limit: number;
   shipmentId?: string;
   severity?: string;
+  type?: string;
+  resolved?: boolean;
 }) {
-  const { cursor, limit, shipmentId, severity } = params;
+  const { cursor, limit, shipmentId, severity, type, resolved } = params;
   const query: FilterQuery<unknown> = {};
 
   if (shipmentId) query.shipmentId = shipmentId;
   if (severity) query.severity = severity;
+  if (type) query.type = type;
+  if (resolved !== undefined) query.resolved = resolved;
   if (cursor) query._id = { $lt: cursor };
 
   const anomalies = await Anomaly.find(query)
@@ -99,6 +117,12 @@ export async function getAnomaliesService(params: {
   return { data, nextCursor, hasMore };
 }
 
+/**
+ * Resolves an existing anomaly record.
+ * @param {string} id - Anomaly ObjectId.
+ * @returns {Promise<unknown>} Updated anomaly document.
+ * @throws {Error} When the anomaly cannot be found.
+ */
 export async function resolveAnomalyService(id: string) {
   const anomaly = await Anomaly.findByIdAndUpdate(
     id,

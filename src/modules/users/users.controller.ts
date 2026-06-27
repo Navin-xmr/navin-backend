@@ -3,7 +3,12 @@ import * as usersService from './users.service.js';
 import { sendResponse } from '../../shared/http/sendResponse.js';
 
 export const createUserController: RequestHandler = async (req, res) => {
-  const user = await usersService.registerUser(req.body);
+  const user = await usersService.registerUser({
+    email: req.body.email,
+    name: req.body.name,
+    role: req.body.role,
+    organizationId: req.user?.organizationId,
+  });
   sendResponse(res, 201, true, 'User registered successfully', user);
 };
 
@@ -18,8 +23,8 @@ export const createTeamMemberController: RequestHandler = async (req, res) => {
 };
 
 export const deleteUserController: RequestHandler = async (req, res) => {
-  await usersService.deleteUser(req.params.id);
-  res.json({ success: true, message: 'User deleted successfully' });
+  const result = await usersService.deleteUser(req.params.id);
+  sendResponse(res, 200, true, 'User deleted successfully', result);
 };
 
 export const createInvitationController: RequestHandler = async (req, res) => {

@@ -66,12 +66,11 @@ describe('E2E: Shipment Lifecycle (Hash and Emit Pipeline)', () => {
           stellarTxHash: 'stellar-tx-hash-e2e',
         })
       ),
-      anchorTelemetryHash: jest.fn(() =>
-        Promise.resolve({ stellarTxHash: 'anchor-tx-hash-e2e' })
-      ),
+      anchorTelemetryHash: jest.fn(() => Promise.resolve({ stellarTxHash: 'anchor-tx-hash-e2e' })),
       releaseEscrow: jest.fn(() =>
         Promise.resolve({ success: true, transactionHash: 'release-tx-hash-e2e' })
       ),
+      getStellarExplorerUrl: jest.fn(() => 'https://stellar.expert/explorer/testnet/tx/mock'),
     }));
 
     await jest.unstable_mockModule('../../src/modules/auth/apiKey.service.js', () => ({
@@ -97,9 +96,7 @@ describe('E2E: Shipment Lifecycle (Hash and Emit Pipeline)', () => {
     }));
 
     await jest.unstable_mockModule('../../src/modules/anomaly/anomaly.service.js', () => ({
-      detectAnomaly: jest.fn(() =>
-        Promise.resolve({ detected: false, anomalies: [] })
-      ),
+      detectAnomaly: jest.fn(() => Promise.resolve({ detected: false, anomalies: [] })),
       getAnomaliesService: jest.fn(),
       resolveAnomalyService: jest.fn(),
       createAnomalyRecord: jest.fn(),
@@ -136,26 +133,22 @@ describe('E2E: Shipment Lifecycle (Hash and Emit Pipeline)', () => {
 
   describe('Stage 1: User Authentication', () => {
     it('should be accessible at /api/auth/signup endpoint', async () => {
-      const res = await request(app)
-        .post('/api/auth/signup')
-        .send({
-          email: 'test@example.com',
-          name: 'Test User',
-          password: 'Test123!',
-          organizationId: 'org-id-123',
-        });
+      const res = await request(app).post('/api/auth/signup').send({
+        email: 'test@example.com',
+        name: 'Test User',
+        password: 'Test123!',
+        organizationId: 'org-id-123',
+      });
 
       // Endpoint should respond (201 success or 422 validation)
       expect([201, 422]).toContain(res.status);
     });
 
     it('should reject invalid login with 401', async () => {
-      const res = await request(app)
-        .post('/api/auth/login')
-        .send({
-          email: 'nonexistent@example.com',
-          password: 'Wrong123!',
-        });
+      const res = await request(app).post('/api/auth/login').send({
+        email: 'nonexistent@example.com',
+        password: 'Wrong123!',
+      });
 
       expect(res.status).toBe(401);
     });
@@ -163,13 +156,11 @@ describe('E2E: Shipment Lifecycle (Hash and Emit Pipeline)', () => {
 
   describe('Stage 2: Shipment Creation', () => {
     it('should reject unauthenticated shipment requests with 401', async () => {
-      const res = await request(app)
-        .post('/api/shipments')
-        .send({
-          trackingNumber: 'TRACK-TEST-001',
-          origin: 'Origin',
-          destination: 'Destination',
-        });
+      const res = await request(app).post('/api/shipments').send({
+        trackingNumber: 'TRACK-TEST-001',
+        origin: 'Origin',
+        destination: 'Destination',
+      });
 
       expect(res.status).toBe(401);
     });
@@ -187,19 +178,16 @@ describe('E2E: Shipment Lifecycle (Hash and Emit Pipeline)', () => {
     });
 
     it('should accept IoT webhook endpoint', async () => {
-      const res = await request(app)
-        .post('/api/webhooks/iot')
-        .set('x-api-key', 'test-key')
-        .send({
-          sensorId: 'sensor-abc-001',
-          shipmentId: 'ship-123',
-          temperature: 22.5,
-          humidity: 55,
-          latitude: 40.7,
-          longitude: -74.0,
-          batteryLevel: 90,
-          timestamp: new Date().toISOString(),
-        });
+      const res = await request(app).post('/api/webhooks/iot').set('x-api-key', 'test-key').send({
+        sensorId: 'sensor-abc-001',
+        shipmentId: 'ship-123',
+        temperature: 22.5,
+        humidity: 55,
+        latitude: 40.7,
+        longitude: -74.0,
+        batteryLevel: 90,
+        timestamp: new Date().toISOString(),
+      });
 
       // Accept success or validation
       expect([202, 400, 422]).toContain(res.status);

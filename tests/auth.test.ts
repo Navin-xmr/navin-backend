@@ -49,6 +49,13 @@ jest.unstable_mockModule('../src/modules/users/users.model.js', () => ({
     ENTERPRISE: 'ENTERPRISE',
     LOGISTICS: 'LOGISTICS',
   },
+  UserRole: {
+    SUPER_ADMIN: 'SUPER_ADMIN',
+    ADMIN: 'ADMIN',
+    MANAGER: 'MANAGER',
+    VIEWER: 'VIEWER',
+    CUSTOMER: 'CUSTOMER',
+  },
 }));
 
 const { env } = await import('../src/env.js');

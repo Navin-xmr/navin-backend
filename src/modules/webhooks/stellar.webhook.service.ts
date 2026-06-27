@@ -4,6 +4,12 @@ import { PaymentStatus } from '../payments/payments.model.js';
 import type { StellarWebhookPayload } from './stellar.webhook.validation.js';
 import { logger } from '../../shared/logger/logger.js';
 
+/**
+ * Handles incoming Stellar proof-of-delivery webhook events.
+ * @param {StellarWebhookPayload} payload - Validated Stellar webhook payload.
+ * @returns {Promise<unknown>} The processed webhook event result.
+ * @throws {AppError} When the webhook event type is unknown or processing fails.
+ */
 export async function handleStellarWebhookEvent(payload: StellarWebhookPayload) {
   const { type, paymentId, transactionHash } = payload;
 

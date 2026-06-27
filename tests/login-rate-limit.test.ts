@@ -2,7 +2,10 @@ import { jest, describe, beforeAll, it, expect } from '@jest/globals';
 import request from 'supertest';
 import type { Application } from 'express';
 
-type UserRecord = { _id: string; email: string; passwordHash: string; role: string } & Record<string, unknown>;
+type UserRecord = { _id: string; email: string; passwordHash: string; role: string } & Record<
+  string,
+  unknown
+>;
 const usersData: UserRecord[] = [];
 
 await jest.unstable_mockModule('../src/modules/users/users.model.js', () => {
@@ -20,8 +23,26 @@ await jest.unstable_mockModule('../src/modules/users/users.model.js', () => {
   const OrganizationModel = {
     findById: () => Promise.resolve(null),
   };
-  return { UserModel, OrganizationModel };
+  const UserRole = {
+    SUPER_ADMIN: 'SUPER_ADMIN',
+    ADMIN: 'ADMIN',
+    MANAGER: 'MANAGER',
+    VIEWER: 'VIEWER',
+    CUSTOMER: 'CUSTOMER',
+  };
+  const OrganizationType = {
+    ENTERPRISE: 'ENTERPRISE',
+    LOGISTICS: 'LOGISTICS',
+  };
+  return { UserModel, OrganizationModel, UserRole, OrganizationType };
 });
+
+await jest.unstable_mockModule('../src/services/stellar.service.js', () => ({
+  tokenizeShipment: jest.fn(),
+  anchorTelemetryHash: jest.fn(),
+  releaseEscrow: jest.fn(),
+  getStellarExplorerUrl: jest.fn(() => 'https://stellar.expert/explorer/testnet/tx/mock'),
+}));
 
 await jest.unstable_mockModule('../src/infra/socket/io.js', () => ({
   initSocketIO: jest.fn(),

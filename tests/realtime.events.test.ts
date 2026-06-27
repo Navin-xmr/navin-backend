@@ -42,7 +42,8 @@ describe('Real-time Socket.io Events', () => {
   const mockEmitStatusUpdate = jest.fn();
   const mockEmitAnomalyDetected = jest.fn();
   const mockShipmentFindByIdAndUpdate = jest.fn<() => Promise<ShipmentUpdateResult>>();
-  const mockUserModelFindById = jest.fn<() => Promise<{ _id: string; walletAddress: string } | null>>();
+  const mockUserModelFindById =
+    jest.fn<() => Promise<{ _id: string; walletAddress: string } | null>>();
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -117,6 +118,7 @@ describe('Real-time Socket.io Events', () => {
       tokenizeShipment: jest.fn(),
       anchorTelemetryHash: mockAnchorTelemetryHash,
       releaseEscrow: jest.fn(),
+      getStellarExplorerUrl: jest.fn(() => 'https://stellar.expert/explorer/testnet/tx/mock'),
     }));
 
     await jest.unstable_mockModule('../src/modules/auth/apiKey.service.js', () => ({
@@ -212,10 +214,7 @@ describe('Real-time Socket.io Events', () => {
         timestamp: '2026-01-15T12:30:00.000Z',
       };
 
-      await request(app)
-        .post('/api/webhooks/iot')
-        .set('x-api-key', 'valid-api-key')
-        .send(body);
+      await request(app).post('/api/webhooks/iot').set('x-api-key', 'valid-api-key').send(body);
 
       // Verify the shipmentId passed matches the expected format
       const [shipmentId] = mockEmitTelemetryUpdate.mock.calls[0];
@@ -272,16 +271,10 @@ describe('Real-time Socket.io Events', () => {
         timestamp: '2026-01-15T12:30:00.000Z',
       };
 
-      await request(app)
-        .post('/api/webhooks/iot')
-        .set('x-api-key', 'valid-api-key')
-        .send(body);
+      await request(app).post('/api/webhooks/iot').set('x-api-key', 'valid-api-key').send(body);
 
       // Verify emitTelemetryUpdate was called with specific shipmentId
-      expect(mockEmitTelemetryUpdate).toHaveBeenCalledWith(
-        body.shipmentId,
-        expect.any(Object)
-      );
+      expect(mockEmitTelemetryUpdate).toHaveBeenCalledWith(body.shipmentId, expect.any(Object));
     });
 
     it('emitStatusUpdate function is properly exported', async () => {

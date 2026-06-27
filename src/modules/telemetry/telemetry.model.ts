@@ -37,6 +37,7 @@ const TelemetrySchema = new Schema(
 TelemetrySchema.plugin(isoDatePlugin);
 
 TelemetrySchema.index({ shipmentId: 1, timestamp: -1 });
+TelemetrySchema.index({ sensorId: 1, shipmentId: 1, timestamp: -1 });
 TelemetrySchema.index({ anchorStatus: 1 });
 
 TelemetrySchema.pre(['find', 'findOne', 'findOneAndUpdate', 'countDocuments'], function () {

@@ -21,14 +21,22 @@ export async function getPaymentById(id: string): Promise<IPayment | null> {
   return PaymentModel.findById(id).lean();
 }
 
+export interface PaymentsPage {
+  data: IPayment[];
+  total: number;
+  hasMore: boolean;
+  nextCursor: string | null;
+}
+
 export async function getPaymentsByOrganization(
   organizationId: string,
   filters?: {
     status?: PaymentStatus;
     limit?: number;
     cursor?: string;
-  },
-): Promise<IPayment[]> {
+  }
+): Promise<PaymentsPage> {
+  const limit = filters?.limit ?? 20;
   const query: Record<string, unknown> = {
     organizationId: new Types.ObjectId(organizationId),
   };
@@ -41,10 +49,26 @@ export async function getPaymentsByOrganization(
     query._id = { $lt: new Types.ObjectId(filters.cursor) };
   }
 
-  return PaymentModel.find(query)
-    .sort({ createdAt: -1 })
-    .limit(filters?.limit || 20)
-    .lean();
+  const [data, total] = await Promise.all([
+    PaymentModel.find(query)
+      .sort({ createdAt: -1, _id: -1 })
+      .limit(limit + 1)
+      .lean(),
+    PaymentModel.countDocuments({
+      organizationId: new Types.ObjectId(organizationId),
+      ...(filters?.status ? { status: filters.status } : {}),
+    }),
+  ]);
+
+  const hasMore = data.length > limit;
+  if (hasMore) data.pop();
+
+  return {
+    data,
+    total,
+    hasMore,
+    nextCursor: hasMore ? data[data.length - 1]._id.toString() : null,
+  };
 }
 
 export async function updatePaymentStatus(

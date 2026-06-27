@@ -25,6 +25,8 @@ export const usersRouter = Router();
 
 usersRouter.post(
   '/',
+  requireAuth,
+  requireRole(UserRole.ADMIN, UserRole.SUPER_ADMIN),
   validateRequest({ body: CreateUserBodySchema }),
   asyncHandler(createUserController)
 );

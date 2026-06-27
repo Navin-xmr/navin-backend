@@ -1,5 +1,4 @@
 import mongoose from 'mongoose';
-import bcrypt from 'bcrypt';
 import { isoDatePlugin } from '../../shared/plugins/isoDatePlugin.js';
 import { IOrganization, OrganizationType, IUser, UserRole } from '../../shared/types/user.js';
 
@@ -19,7 +18,7 @@ const UserSchema = new mongoose.Schema(
     name: { type: String, required: true },
     passwordHash: { type: String, required: true },
     role: { type: String, enum: Object.values(UserRole), required: true },
-    organizationId: { type: mongoose.Schema.Types.ObjectId, ref: 'Organization', required: true },
+    organizationId: { type: mongoose.Schema.Types.ObjectId, ref: 'Organization', required: false },
     walletAddress: { type: String, required: false },
     deletedAt: { type: Date, default: null },
   },
@@ -37,14 +36,9 @@ const UserSchema = new mongoose.Schema(
 
 UserSchema.plugin(isoDatePlugin);
 
-// Pre-save hook to hash password
-UserSchema.pre('save', async function (next) {
-  if (this.isModified('passwordHash')) {
-    const salt = await bcrypt.genSalt(10);
-    this.passwordHash = await bcrypt.hash(this.passwordHash, salt);
-  }
-  next();
-});
+// NOTE: Password hashing is performed exclusively in the service layer (auth.service.ts,
+// users.service.ts) before calling UserModel.create(). There is intentionally no pre-save
+// hook here to avoid double-hashing.
 
 // Override toJSON to hide passwordHash
 UserSchema.methods.toJSON = function () {

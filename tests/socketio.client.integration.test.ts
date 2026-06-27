@@ -96,6 +96,7 @@ describe('Socket.io Client Integration Tests', () => {
       tokenizeShipment: jest.fn(),
       anchorTelemetryHash: mockAnchorTelemetryHash,
       releaseEscrow: jest.fn(),
+      getStellarExplorerUrl: jest.fn(() => 'https://stellar.expert/explorer/testnet/tx/mock'),
     }));
 
     await jest.unstable_mockModule('../src/modules/auth/apiKey.service.js', () => ({
