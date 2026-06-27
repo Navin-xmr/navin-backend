@@ -38,6 +38,13 @@ jest.unstable_mockModule('../src/modules/users/users.model.js', () => ({
   OrganizationModel: {
     findById: mockOrgFindById,
   },
+  UserRole: {
+    SUPER_ADMIN: 'SUPER_ADMIN',
+    ADMIN: 'ADMIN',
+    MANAGER: 'MANAGER',
+    VIEWER: 'VIEWER',
+    CUSTOMER: 'CUSTOMER',
+  },
   OrganizationType: {
     ENTERPRISE: 'ENTERPRISE',
     LOGISTICS: 'LOGISTICS',
@@ -109,6 +116,59 @@ describe('Auth Service', () => {
           organizationId: 'org-id-123',
         })
       ).rejects.toThrow('Email already in use');
+    });
+
+    it('ignores privileged role input and assigns VIEWER for public signup', async () => {
+      const mockUser: UserDoc = {
+        _id: { toString: () => 'user-id-124' },
+        email: 'public@example.com',
+        name: 'Public User',
+        role: 'VIEWER',
+        organizationId: null,
+      };
+
+      mockFindOne.mockResolvedValue(null);
+      mockCreate.mockResolvedValue(mockUser);
+
+      await signup({
+        email: 'public@example.com',
+        name: 'Public User',
+        password: 'password123',
+        organizationId: 'org-id-456',
+        role: 'SUPER_ADMIN',
+      } as unknown as Parameters<typeof signup>[0]);
+
+      expect(mockCreate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          role: 'VIEWER',
+        })
+      );
+    });
+
+    it('does not auto-assign ADMIN for privileged email domains in public signup', async () => {
+      const mockUser: UserDoc = {
+        _id: { toString: () => 'user-id-125' },
+        email: 'ops@navin.io',
+        name: 'Ops User',
+        role: 'VIEWER',
+        organizationId: null,
+      };
+
+      mockFindOne.mockResolvedValue(null);
+      mockCreate.mockResolvedValue(mockUser);
+
+      await signup({
+        email: 'ops@navin.io',
+        name: 'Ops User',
+        password: 'password123',
+        organizationId: 'org-id-457',
+      });
+
+      expect(mockCreate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          role: 'VIEWER',
+        })
+      );
     });
   });
 

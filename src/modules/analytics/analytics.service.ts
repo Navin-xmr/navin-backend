@@ -114,13 +114,13 @@ export async function getAnalyticsPerformance(
     maxTimeMS: 5000,
   })) as AggregationFacet[];
 
-  const shipmentsByStatus = (facet?.shipmentsByStatus ?? []).map((row: any) => ({
+  const shipmentsByStatus = (facet?.shipmentsByStatus ?? []).map((row: AggregationRow) => ({
     status: String(row._id),
     total: Number(row.total ?? 0),
   }));
 
   const averageDeliveryTimeByLogisticsId = (facet?.averageDeliveryTimeByLogisticsId ?? []).map(
-    (row: any) => ({
+    (row: AggregationRow) => ({
       logisticsId: String(row._id),
       averageDeliveryTimeMs: Number(row.averageDeliveryTimeMs ?? 0),
     })

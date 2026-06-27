@@ -5,7 +5,6 @@ export const SignupBodySchema = z.object({
   name: z.string().min(1),
   password: z.string().min(8, 'Password must be at least 8 characters long'),
   organizationId: z.string().min(1).optional(),
-  role: z.enum(['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'VIEWER', 'CUSTOMER']).optional(),
 });
 
 export const LoginBodySchema = z.object({
