@@ -24,17 +24,9 @@ function generateToken(payload: Omit<TokenPayload, 'jti'>): string {
 }
 
 /**
- * Determines the appropriate role for a new user based on email domain.
- * Admin domains get ADMIN role, all others default to VIEWER.
+ * Determines the safe default role for public signup.
  */
-function determineUserRole(email: string): UserRole {
-  const adminDomains = ['navin.io', 'navin-admin.com', 'admin.navin.io'];
-  const emailDomain = email.split('@')[1]?.toLowerCase();
-
-  if (emailDomain && adminDomains.includes(emailDomain)) {
-    return UserRole.ADMIN;
-  }
-
+function determineUserRole(_email: string): UserRole {
   return UserRole.VIEWER;
 }
 
@@ -45,7 +37,7 @@ export async function signup(input: SignupInput) {
   }
 
   const hashedPassword = await bcrypt.hash(input.password, 10);
-  const assignedRole = input.role ? input.role : determineUserRole(input.email);
+  const assignedRole = determineUserRole(input.email) ?? UserRole.VIEWER;
 
   const user = await UserModel.create({
     email: input.email,

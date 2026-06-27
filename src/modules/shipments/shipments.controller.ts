@@ -7,6 +7,7 @@ import {
   updateShipmentStatusService,
   uploadShipmentProofService,
   deleteShipmentService,
+  getShipmentEtaService,
 } from './shipments.service.js';
 import { sendResponse } from '../../shared/http/sendResponse.js';
 import type { GetShipmentsQuery } from './shipments.validation.js';
@@ -14,7 +15,12 @@ import type { GetShipmentsQuery } from './shipments.validation.js';
 export const getShipments = async (req: Request, res: Response) => {
   const query = req.query as unknown as GetShipmentsQuery;
   const { status, page = 1, limit = 20, origin, destination, ...filters } = query;
-  const { data, page: currentPage, limit: currentLimit, total } = await getShipmentsService({
+  const {
+    data,
+    page: currentPage,
+    limit: currentLimit,
+    total,
+  } = await getShipmentsService({
     status,
     page: Number(page),
     limit: Number(limit),
@@ -23,10 +29,10 @@ export const getShipments = async (req: Request, res: Response) => {
     filters: filters as Record<string, unknown>,
   });
 
-  sendResponse(res, 200, true, 'Shipments retrieved', data, { 
-    page: currentPage, 
-    limit: currentLimit, 
-    total 
+  sendResponse(res, 200, true, 'Shipments retrieved', data, {
+    page: currentPage,
+    limit: currentLimit,
+    total,
   });
 };
 
@@ -107,4 +113,10 @@ export const deleteShipment = async (req: Request, res: Response) => {
   }
 
   sendResponse(res, 200, true, 'Shipment deleted successfully', shipment);
+};
+
+export const getShipmentEta = async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const eta = await getShipmentEtaService(id);
+  sendResponse(res, 200, true, 'Shipment ETA retrieved', eta);
 };

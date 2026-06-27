@@ -354,6 +354,11 @@ describe('Shipments API (mocked DB)', () => {
     expect(res.status).toBe(401);
   });
 
+  it('should return 401 when trying to access shipment ETA without a token', async () => {
+    const res = await request(app).get('/api/shipments/123/eta');
+    expect(res.status).toBe(401);
+  });
+
   it('should return 403 when trying to upload proof (POST /:id/proof) as a VIEWER', async () => {
     const users = await import('../src/modules/users/users.model.js');
     const user = await users.UserModel.create({

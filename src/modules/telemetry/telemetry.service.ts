@@ -5,10 +5,14 @@ import type { FilterQuery } from 'mongoose';
 import { generateDataHash } from '../../shared/utils/crypto.js';
 import { detectAnomaly } from '../anomaly/anomaly.service.js';
 import { emitAnomalyDetected, emitTelemetryUpdate } from '../../infra/socket/io.js';
-import type { AnomalyAlertPayload, TelemetryUpdatePayload } from '../../shared/types/socketEvents.js';
+import type {
+  AnomalyAlertPayload,
+  TelemetryUpdatePayload,
+} from '../../shared/types/socketEvents.js';
 import type { BulkTelemetryItem } from './telemetry.validation.js';
 import { AppError } from '../../shared/http/errors.js';
 import { pushStellarAnchorJob, pushAlertJob } from '../../infra/redis/queue.js';
+import { invalidateShipmentEtaCache } from '../shipments/shipmentsEta.cache.js';
 
 /**
  * Finds the active (IN_TRANSIT) shipment linked to a given sensorId.
@@ -99,7 +103,11 @@ export async function bulkIngestTelemetry(items: BulkTelemetryItem[]) {
     if (!shipmentId && item.sensorId) {
       const shipment = await findActiveShipmentBySensorId(item.sensorId);
       if (!shipment?._id) {
-        throw new AppError(404, `No active shipment found for sensor ${item.sensorId}`, 'NOT_FOUND');
+        throw new AppError(
+          404,
+          `No active shipment found for sensor ${item.sensorId}`,
+          'NOT_FOUND'
+        );
       }
       shipmentId = shipment._id.toString();
     }
@@ -125,6 +133,7 @@ export async function bulkIngestTelemetry(items: BulkTelemetryItem[]) {
     });
 
     createdIds.push(telemetry._id.toString());
+    await invalidateShipmentEtaCache(shipmentId);
 
     await pushStellarAnchorJob({
       telemetryId: telemetry._id.toString(),
