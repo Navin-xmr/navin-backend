@@ -254,7 +254,7 @@ export async function bulkIngestTelemetry(items: BulkTelemetryItem[]) {
 
         if (result.detected) {
           await Promise.all(
-            result.anomalies.map(async (anomaly) => {
+            result.anomalies.map(async anomaly => {
               const anomalyPayload: AnomalyAlertPayload = {
                 anomalyId: anomaly._id,
                 shipmentId: anomaly.shipmentId,
@@ -283,7 +283,8 @@ export async function bulkIngestTelemetry(items: BulkTelemetryItem[]) {
       } catch (err) {
         logger.error({ err, shipmentId }, 'Background anomaly detection failed');
       }
-    });  }
+    });
+  }
 
   return { insertedCount: createdIds.length, insertedIds: createdIds };
 }

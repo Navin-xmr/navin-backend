@@ -22,7 +22,12 @@ export const getShipments = async (req: Request, res: Response) => {
     // @ts-ignore
     filters.organizationId = user.organizationId;
   }
-  const { data, page: currentPage, limit: currentLimit, total } = await getShipmentsService({
+  const {
+    data,
+    page: currentPage,
+    limit: currentLimit,
+    total,
+  } = await getShipmentsService({
     status,
     page: Number(page),
     limit: Number(limit),
@@ -31,10 +36,10 @@ export const getShipments = async (req: Request, res: Response) => {
     filters,
   });
 
-  sendResponse(res, 200, true, 'Shipments retrieved', data, { 
-    page: currentPage, 
-    limit: currentLimit, 
-    total 
+  sendResponse(res, 200, true, 'Shipments retrieved', data, {
+    page: currentPage,
+    limit: currentLimit,
+    total,
   });
 };
 
