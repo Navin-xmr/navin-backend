@@ -16,9 +16,11 @@ export interface TokenPayload {
   jti: string;
 }
 
+// SECURITY: [Token Lifecycle Compromise] — This prevents long-term token abuse by enforcing a 7-day Time-To-Live (TTL) limit on authentication tokens, bounding the window of opportunity for stolen credentials.
 const TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60; // 7 days
 
 function generateToken(payload: Omit<TokenPayload, 'jti'>): string {
+  // SECURITY: [Token Replay Attack] — This prevents reuse of old or intercepted JWTs by attaching a cryptographically random, unique JWT ID (jti) to each token, allowing the middleware to track and revoke individual sessions via Redis.
   const jti = randomUUID();
   return jwt.sign({ ...payload, jti }, env.JWT_SECRET, { expiresIn: TOKEN_TTL_SECONDS });
 }

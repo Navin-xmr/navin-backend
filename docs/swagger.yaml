@@ -1084,7 +1084,7 @@ paths:
                     example: true
                   message:
                     type: string
-                    example: "Shipments retrieved"
+                    example: 'Shipments retrieved'
                   data:
                     type: array
                     items:
@@ -1119,7 +1119,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/Shipment'
+              $ref: '#/components/schemas/CreateShipmentRequest'
       responses:
         '201':
           description: Shipment created
@@ -1186,15 +1186,7 @@ paths:
         content:
           multipart/form-data:
             schema:
-              type: object
-              properties:
-                file:
-                  type: string
-                  format: binary
-                recipientSignatureName:
-                  type: string
-                notes:
-                  type: string
+              $ref: '#/components/schemas/UploadProofRequest'
       responses:
         '200':
           description: Proof uploaded successfully
@@ -1259,12 +1251,7 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required: [status]
-              properties:
-                status:
-                  type: string
-                  enum: [CREATED, IN_TRANSIT, DELIVERED, CANCELLED]
+              $ref: '#/components/schemas/UpdateShipmentStatusRequest'
       responses:
         '200':
           description: Shipment status updated
@@ -1303,7 +1290,14 @@ paths:
           name: type
           schema:
             type: string
-            enum: [TEMPERATURE_EXCEEDED, TEMPERATURE_BELOW_MIN, HUMIDITY_EXCEEDED, HUMIDITY_BELOW_MIN, BATTERY_LOW]
+            enum:
+              [
+                TEMPERATURE_EXCEEDED,
+                TEMPERATURE_BELOW_MIN,
+                HUMIDITY_EXCEEDED,
+                HUMIDITY_BELOW_MIN,
+                BATTERY_LOW,
+              ]
           description: Filter by anomaly type
         - in: query
           name: resolved
@@ -1399,6 +1393,59 @@ components:
           type: object
           nullable: true
           description: Null payload for error responses.
+    CreateShipmentRequest:
+      type: object
+      required:
+        - origin
+        - destination
+        - enterpriseId
+        - logisticsId
+      properties:
+        trackingNumber:
+          type: string
+          description: Optional tracking number. If not provided, a unique tracking number will be auto-generated.
+        origin:
+          type: string
+          description: The shipment origin address or location.
+        destination:
+          type: string
+          description: The shipment destination address or location.
+        enterpriseId:
+          type: string
+          description: The organization ID of the enterprise requesting the shipment.
+        logisticsId:
+          type: string
+          description: The organization ID of the logistics provider handling the shipment.
+        offChainMetadata:
+          type: object
+          description: Optional key-value store for unstructured off-chain data.
+    UpdateShipmentStatusRequest:
+      type: object
+      required:
+        - status
+      properties:
+        status:
+          type: string
+          enum: [CREATED, IN_TRANSIT, DELIVERED, CANCELLED]
+          description: The new status of the shipment.
+        milestoneData:
+          type: object
+          description: Optional metadata/context to attach to the generated milestone.
+    UploadProofRequest:
+      type: object
+      required:
+        - file
+      properties:
+        file:
+          type: string
+          format: binary
+          description: The delivery proof image or document file (PDF, JPG, PNG).
+        recipientSignatureName:
+          type: string
+          description: The name of the recipient who signed for the delivery.
+        notes:
+          type: string
+          description: Optional notes regarding the delivery signature.
     Shipment:
       type: object
       properties:
@@ -1438,7 +1485,14 @@ components:
           type: string
         type:
           type: string
-          enum: [TEMPERATURE_EXCEEDED, TEMPERATURE_BELOW_MIN, HUMIDITY_EXCEEDED, HUMIDITY_BELOW_MIN, BATTERY_LOW]
+          enum:
+            [
+              TEMPERATURE_EXCEEDED,
+              TEMPERATURE_BELOW_MIN,
+              HUMIDITY_EXCEEDED,
+              HUMIDITY_BELOW_MIN,
+              BATTERY_LOW,
+            ]
         severity:
           type: string
           enum: [LOW, MEDIUM, HIGH]
@@ -1474,4 +1528,4 @@ components:
       description: All API responses include an X-Request-ID header containing a unique identifier for request tracking and debugging. Clients can provide their own X-Request-ID in the request header, which will be echoed back in the response.
       schema:
         type: string
-        example: "550e8400-e29b-41d4-a716-446655440000"
+        example: '550e8400-e29b-41d4-a716-446655440000'

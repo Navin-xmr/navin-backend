@@ -24,8 +24,7 @@ export async function registerUser(input: {
   const existing = await findUserByEmail(input.email);
   if (existing) throw new AppError(409, 'Email already in use', 'EMAIL_TAKEN');
 
-  // Locked placeholder so bcrypt.compare(anything, lockedHash) always returns false
-  // until the user sets a real password through the invitation flow.
+  // SECURITY: [Unauthorized Password Bypass] — This prevents authentication prior to invitation completion by setting a cryptographically random, high-entropy placeholder string as the bcrypt hash, which is impossible to guess or match.
   const lockedHash = await bcrypt.hash(randomBytes(32).toString('hex'), 10);
 
   return createUser({
@@ -52,9 +51,7 @@ export async function createTeamMember(input: {
   const existing = await findUserByEmail(input.email);
   if (existing) throw new AppError(409, 'Email already in use', 'EMAIL_TAKEN');
 
-  // Team members have no password until they complete the invitation flow.
-  // Store a random bcrypt hash so bcrypt.compare(anything, placeholder) always
-  // returns false — preventing accidental authentication.
+  // SECURITY: [Unauthorized Password Bypass] — This prevents authentication prior to invitation completion by setting a cryptographically random, high-entropy placeholder string as the bcrypt hash, which is impossible to guess or match.
   const lockedHash = await bcrypt.hash(randomBytes(32).toString('hex'), 10);
 
   // Force override organizationId from caller's JWT context

@@ -41,6 +41,7 @@ export const verifyStellarSignature: RequestHandler = (req, _res, next) => {
     throw new AppError(401, 'Invalid signature format', 'UNAUTHORIZED');
   }
 
+  // SECURITY: [Timing Attack] — This prevents timing-based signature recovery (side-channel attacks) by using crypto.timingSafeEqual instead of standard equality (===), ensuring comparison time is constant regardless of how many bytes match.
   if (sigBuffer.length !== expectedBuffer.length || !timingSafeEqual(sigBuffer, expectedBuffer)) {
     throw new AppError(401, 'Invalid webhook signature', 'UNAUTHORIZED');
   }
