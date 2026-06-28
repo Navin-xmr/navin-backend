@@ -26,6 +26,12 @@ type BulkUpdateResult = {
   updated: number;
   failed: Array<{ id: string; reason: string }>;
 };
+import {
+  readShipmentEtaCache,
+  writeShipmentEtaCache,
+  invalidateShipmentEtaCache,
+  type ShipmentEtaPayload,
+} from './shipmentsEta.cache.js';
 
 type ShipmentListResult = {
   data: IShipment[];
@@ -33,6 +39,136 @@ type ShipmentListResult = {
   limit: number;
   total: number;
 };
+
+type Coordinates = {
+  latitude: number;
+  longitude: number;
+};
+
+type TelemetryPoint = {
+  latitude: number;
+  longitude: number;
+  timestamp: Date;
+};
+
+const ETA_POINTS_WINDOW = 8;
+const MIN_EFFECTIVE_SPEED_KMH = 5;
+const DEFAULT_SINGLE_POINT_SPEED_KMH = 40;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function readNumberField(record: Record<string, unknown>, keys: string[]): number | null {
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return value;
+    }
+  }
+
+  return null;
+}
+
+function extractCoordinates(value: unknown): Coordinates | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const latitude = readNumberField(value, ['latitude', 'lat']);
+  const longitude = readNumberField(value, ['longitude', 'lng', 'lon']);
+
+  if (latitude === null || longitude === null) {
+    return null;
+  }
+
+  return { latitude, longitude };
+}
+
+function resolveDestinationCoordinates(metadata: unknown): Coordinates | null {
+  if (!isRecord(metadata)) {
+    return null;
+  }
+
+  const direct = extractCoordinates(metadata.destinationCoordinates);
+  if (direct) {
+    return direct;
+  }
+
+  const nestedDestination = extractCoordinates(metadata.destination);
+  if (nestedDestination) {
+    return nestedDestination;
+  }
+
+  const route = isRecord(metadata.route) ? metadata.route : null;
+  const routeDestination = route ? extractCoordinates(route.destination) : null;
+  if (routeDestination) {
+    return routeDestination;
+  }
+
+  return null;
+}
+
+function toRadians(degrees: number): number {
+  return (degrees * Math.PI) / 180;
+}
+
+function calculateDistanceKm(from: Coordinates, to: Coordinates): number {
+  const earthRadiusKm = 6371;
+  const deltaLatitude = toRadians(to.latitude - from.latitude);
+  const deltaLongitude = toRadians(to.longitude - from.longitude);
+
+  const a =
+    Math.sin(deltaLatitude / 2) * Math.sin(deltaLatitude / 2) +
+    Math.cos(toRadians(from.latitude)) *
+      Math.cos(toRadians(to.latitude)) *
+      Math.sin(deltaLongitude / 2) *
+      Math.sin(deltaLongitude / 2);
+
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return earthRadiusKm * c;
+}
+
+function calculateAverageSpeedKmh(points: TelemetryPoint[]): number {
+  if (points.length < 2) {
+    return DEFAULT_SINGLE_POINT_SPEED_KMH;
+  }
+
+  const chronological = [...points].reverse();
+  let distanceKm = 0;
+  let elapsedHours = 0;
+
+  for (let index = 1; index < chronological.length; index += 1) {
+    const previous = chronological[index - 1];
+    const current = chronological[index];
+
+    const segmentHours = (current.timestamp.getTime() - previous.timestamp.getTime()) / 3600000;
+    if (segmentHours <= 0) {
+      continue;
+    }
+
+    distanceKm += calculateDistanceKm(previous, current);
+    elapsedHours += segmentHours;
+  }
+
+  if (elapsedHours <= 0) {
+    return DEFAULT_SINGLE_POINT_SPEED_KMH;
+  }
+
+  return distanceKm / elapsedHours;
+}
+
+function inferEtaConfidence(pointsCount: number, averageSpeed: number): 'LOW' | 'MEDIUM' | 'HIGH' {
+  if (pointsCount >= 6 && averageSpeed >= 15) {
+    return 'HIGH';
+  }
+
+  if (pointsCount >= 3 && averageSpeed >= 8) {
+    return 'MEDIUM';
+  }
+
+  return 'LOW';
+}
 
 /**
  * Queries shipments directly by filter, skip, and limit.
@@ -206,6 +342,7 @@ export const updateShipmentStatusService = async (
 
   await shipment.save();
   await invalidateAnalyticsPerformanceCache();
+  await invalidateShipmentEtaCache(id);
 
   // Trigger escrow release on delivery
   if (status === ShipmentStatus.DELIVERED) {
@@ -223,6 +360,9 @@ export const updateShipmentStatusService = async (
             PaymentStatus.RELEASED,
             releaseResult.transactionHash
           );
+          console.log(
+            `[Shipment] Escrow released for shipment ${id}, ` +
+              `tx: ${releaseResult.transactionHash}`
           logger.info(
             { shipmentId: id, transactionHash: releaseResult.transactionHash },
             'Escrow released for shipment'
@@ -230,6 +370,7 @@ export const updateShipmentStatusService = async (
         }
       }
     } catch (escrowError) {
+      console.warn(`[Shipment] Failed to trigger escrow release for ${id}:`, escrowError);
       logger.warn({ err: escrowError, shipmentId: id }, 'Failed to trigger escrow release');
       // Don't fail the shipment status update if escrow release fails
       // The payment status can be manually updated later via webhook
@@ -320,157 +461,60 @@ export const deleteShipmentService = async (id: string) => {
   return shipment;
 };
 
-/**
- * Validates status transition against the state machine.
- * @param {ShipmentStatus} current - Current status.
- * @param {ShipmentStatus} target - Target status.
- * @returns {boolean} Whether the transition is valid.
- */
-export const isValidStatusTransition = (
-  current: ShipmentStatus,
-  target: ShipmentStatus
-): boolean => {
-  return VALID_TRANSITIONS[current]?.includes(target) ?? false;
-};
-
-/**
- * Updates multiple shipments' status in bulk. Returns partial results.
- * Each successful update emits status_update WebSocket events.
- * @param {BulkStatusUpdateInput} input - Bulk update payload.
- * @param {string} organizationId - User's organization ID for ownership validation.
- * @param {{ userId?: string }} actor - Actor metadata.
- * @returns {Promise<BulkUpdateResult>} Summary of updated and failed items.
- */
-export const bulkUpdateShipmentStatusService = async (
-  input: BulkStatusUpdateInput,
-  organizationId: string,
-  actor?: { userId?: string }
-): Promise<BulkUpdateResult> => {
-  const { shipmentIds, status } = input;
-  const failed: Array<{ id: string; reason: string }> = [];
-  let updatedCount = 0;
-
-  const shipments = await Shipment.find({
-    _id: { $in: shipmentIds },
-    $or: [{ enterpriseId: organizationId }, { logisticsId: organizationId }],
-  });
-
-  const foundShipments = new Map(
-    shipments.map(s => [s._id.toString(), s])
-  );
-
-  for (const id of shipmentIds) {
-    const shipment = foundShipments.get(id);
-
-    if (!shipment) {
-      failed.push({ id, reason: 'NOT_FOUND' });
-      continue;
-    }
-
-    const enterpriseId = shipment.enterpriseId?.toString?.();
-    const logisticsId = shipment.logisticsId?.toString?.();
-    if (enterpriseId !== organizationId && logisticsId !== organizationId) {
-      failed.push({ id, reason: 'WRONG_ORG' });
-      continue;
-    }
-
-    if (!isValidStatusTransition(shipment.status, status)) {
-      failed.push({ id, reason: 'INVALID_TRANSITION' });
-      continue;
-    }
-
-    const previousStatus = shipment.status;
-    shipment.status = status;
-
-    const milestone = {
-      name: status,
-      timestamp: new Date(),
-      description: `Status changed to ${status}`,
-    } as {
-      name: string;
-      timestamp: Date;
-      description?: string;
-      userId?: string;
-      walletAddress?: string;
-    };
-
-    if (actor?.userId) {
-      milestone.userId = actor.userId;
-      const user = await UserModel.findById(actor.userId)
-        .select({ walletAddress: 1 })
-        .lean<{ walletAddress?: string }>();
-      if (user?.walletAddress) {
-        milestone.walletAddress = user.walletAddress;
-      }
-    }
-
-    shipment.milestones.push(milestone);
-
-    try {
-      await shipment.save();
-      await invalidateAnalyticsPerformanceCache();
-
-      if (status === ShipmentStatus.DELIVERED) {
-        try {
-          const payment = await paymentsRepo.getPaymentByShipmentId(id);
-          if (payment) {
-            const releaseResult = await releaseEscrow({
-              paymentId: payment._id.toString(),
-              shipmentId: id,
-            });
-
-            if (releaseResult.success && releaseResult.transactionHash) {
-              await paymentsRepo.updatePaymentStatus(
-                payment._id.toString(),
-                PaymentStatus.RELEASED,
-                releaseResult.transactionHash
-              );
-              logger.info(
-                { shipmentId: id, transactionHash: releaseResult.transactionHash },
-                'Escrow released for shipment'
-              );
-            }
-          }
-        } catch (escrowError) {
-          logger.warn(
-            { err: escrowError, shipmentId: id },
-            'Failed to trigger escrow release'
-          );
-        }
-      }
-
-      if (actor?.userId) {
-        auditLog({
-          userId: actor.userId,
-          action: 'SHIPMENT_STATUS_CHANGED',
-          resourceId: id,
-          timestamp: new Date(),
-          metadata: { previousStatus, newStatus: status },
-        });
-      }
-
-      emitStatusUpdate(id, {
-        shipmentId: id,
-        status: shipment.status,
-        milestones: shipment.milestones.map(m => ({
-          name: m.name,
-          timestamp: m.timestamp instanceof Date ? m.timestamp.toISOString() : m.timestamp,
-          description: m.description ?? undefined,
-          userId: m.userId?.toString() ?? undefined,
-          walletAddress: m.walletAddress ?? undefined,
-        })),
-        updatedAt:
-          shipment.updatedAt instanceof Date
-            ? shipment.updatedAt.toISOString()
-            : shipment.updatedAt,
-      });
-
-      updatedCount++;
-    } catch (err) {
-      logger.error({ err, shipmentId: id }, 'Failed to update shipment status');
-      failed.push({ id, reason: 'UPDATE_FAILED' });
-    }
+export const getShipmentEtaService = async (id: string): Promise<ShipmentEtaPayload> => {
+  const cached = await readShipmentEtaCache(id);
+  if (cached) {
+    return cached;
   }
 
-  return { updated: updatedCount, failed };
+  const shipment = await Shipment.findById(id).lean();
+  if (!shipment) {
+    throw new AppError(404, 'Shipment not found', 'ERR_SHIPMENT_NOT_FOUND');
+  }
+
+  if (shipment.status !== ShipmentStatus.IN_TRANSIT) {
+    const nonTransitPayload: ShipmentEtaPayload = {
+      estimatedArrival: null,
+      reason: `ETA is available only for ${ShipmentStatus.IN_TRANSIT} shipments`,
+    };
+    await writeShipmentEtaCache(id, nonTransitPayload);
+    return nonTransitPayload;
+  }
+
+  const destination = resolveDestinationCoordinates(shipment.offChainMetadata);
+  if (!destination) {
+    throw new AppError(
+      400,
+      'Destination coordinates are missing in shipment metadata',
+      'ERR_SHIPMENT_ETA_DESTINATION_MISSING'
+    );
+  }
+
+  const points = (await Telemetry.find({ shipmentId: id })
+    .select('latitude longitude timestamp')
+    .sort({ timestamp: -1, _id: -1 })
+    .limit(ETA_POINTS_WINDOW)
+    .lean()) as TelemetryPoint[];
+
+  if (points.length === 0) {
+    throw new AppError(404, 'No GPS telemetry data points found', 'ERR_SHIPMENT_ETA_NO_GPS');
+  }
+
+  const latest = points[0];
+  const distanceRemaining = calculateDistanceKm(latest, destination);
+  const averageSpeedRaw = calculateAverageSpeedKmh(points);
+  const averageSpeed = Math.max(averageSpeedRaw, MIN_EFFECTIVE_SPEED_KMH);
+  const confidence = inferEtaConfidence(points.length, averageSpeedRaw);
+  const etaHours = distanceRemaining / averageSpeed;
+  const estimatedArrival = new Date(Date.now() + etaHours * 3600000).toISOString();
+
+  const payload: ShipmentEtaPayload = {
+    estimatedArrival,
+    distanceRemaining: Number(distanceRemaining.toFixed(3)),
+    averageSpeed: Number(averageSpeed.toFixed(3)),
+    confidence,
+  };
+
+  await writeShipmentEtaCache(id, payload);
+  return payload;
 };

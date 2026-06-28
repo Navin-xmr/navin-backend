@@ -7,7 +7,7 @@ import {
   updateShipmentStatusService,
   uploadShipmentProofService,
   deleteShipmentService,
-  bulkUpdateShipmentStatusService,
+  getShipmentEtaService,
 } from './shipments.service.js';
 import { sendResponse } from '../../shared/http/sendResponse.js';
 import type { GetShipmentsQuery, BulkStatusUpdateInput } from './shipments.validation.js';
@@ -15,6 +15,7 @@ import { AppError } from '../../shared/http/errors.js';
 
 export const getShipments = async (req: Request, res: Response) => {
   const query = req.query as unknown as GetShipmentsQuery;
+  const { status, page = 1, limit = 20, origin, destination, ...filters } = query;
   const { status, page = 1, limit = 20, origin, destination } = query;
   // Build explicit filters object to avoid unvalidated query parameters
   const filters: Record<string, unknown> = {};
@@ -118,15 +119,8 @@ export const deleteShipment = async (req: Request, res: Response) => {
   sendResponse(res, 200, true, 'Shipment deleted successfully', shipment);
 };
 
-export const bulkUpdateShipmentStatus = async (req: Request, res: Response) => {
-  const { shipmentIds, status } = req.body as BulkStatusUpdateInput;
-  const user = req.user as { userId?: string; organizationId?: string };
-
-  const result = await bulkUpdateShipmentStatusService(
-    { shipmentIds, status },
-    user?.organizationId ?? '',
-    { userId: user?.userId }
-  );
-
-  sendResponse(res, 200, true, 'Bulk status update completed', result);
+export const getShipmentEta = async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const eta = await getShipmentEtaService(id);
+  sendResponse(res, 200, true, 'Shipment ETA retrieved', eta);
 };

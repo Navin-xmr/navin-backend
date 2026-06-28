@@ -8,7 +8,7 @@ import {
   patchShipmentStatus,
   uploadShipmentProof,
   deleteShipment,
-  bulkUpdateShipmentStatus,
+  getShipmentEta,
 } from './shipments.controller.js';
 import { requireRole } from '../../shared/middleware/requireRole.js';
 import { requireAuth } from '../../shared/middleware/requireAuth.js';
@@ -72,12 +72,11 @@ shipmentsRouter.delete(
   asyncHandler(deleteShipment)
 );
 
-shipmentsRouter.patch(
-  '/bulk/status',
+shipmentsRouter.get(
+  '/:id/eta',
   requireAuth,
-  requireRole(UserRole.ADMIN, UserRole.MANAGER),
-  validateRequest({ body: BulkStatusUpdateBodySchema }),
-  asyncHandler(bulkUpdateShipmentStatus)
+  validateRequest({ params: ShipmentIdParamSchema }),
+  asyncHandler(getShipmentEta)
 );
 
 export default shipmentsRouter;
