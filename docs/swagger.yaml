@@ -261,6 +261,7 @@ paths:
     post:
       summary: Register a new user
       description: Creates a new user account. organizationId is optional.
+      security: []
       requestBody:
         required: true
         content:
@@ -317,6 +318,7 @@ paths:
   /api/auth/login:
     post:
       summary: Authenticate a user
+      security: []
       requestBody:
         required: true
         content:
@@ -512,6 +514,7 @@ paths:
   /api/users/invitations/verify:
     get:
       summary: Verify invitation token
+      security: []
       parameters:
         - in: query
           name: token
@@ -530,6 +533,7 @@ paths:
   /api/users/invitations/accept:
     post:
       summary: Accept invitation and create account
+      security: []
       requestBody:
         required: true
         content:
@@ -932,6 +936,8 @@ paths:
     get:
       summary: Get telemetry records
       description: Retrieve telemetry time-series points with optional shipment filtering and pagination.
+      security:
+        - bearerAuth: []
       parameters:
         - in: query
           name: shipmentId
@@ -1034,6 +1040,8 @@ paths:
     get:
       summary: Get paginated shipments with offset-based pagination
       description: Returns a paginated list of shipments. Uses offset-based pagination with page and limit parameters.
+      security:
+        - bearerAuth: []
       parameters:
         - in: query
           name: status
@@ -1126,6 +1134,8 @@ paths:
   /api/shipments/{id}:
     patch:
       summary: Update off-chain metadata
+      security:
+        - bearerAuth: []
       parameters:
         - in: path
           name: id
@@ -1455,6 +1465,29 @@ components:
         updatedAt:
           type: string
           format: date-time
+    ErrorCodes:
+      type: string
+      enum:
+        - ERR_AUTH_INVALID
+        - ERR_PERMISSION_DENIED
+        - ERR_NOT_FOUND
+        - ERR_BAD_REQUEST
+        - ERR_VALIDATION_FAILED
+        - ERR_INTERNAL_SERVER_ERROR
+        - ERR_SHIPMENT_NOT_FOUND
+        - ERR_PAYMENT_NOT_FOUND
+        - ERR_DUPLICATE_KEY
+      description: |
+        Standard error codes returned by the API. See docs/ERROR_CODES.md for details.
+        - ERR_AUTH_INVALID: Invalid or missing authentication token (401)
+        - ERR_PERMISSION_DENIED: Insufficient role permissions (403)
+        - ERR_NOT_FOUND: Generic resource not found (404)
+        - ERR_BAD_REQUEST: Malformed request (400)
+        - ERR_VALIDATION_FAILED: Schema validation failed (400)
+        - ERR_INTERNAL_SERVER_ERROR: Unhandled server error (500)
+        - ERR_SHIPMENT_NOT_FOUND: Specific shipment not found (404)
+        - ERR_PAYMENT_NOT_FOUND: Specific payment not found (404)
+        - ERR_DUPLICATE_KEY: Unique constraint violation (409)
   securitySchemes:
     stellarSignature:
       type: apiKey
