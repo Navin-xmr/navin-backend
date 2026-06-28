@@ -4,8 +4,8 @@ import { validateRequest } from '../../shared/validation/validate.js';
 import { requireAuth } from '../../shared/middleware/requireAuth.js';
 import { requireRole } from '../../shared/middleware/requireRole.js';
 import { UserRole } from '../../shared/constants/roles.js';
-import { SignupBodySchema, LoginBodySchema } from './auth.validation.js';
-import { signupController, loginController, logoutController } from './auth.controller.js';
+import { SignupBodySchema, LoginBodySchema, RefreshBodySchema } from './auth.validation.js';
+import { signupController, loginController, logoutController, refreshController } from './auth.controller.js';
 import {
   createApiKeyController,
   listApiKeysController,
@@ -30,6 +30,11 @@ authRouter.post(
   asyncHandler(loginController)
 );
 authRouter.post('/logout', asyncHandler(requireAuth), asyncHandler(logoutController));
+authRouter.post(
+  '/refresh',
+  validateRequest({ body: RefreshBodySchema }),
+  asyncHandler(refreshController)
+);
 
 // API Key management routes (protected by JWT auth + admin role)
 authRouter.post(

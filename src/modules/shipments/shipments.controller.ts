@@ -8,6 +8,8 @@ import {
   uploadShipmentProofService,
   deleteShipmentService,
   getShipmentEtaService,
+  exportShipmentsService,
+  shipmentsToCSV,
 } from './shipments.service.js';
 import { sendResponse } from '../../shared/http/sendResponse.js';
 import type { GetShipmentsQuery, BulkStatusUpdateInput } from './shipments.validation.js';
@@ -15,7 +17,6 @@ import { AppError } from '../../shared/http/errors.js';
 
 export const getShipments = async (req: Request, res: Response) => {
   const query = req.query as unknown as GetShipmentsQuery;
-  const { status, page = 1, limit = 20, origin, destination, ...filters } = query;
   const { status, page = 1, limit = 20, origin, destination } = query;
   // Build explicit filters object to avoid unvalidated query parameters
   const filters: Record<string, unknown> = {};
@@ -123,4 +124,21 @@ export const getShipmentEta = async (req: Request, res: Response) => {
   const { id } = req.params;
   const eta = await getShipmentEtaService(id);
   sendResponse(res, 200, true, 'Shipment ETA retrieved', eta);
+};
+
+export const exportShipments = async (req: Request, res: Response) => {
+  const { format = 'json', status, origin, destination, startDate, endDate } = req.query as Record<string, string>;
+  const organizationId = req.user?.organizationId;
+
+  const shipments = await exportShipmentsService({ status, origin, destination, startDate, endDate, organizationId });
+
+  const date = new Date().toISOString().split('T')[0];
+  if (format === 'csv') {
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="shipments-export-${date}.csv"`);
+    return res.send(shipmentsToCSV(shipments as any));
+  }
+
+  res.setHeader('Content-Disposition', `attachment; filename="shipments-export-${date}.json"`);
+  sendResponse(res, 200, true, 'Shipments exported', shipments);
 };

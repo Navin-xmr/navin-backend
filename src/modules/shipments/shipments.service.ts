@@ -445,6 +445,56 @@ export const uploadShipmentProofService = async (
 };
 
 /**
+ * Exports shipments as raw records for CSV/JSON download (max 10,000).
+ * Applies same filters as the list endpoint.
+ */
+export const exportShipmentsService = async (params: {
+  status?: string;
+  origin?: string;
+  destination?: string;
+  startDate?: string;
+  endDate?: string;
+  organizationId?: string;
+}) => {
+  const { status, origin, destination, startDate, endDate, organizationId } = params;
+  const query: FilterQuery<unknown> = {};
+
+  if (organizationId) query.organizationId = organizationId;
+  if (status) query.status = status;
+  if (origin) query.origin = { $regex: origin.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), $options: 'i' };
+  if (destination) query.destination = { $regex: destination.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), $options: 'i' };
+  if (startDate || endDate) {
+    query.createdAt = {};
+    if (startDate) (query.createdAt as Record<string, unknown>).$gte = new Date(startDate);
+    if (endDate) (query.createdAt as Record<string, unknown>).$lte = new Date(endDate);
+  }
+
+  const EXPORT_LIMIT = 10_000;
+  const total = await Shipment.countDocuments(query);
+  if (total > EXPORT_LIMIT) {
+    throw new AppError(
+      400,
+      `Export exceeds ${EXPORT_LIMIT} records (${total} found). Narrow your filters.`,
+      'EXPORT_LIMIT_EXCEEDED'
+    );
+  }
+
+  return Shipment.find(query).sort({ createdAt: -1 }).lean();
+};
+
+/**
+ * Converts shipment records to CSV string.
+ */
+export function shipmentsToCSV(shipments: IShipment[]): string {
+  const headers = ['_id', 'trackingNumber', 'origin', 'destination', 'status', 'createdAt', 'updatedAt'];
+  const escape = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const rows = shipments.map(s =>
+    headers.map(h => escape((s as unknown as Record<string, unknown>)[h])).join(',')
+  );
+  return [headers.join(','), ...rows].join('\n');
+}
+
+/**
  * Soft deletes a shipment and cascades deletion markers to related telemetry and anomaly documents.
  * @param {string} id - Shipment ObjectId.
  * @returns {Promise<unknown>} Deleted shipment document or null.
