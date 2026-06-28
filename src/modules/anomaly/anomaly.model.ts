@@ -10,6 +10,9 @@ const AnomalySchema = new Schema(
     message: { type: String, required: true },
     timestamp: { type: Date, required: true },
     resolved: { type: Boolean, default: false, required: true },
+    resolvedAt: { type: Date, default: null },
+    resolvedBy: { type: String, default: null },
+    resolutionNote: { type: String, default: null },
     deletedAt: { type: Date, default: null },
   },
   { timestamps: true, strict: true }

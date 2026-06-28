@@ -444,6 +444,51 @@ export const uploadShipmentProofService = async (
   return shipment;
 };
 
+const EXPORT_MAX_RECORDS = 10_000;
+
+/**
+ * Exports shipments matching the given filters as an array (max 10,000).
+ * Returns 400 if the result set exceeds the limit.
+ */
+export const exportShipmentsService = async (params: {
+  organizationId?: string;
+  status?: string;
+  origin?: string;
+  destination?: string;
+  startDate?: string;
+  endDate?: string;
+}): Promise<IShipment[]> => {
+  const { organizationId, status, origin, destination, startDate, endDate } = params;
+  const query: FilterQuery<unknown> = {};
+
+  if (organizationId) query.organizationId = organizationId;
+  if (status) query.status = status;
+  if (origin) {
+    const escaped = origin.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    query.origin = { $regex: escaped, $options: 'i' };
+  }
+  if (destination) {
+    const escaped = destination.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    query.destination = { $regex: escaped, $options: 'i' };
+  }
+  if (startDate || endDate) {
+    query.createdAt = {};
+    if (startDate) (query.createdAt as Record<string, unknown>).$gte = new Date(startDate);
+    if (endDate) (query.createdAt as Record<string, unknown>).$lte = new Date(endDate);
+  }
+
+  const count = await Shipment.countDocuments(query);
+  if (count > EXPORT_MAX_RECORDS) {
+    throw new AppError(
+      400,
+      `Export exceeds ${EXPORT_MAX_RECORDS} records (${count} found). Please narrow your filters.`,
+      'EXPORT_TOO_LARGE'
+    );
+  }
+
+  return Shipment.find(query).sort({ createdAt: -1 }).limit(EXPORT_MAX_RECORDS).lean();
+};
+
 /**
  * Soft deletes a shipment and cascades deletion markers to related telemetry and anomaly documents.
  * @param {string} id - Shipment ObjectId.
