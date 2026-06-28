@@ -8,6 +8,8 @@ export const ErrorCodes = {
   SHIPMENT_NOT_FOUND: 'ERR_SHIPMENT_NOT_FOUND',
   PAYMENT_NOT_FOUND: 'ERR_PAYMENT_NOT_FOUND',
   DUPLICATE_KEY: 'ERR_DUPLICATE_KEY',
+  STELLAR_CONFIG: 'ERR_STELLAR_CONFIG',
+  STELLAR_INVALID_HASH: 'ERR_STELLAR_INVALID_HASH',
 } as const;
 
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];

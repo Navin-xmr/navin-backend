@@ -46,6 +46,7 @@ await jest.unstable_mockModule('../src/config/index.js', () => ({
 }));
 
 const { tokenizeShipment } = await import('../src/services/stellar.service.js');
+const { AppError, ErrorCodes } = await import('../src/shared/http/errors.js');
 
 describe('Stellar Service - tokenizeShipment', () => {
   const shipmentData = {
@@ -86,11 +87,15 @@ describe('Stellar Service - tokenizeShipment', () => {
     });
   });
 
-  it('should throw when STELLAR_SECRET_KEY is not configured', async () => {
+  it('should throw AppError when STELLAR_SECRET_KEY is not configured', async () => {
     mockStellarSecretKey = undefined;
 
-    await expect(tokenizeShipment(shipmentData))
-      .rejects.toThrow('STELLAR_SECRET_KEY is not configured');
+    await expect(tokenizeShipment(shipmentData)).rejects.toMatchObject({
+      statusCode: 500,
+      message: 'STELLAR_SECRET_KEY is not configured',
+      code: ErrorCodes.STELLAR_CONFIG,
+    });
+    await expect(tokenizeShipment(shipmentData)).rejects.toBeInstanceOf(AppError);
   });
 
   it('should derive the public key and load the account from Horizon', async () => {
@@ -196,10 +201,27 @@ describe('Stellar Service - anchorTelemetryHash', () => {
     expect(result).toEqual({ stellarTxHash: 'mock-telemetry-tx-hash' });
   });
 
-  it('should throw when dataHash is empty', async () => {
+  it('should throw AppError when dataHash is empty', async () => {
     const { anchorTelemetryHash } = await import('../src/services/stellar.service.js');
 
-    await expect(anchorTelemetryHash({ ...telemetry, dataHash: '' }))
-      .rejects.toThrow('dataHash must be a non-empty string');
+    await expect(anchorTelemetryHash({ ...telemetry, dataHash: '' })).rejects.toMatchObject({
+      statusCode: 400,
+      message: 'dataHash must be a non-empty string',
+      code: ErrorCodes.STELLAR_INVALID_HASH,
+    });
+    await expect(anchorTelemetryHash({ ...telemetry, dataHash: '' })).rejects.toBeInstanceOf(
+      AppError
+    );
+  });
+
+  it('should throw AppError when STELLAR_SECRET_KEY is not configured', async () => {
+    mockStellarSecretKey = undefined;
+    const { anchorTelemetryHash } = await import('../src/services/stellar.service.js');
+
+    await expect(anchorTelemetryHash(telemetry)).rejects.toMatchObject({
+      statusCode: 500,
+      message: 'STELLAR_SECRET_KEY is not configured',
+      code: ErrorCodes.STELLAR_CONFIG,
+    });
   });
 });
