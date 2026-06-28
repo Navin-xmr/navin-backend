@@ -107,6 +107,8 @@ describe('Auth and User Controllers', () => {
       login,
       logout: jest.fn(),
       verifyToken: jest.fn(),
+      forgotPassword: jest.fn(),
+      resetPassword: jest.fn(),
     }));
 
     const { signupController, loginController } = await import('../src/modules/auth/auth.controller.js');

@@ -4,8 +4,19 @@ import { validateRequest } from '../../shared/validation/validate.js';
 import { requireAuth } from '../../shared/middleware/requireAuth.js';
 import { requireRole } from '../../shared/middleware/requireRole.js';
 import { UserRole } from '../../shared/constants/roles.js';
-import { SignupBodySchema, LoginBodySchema } from './auth.validation.js';
-import { signupController, loginController, logoutController } from './auth.controller.js';
+import {
+  SignupBodySchema,
+  LoginBodySchema,
+  ForgotPasswordBodySchema,
+  ResetPasswordBodySchema,
+} from './auth.validation.js';
+import {
+  signupController,
+  loginController,
+  logoutController,
+  forgotPasswordController,
+  resetPasswordController,
+} from './auth.controller.js';
 import {
   createApiKeyController,
   listApiKeysController,
@@ -30,6 +41,19 @@ authRouter.post(
   asyncHandler(loginController)
 );
 authRouter.post('/logout', asyncHandler(requireAuth), asyncHandler(logoutController));
+
+// PUBLIC: password-reset-flow
+authRouter.post(
+  '/forgot-password',
+  validateRequest({ body: ForgotPasswordBodySchema }),
+  asyncHandler(forgotPasswordController)
+);
+// PUBLIC: password-reset-flow
+authRouter.post(
+  '/reset-password',
+  validateRequest({ body: ResetPasswordBodySchema }),
+  asyncHandler(resetPasswordController)
+);
 
 // API Key management routes (protected by JWT auth + admin role)
 authRouter.post(

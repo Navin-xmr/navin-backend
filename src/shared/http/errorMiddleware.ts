@@ -74,7 +74,14 @@ export function errorMiddleware(): ErrorRequestHandler {
           return respond(err.statusCode, err.message, err.code);
         }
       }
-      return respond(err.statusCode, err.message, err.code);
+      return res.status(err.statusCode).json({
+        success: false,
+        message: err.message,
+        data: null,
+        error: { code: err.code },
+        ...(err.details !== undefined && { details: err.details }),
+        ...(isDev && { stack: err.stack }),
+      });
     }
 
     // CORS origin rejection
