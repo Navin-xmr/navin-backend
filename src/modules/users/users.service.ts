@@ -67,13 +67,25 @@ export async function createTeamMember(input: {
   });
 }
 
+export interface ListOrganizationUsersResult {
+  data: unknown[];
+  total: number;
+  hasMore: boolean;
+  nextCursor: string | null;
+}
+
 /**
  * Lists users within an organization for an authorized role.
- * @param {{organizationId?: string; role?: string}} input - Organization and role scope.
- * @returns {Promise<unknown[]>} Organization users matching the role and org.
+ * @param {{organizationId?: string; role?: string; limit?: number; cursor?: string}} input - Organization and role scope.
+ * @returns {Promise<ListOrganizationUsersResult>} Paginated organization users matching the role and org.
  * @throws {AppError} When authorization or organization context is missing.
  */
-export async function listOrganizationUsers(input: { organizationId?: string; role?: string }) {
+export async function listOrganizationUsers(input: {
+  organizationId?: string;
+  role?: string;
+  limit?: number;
+  cursor?: string;
+}): Promise<ListOrganizationUsersResult> {
   const allowedRoles = [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER];
 
   if (!input.role || !allowedRoles.includes(input.role as UserRole)) {
@@ -84,7 +96,17 @@ export async function listOrganizationUsers(input: { organizationId?: string; ro
     throw new AppError(403, 'Organization context is required', 'FORBIDDEN');
   }
 
-  return findUsersByOrganizationId(input.organizationId);
+  const page = await findUsersByOrganizationId(input.organizationId, {
+    limit: input.limit,
+    cursor: input.cursor,
+  });
+
+  return {
+    data: page.data,
+    total: page.total,
+    hasMore: page.hasMore,
+    nextCursor: page.nextCursor,
+  };
 }
 
 /**

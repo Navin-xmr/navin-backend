@@ -55,10 +55,17 @@ export const acceptInvitationController: RequestHandler = async (req, res) => {
 };
 
 export const listUsersController: RequestHandler = async (req, res) => {
-  const users = await usersService.listOrganizationUsers({
+  const query = req.query as unknown as import('./users.validation.js').ListUsersQuery;
+  const result = await usersService.listOrganizationUsers({
     organizationId: req.user?.organizationId,
     role: req.user?.role,
+    limit: query.limit,
+    cursor: query.cursor,
   });
 
-  sendResponse(res, 200, true, 'Users retrieved successfully', users);
+  sendResponse(res, 200, true, 'Users retrieved successfully', result.data, {
+    total: result.total,
+    hasMore: result.hasMore,
+    nextCursor: result.nextCursor,
+  });
 };
