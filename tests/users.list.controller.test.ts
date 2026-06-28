@@ -68,4 +68,20 @@ describe('GET /api/users', () => {
     expect(res.status).toBe(403);
     expect(String(res.body.message)).toMatch(/organization context/i);
   });
+
+  it('returns 400 when unknown query parameters are provided', async () => {
+    const token = jwt.sign(
+      { userId: 'actor-1', role: 'ADMIN', organizationId: 'org-a' },
+      process.env.JWT_SECRET!,
+    );
+
+    const res = await request(app)
+      .get('/api/users')
+      .query({ unexpected: 'value' })
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(400);
+    expect(res.body.success).toBe(false);
+    expect(findUsersByOrganizationId).not.toHaveBeenCalled();
+  });
 });

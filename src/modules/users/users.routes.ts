@@ -6,6 +6,7 @@ import {
   AcceptInvitationBodySchema,
   CreateInvitationBodySchema,
   CreateUserBodySchema,
+  ListUsersQuerySchema,
   VerifyInvitationQuerySchema,
 } from './users.validation.js';
 import {
@@ -60,6 +61,7 @@ usersRouter.get(
   '/',
   requireAuth,
   requireRole(UserRole.ADMIN, UserRole.MANAGER, UserRole.SUPER_ADMIN),
+  validateRequest({ query: ListUsersQuerySchema }),
   asyncHandler(listUsersController)
 );
 usersRouter.delete(
