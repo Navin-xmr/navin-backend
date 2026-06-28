@@ -7,6 +7,7 @@ import {
   updateShipmentStatusService,
   uploadShipmentProofService,
   deleteShipmentService,
+  getShipmentEtaService,
 } from './shipments.service.js';
 import { sendResponse } from '../../shared/http/sendResponse.js';
 import type { GetShipmentsQuery } from './shipments.validation.js';
@@ -14,6 +15,7 @@ import { AppError } from '../../shared/http/errors.js';
 
 export const getShipments = async (req: Request, res: Response) => {
   const query = req.query as unknown as GetShipmentsQuery;
+  const { status, page = 1, limit = 20, origin, destination, ...filters } = query;
   const { status, page = 1, limit = 20, origin, destination } = query;
   // Build explicit filters object to avoid unvalidated query parameters
   const filters: Record<string, unknown> = {};
@@ -115,4 +117,10 @@ export const deleteShipment = async (req: Request, res: Response) => {
   }
 
   sendResponse(res, 200, true, 'Shipment deleted successfully', shipment);
+};
+
+export const getShipmentEta = async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const eta = await getShipmentEtaService(id);
+  sendResponse(res, 200, true, 'Shipment ETA retrieved', eta);
 };

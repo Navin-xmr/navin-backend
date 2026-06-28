@@ -8,6 +8,7 @@ import {
   patchShipmentStatus,
   uploadShipmentProof,
   deleteShipment,
+  getShipmentEta,
 } from './shipments.controller.js';
 import { requireRole } from '../../shared/middleware/requireRole.js';
 import { requireAuth } from '../../shared/middleware/requireAuth.js';
@@ -68,6 +69,13 @@ shipmentsRouter.delete(
   requireRole(UserRole.ADMIN, UserRole.MANAGER),
   validateRequest({ params: ShipmentIdParamSchema }),
   asyncHandler(deleteShipment)
+);
+
+shipmentsRouter.get(
+  '/:id/eta',
+  requireAuth,
+  validateRequest({ params: ShipmentIdParamSchema }),
+  asyncHandler(getShipmentEta)
 );
 
 export default shipmentsRouter;
