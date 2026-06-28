@@ -1,4 +1,5 @@
 import { jest, describe, it, expect, beforeEach } from '@jest/globals';
+import { createStellarServiceMock } from './helpers/mocks.js';
 
 const mockCreatePayment = jest.fn();
 
@@ -11,11 +12,7 @@ await jest.unstable_mockModule('../src/modules/payments/payments.repo.js', () =>
   deletePayment: jest.fn(),
 }));
 
-await jest.unstable_mockModule('../src/services/stellar.service.js', () => ({
-  getStellarExplorerUrl: (hash: string) => `https://stellar.expert/explorer/testnet/tx/${hash}`,
-  tokenizeShipment: jest.fn(),
-  releaseEscrow: jest.fn(),
-}));
+await jest.unstable_mockModule('../src/services/stellar.service.js', () => createStellarServiceMock());
 
 const { createPaymentService } = await import('../src/modules/payments/payments.service.js');
 const { AppError } = await import('../src/shared/http/errors.js');
