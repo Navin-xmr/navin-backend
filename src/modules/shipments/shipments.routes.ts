@@ -8,6 +8,7 @@ import {
   patchShipmentStatus,
   uploadShipmentProof,
   deleteShipment,
+  bulkUpdateShipmentStatus,
 } from './shipments.controller.js';
 import { requireRole } from '../../shared/middleware/requireRole.js';
 import { requireAuth } from '../../shared/middleware/requireAuth.js';
@@ -20,6 +21,7 @@ import {
   ShipmentPatchBodySchema,
   ShipmentProofBodySchema,
   ShipmentStatusBodySchema,
+  BulkStatusUpdateBodySchema,
 } from './shipments.validation.js';
 
 import { UserRole } from '../../shared/constants/index.js';
@@ -68,6 +70,14 @@ shipmentsRouter.delete(
   requireRole(UserRole.ADMIN, UserRole.MANAGER),
   validateRequest({ params: ShipmentIdParamSchema }),
   asyncHandler(deleteShipment)
+);
+
+shipmentsRouter.patch(
+  '/bulk/status',
+  requireAuth,
+  requireRole(UserRole.ADMIN, UserRole.MANAGER),
+  validateRequest({ body: BulkStatusUpdateBodySchema }),
+  asyncHandler(bulkUpdateShipmentStatus)
 );
 
 export default shipmentsRouter;

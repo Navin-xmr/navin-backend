@@ -21,6 +21,7 @@ import { webhooksRouter } from './modules/webhooks/iot.routes.js';
 import { analyticsRouter } from './modules/analytics/analytics.routes.js';
 import { anomaliesRouter } from './modules/anomaly/anomaly.routes.js';
 import { telemetryRouter } from './modules/telemetry/telemetry.routes.js';
+import { organizationsRouter } from './modules/organizations/organizations.routes.js';
 
 const swaggerDocumentPath = fileURLToPath(new URL('../docs/swagger.yaml', import.meta.url));
 
@@ -47,6 +48,7 @@ export function buildApp() {
   app.use('/api/health', healthRouter);
   app.use('/api/auth', authRouter);
   app.use('/api/users', usersRouter);
+  app.use('/api/organizations', organizationsRouter);
   app.use('/api/shipments', shipmentsRouter);
   app.use('/api/payments', paymentsRouter);
   app.use('/api/webhooks', webhooksRouter);

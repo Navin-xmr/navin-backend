@@ -7,9 +7,10 @@ import {
   updateShipmentStatusService,
   uploadShipmentProofService,
   deleteShipmentService,
+  bulkUpdateShipmentStatusService,
 } from './shipments.service.js';
 import { sendResponse } from '../../shared/http/sendResponse.js';
-import type { GetShipmentsQuery } from './shipments.validation.js';
+import type { GetShipmentsQuery, BulkStatusUpdateInput } from './shipments.validation.js';
 import { AppError } from '../../shared/http/errors.js';
 
 export const getShipments = async (req: Request, res: Response) => {
@@ -115,4 +116,17 @@ export const deleteShipment = async (req: Request, res: Response) => {
   }
 
   sendResponse(res, 200, true, 'Shipment deleted successfully', shipment);
+};
+
+export const bulkUpdateShipmentStatus = async (req: Request, res: Response) => {
+  const { shipmentIds, status } = req.body as BulkStatusUpdateInput;
+  const user = req.user as { userId?: string; organizationId?: string };
+
+  const result = await bulkUpdateShipmentStatusService(
+    { shipmentIds, status },
+    user?.organizationId ?? '',
+    { userId: user?.userId }
+  );
+
+  sendResponse(res, 200, true, 'Bulk status update completed', result);
 };
