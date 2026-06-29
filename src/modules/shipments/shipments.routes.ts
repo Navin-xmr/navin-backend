@@ -23,6 +23,7 @@ import {
   ShipmentProofBodySchema,
   ShipmentStatusBodySchema,
   BulkStatusUpdateBodySchema,
+  ExportShipmentsQuerySchema,
 } from './shipments.validation.js';
 
 import { UserRole } from '../../shared/constants/index.js';

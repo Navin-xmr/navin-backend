@@ -1,5 +1,7 @@
 # Navin Backend-to-Frontend Compatibility & Review Guide
 
+**Last Verified:** 2026-06-28
+
 This report acts as a comprehensive, structured guide to review the **Navin Backend**'s alignment and readiness to integrate with the **Navin Frontend** codebase. 
 
 Because the frontend is a blockchain-powered logistics platform, it assumes a set of REST endpoints, specific data envelopes, auth interceptors, and blockchain hash references. This document compiles all of these assumptions and introduces a **Percentage Compatibility Scorecard** to quantify the backend's readiness.
@@ -327,7 +329,8 @@ $$\text{Total Compatibility (\%)} = \sum (\text{Component Score} \times \text{We
 - **Issue**: Frontend `shipmentApi.getAll` expects `res.data.data` to be a paginated object `{ data: Shipment[], page, limit, total }`. The backend `/shipments` (GET) returns a flat array of shipments as `data` and wraps pagination inside `meta` (nextCursor, hasMore).
 - **Fix**: Align pagination models. If the frontend is to support infinite scroll, adapt `shipmentApi.getAll` to accept cursor-based responses, or adjust the backend to return an offset pagination object matching the frontend interface.
 
-### 8.6. Missing List Organizational Users Endpoint
-- **Issue**: Frontend's Team Management page needs to list users. The backend has a users module but only defines `POST /api/users` and `DELETE /api/users/:id`, with no `GET /api/users` route.
-- **Fix**: Add a `GET /` route to `users.routes.ts` mapping to a listing controller in `users.controller.ts` that filters users by the authenticated user's `organizationId`.
+### 8.6. User List Endpoint (RESOLVED)
+- **Status**: ✅ RESOLVED
+- **Details**: The backend correctly implements `GET /api/users` route for listing organization members. This endpoint is documented in the Swagger spec and filters users by the authenticated user's `organizationId`. The endpoint supports pagination via `page` and `limit` query parameters and returns users in the expected envelope format.
+- **Verification**: Confirmed in both `users.routes.ts` (route definition) and `docs/swagger.yaml` (Swagger documentation).
 

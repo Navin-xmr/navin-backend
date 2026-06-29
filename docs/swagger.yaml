@@ -260,6 +260,8 @@ paths:
   /api/auth/signup:
     post:
       summary: Register a new user
+      description: Creates a new user account. organizationId is optional.
+      security: []
       description: Creates a new user account. organizationId is optional. Public signup does not allow privileged role assignment.
       requestBody:
         required: true
@@ -417,6 +419,7 @@ paths:
   /api/auth/login:
     post:
       summary: Authenticate a user
+      security: []
       requestBody:
         required: true
         content:
@@ -662,6 +665,7 @@ paths:
   /api/users/invitations/verify:
     get:
       summary: Verify invitation token
+      security: []
       parameters:
         - in: query
           name: token
@@ -680,6 +684,7 @@ paths:
   /api/users/invitations/accept:
     post:
       summary: Accept invitation and create account
+      security: []
       requestBody:
         required: true
         content:
@@ -857,15 +862,18 @@ paths:
         - bearerAuth: []
       parameters:
         - in: query
-          name: page
-          schema:
-            type: integer
-            default: 1
-        - in: query
           name: limit
           schema:
             type: integer
+            minimum: 1
+            maximum: 100
             default: 20
+          description: Maximum number of users to return per page
+        - in: query
+          name: cursor
+          schema:
+            type: string
+          description: Cursor for the next page (ObjectId of the last user from the previous page)
       responses:
         '200':
           description: Users retrieved
@@ -896,12 +904,13 @@ paths:
                   meta:
                     type: object
                     properties:
-                      page:
-                        type: integer
-                      limit:
-                        type: integer
                       total:
                         type: integer
+                      hasMore:
+                        type: boolean
+                      nextCursor:
+                        type: string
+                        nullable: true
   /api/users/team:
     post:
       summary: Create a user as a team member (admin only)
@@ -1108,6 +1117,8 @@ paths:
     get:
       summary: Get telemetry records
       description: Retrieve telemetry time-series points with optional shipment filtering and pagination.
+      security:
+        - bearerAuth: []
       parameters:
         - in: query
           name: shipmentId
@@ -1375,6 +1386,8 @@ meta:
      get:
       summary: Get paginated shipments with offset-based pagination
       description: Returns a paginated list of shipments. Uses offset-based pagination with page and limit parameters.
+      security:
+        - bearerAuth: []
       parameters:
         - in: query
           name: status
@@ -1467,6 +1480,8 @@ meta:
   /api/shipments/{id}:
     patch:
       summary: Update off-chain metadata
+      security:
+        - bearerAuth: []
       parameters:
         - in: path
           name: id
@@ -1982,6 +1997,29 @@ offChainMetadata:
         updatedAt:
           type: string
           format: date-time
+    ErrorCodes:
+      type: string
+      enum:
+        - ERR_AUTH_INVALID
+        - ERR_PERMISSION_DENIED
+        - ERR_NOT_FOUND
+        - ERR_BAD_REQUEST
+        - ERR_VALIDATION_FAILED
+        - ERR_INTERNAL_SERVER_ERROR
+        - ERR_SHIPMENT_NOT_FOUND
+        - ERR_PAYMENT_NOT_FOUND
+        - ERR_DUPLICATE_KEY
+      description: |
+        Standard error codes returned by the API. See docs/ERROR_CODES.md for details.
+        - ERR_AUTH_INVALID: Invalid or missing authentication token (401)
+        - ERR_PERMISSION_DENIED: Insufficient role permissions (403)
+        - ERR_NOT_FOUND: Generic resource not found (404)
+        - ERR_BAD_REQUEST: Malformed request (400)
+        - ERR_VALIDATION_FAILED: Schema validation failed (400)
+        - ERR_INTERNAL_SERVER_ERROR: Unhandled server error (500)
+        - ERR_SHIPMENT_NOT_FOUND: Specific shipment not found (404)
+        - ERR_PAYMENT_NOT_FOUND: Specific payment not found (404)
+        - ERR_DUPLICATE_KEY: Unique constraint violation (409)
   securitySchemes:
     stellarSignature:
       type: apiKey

@@ -61,3 +61,15 @@ export const ExportShipmentsQuerySchema = z.object({
   startDate: z.string().datetime({ offset: true }).optional(),
   endDate: z.string().datetime({ offset: true }).optional(),
 });
+export const ExportShipmentsQuerySchema = z
+  .object({
+    format: z.enum(['csv', 'json']).default('json'),
+    status: z.string().optional(),
+    origin: z.string().optional(),
+    destination: z.string().optional(),
+    startDate: z.string().optional(),
+    endDate: z.string().optional(),
+  })
+  .strict();
+
+export type ExportShipmentsQuery = z.infer<typeof ExportShipmentsQuerySchema>;

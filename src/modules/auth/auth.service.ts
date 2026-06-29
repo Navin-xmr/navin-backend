@@ -174,6 +174,59 @@ export async function refreshToken(token: string) {
     role: payload.role,
     organizationId: payload.organizationId,
     organizationType: payload.organizationType,
+ * Issues a new JWT in exchange for a valid (or recently-expired) token.
+ * Blocklists the old token's JTI to prevent replay.
+ */
+export async function refreshToken(token: string): Promise<{ token: string; expiresIn: number }> {
+  let payload: TokenPayload & { exp?: number; iat?: number };
+  try {
+    payload = jwt.verify(token, env.JWT_SECRET, {
+      ignoreExpiration: true,
+    }) as TokenPayload & { exp?: number; iat?: number };
+  } catch {
+    throw new AppError(401, 'Invalid token', 'INVALID_TOKEN');
+  }
+
+  if (!payload.jti) {
+    throw new AppError(401, 'Invalid token', 'INVALID_TOKEN');
+  }
+
+  const isBlocked = await isTokenBlocked(payload.jti);
+  if (isBlocked) {
+    throw new AppError(401, 'Token has been revoked', 'TOKEN_REVOKED');
+  }
+
+  const issuedAt = payload.iat ?? 0;
+  const gracePeriodSeconds = 7 * 24 * 60 * 60;
+  const now = Math.floor(Date.now() / 1000);
+  if (now - issuedAt > gracePeriodSeconds) {
+    throw new AppError(401, 'Token is too old to refresh', 'TOKEN_EXPIRED');
+  }
+
+  const user = await UserModel.findById(payload.userId);
+  if (!user || (user as any).deletedAt) {
+    throw new AppError(401, 'User no longer exists', 'USER_NOT_FOUND');
+  }
+
+  let organizationType: OrganizationType | undefined;
+  if (user.organizationId) {
+    const org = await OrganizationModel.findById(user.organizationId);
+    organizationType = org?.type;
+  }
+
+  const exp = payload.exp ?? now;
+  const oldTtl = exp - now;
+  if (oldTtl > 0) {
+    await blockToken(payload.jti, oldTtl + gracePeriodSeconds);
+  } else {
+    await blockToken(payload.jti, gracePeriodSeconds);
+  }
+
+  const newToken = generateToken({
+    userId: user._id.toString(),
+    role: user.role as string,
+    organizationId: user.organizationId?.toString(),
+    organizationType,
   });
 
   return { token: newToken, expiresIn: TOKEN_TTL_SECONDS };
