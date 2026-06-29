@@ -4,6 +4,7 @@ import { requireAuth } from '../../shared/middleware/requireAuth.js';
 import { requireRole } from '../../shared/middleware/requireRole.js';
 import { validateRequest } from '../../shared/validation/validate.js';
 import { getAnomalies, resolveAnomaly, getAnomalyStats } from './anomaly.controller.js';
+import { AnomalyQuerySchema, ResolveAnomalyParamsSchema, ResolveAnomalyBodySchema } from './anomaly.validation.js';
 import {
   AnomalyQuerySchema,
   ResolveAnomalyParamsSchema,
@@ -27,6 +28,13 @@ anomaliesRouter.get(
   requireRole(UserRole.ADMIN, UserRole.MANAGER),
   validateRequest({ query: AnomalyQuerySchema }),
   asyncHandler(getAnomalies)
+);
+
+anomaliesRouter.get(
+  '/stats',
+  requireAuth,
+  requireRole(UserRole.ADMIN, UserRole.MANAGER),
+  asyncHandler(getAnomalyStats)
 );
 
 anomaliesRouter.patch(

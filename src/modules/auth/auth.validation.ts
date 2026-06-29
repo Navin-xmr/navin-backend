@@ -12,6 +12,10 @@ export const LoginBodySchema = z.object({
   password: z.string(),
 });
 
+export const RefreshBodySchema = z.object({
+  token: z.string().min(1),
+});
+
 export type SignupInput = z.infer<typeof SignupBodySchema>;
 export type LoginInput = z.infer<typeof LoginBodySchema>;
 

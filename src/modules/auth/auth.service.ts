@@ -130,6 +130,50 @@ export function verifyToken(token: string): TokenPayload {
 }
 
 /**
+ * Refreshes a JWT within the grace window (7 days from issue).
+ * Blocklists the old token's JTI and issues a new one.
+ */
+export async function refreshToken(token: string) {
+  let payload: TokenPayload & { iat?: number; exp?: number };
+  try {
+    payload = jwt.verify(token, env.JWT_SECRET) as TokenPayload & { iat?: number; exp?: number };
+  } catch (err) {
+    if (err instanceof jwt.TokenExpiredError) {
+      // Allow decode even if expired, then check grace window
+      payload = jwt.decode(token) as TokenPayload & { iat?: number; exp?: number };
+      if (!payload) throw new AppError(401, 'Invalid token', 'INVALID_TOKEN');
+
+      const issuedAt = payload.iat ?? 0;
+      const graceCutoff = issuedAt + TOKEN_TTL_SECONDS;
+      if (Math.floor(Date.now() / 1000) > graceCutoff) {
+        throw new AppError(401, 'Token expired beyond grace window', 'TOKEN_EXPIRED');
+      }
+    } else {
+      throw new AppError(401, 'Invalid token', 'INVALID_TOKEN');
+    }
+  }
+
+  if (!payload.jti) throw new AppError(401, 'Invalid token', 'INVALID_TOKEN');
+
+  if (await isTokenBlocked(payload.jti)) {
+    throw new AppError(401, 'Token has been revoked', 'TOKEN_REVOKED');
+  }
+
+  const user = await UserModel.findById(payload.userId).lean();
+  if (!user || (user as Record<string, unknown>).deletedAt) {
+    throw new AppError(401, 'User not found', 'USER_NOT_FOUND');
+  }
+
+  // Blocklist old token
+  const oldExp = (payload as { exp?: number }).exp;
+  const ttl = oldExp ? Math.max(oldExp - Math.floor(Date.now() / 1000), 1) : TOKEN_TTL_SECONDS;
+  await blockToken(payload.jti, ttl);
+
+  const newToken = generateToken({
+    userId: payload.userId,
+    role: payload.role,
+    organizationId: payload.organizationId,
+    organizationType: payload.organizationType,
  * Issues a new JWT in exchange for a valid (or recently-expired) token.
  * Blocklists the old token's JTI to prevent replay.
  */

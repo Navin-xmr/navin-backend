@@ -5,6 +5,7 @@ import { requireAuth } from '../../shared/middleware/requireAuth.js';
 import { requireRole } from '../../shared/middleware/requireRole.js';
 import { UserRole } from '../../shared/constants/roles.js';
 import { SignupBodySchema, LoginBodySchema, RefreshBodySchema } from './auth.validation.js';
+import { signupController, loginController, logoutController, refreshController } from './auth.controller.js';
 import {
   signupController,
   loginController,

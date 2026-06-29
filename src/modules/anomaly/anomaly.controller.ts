@@ -19,9 +19,18 @@ export const getAnomalies = async (req: Request, res: Response) => {
   sendResponse(res, 200, true, 'Anomalies retrieved', data, { nextCursor, hasMore });
 };
 
+export const getAnomalyStats = async (req: Request, res: Response) => {
+  const organizationId = req.user?.organizationId;
+  const stats = await anomalyService.getAnomalyStatsService(organizationId);
+  sendResponse(res, 200, true, 'Anomaly stats retrieved', stats);
+};
+
 export const resolveAnomaly = async (req: Request, res: Response) => {
   const { id } = req.params;
   const { note } = req.body as { note?: string };
+  const resolvedBy = req.user!.userId;
+
+  const anomaly = await anomalyService.resolveAnomalyService(id, resolvedBy, note);
   const userId = (req as any).user?.userId as string;
 
   const anomaly = await anomalyService.resolveAnomalyService(id, userId, note);
