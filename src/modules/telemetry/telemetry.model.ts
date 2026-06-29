@@ -36,7 +36,10 @@ const TelemetrySchema = new Schema(
 
 TelemetrySchema.plugin(isoDatePlugin);
 
+// Optimizes retrieving telemetry data points for a specific shipment, sorted by timestamp descending (newest first) for charting.
 TelemetrySchema.index({ shipmentId: 1, timestamp: -1 });
+
+// Optimizes checking/filtering telemetry data for a specific sensor tracking a specific shipment, sorted by timestamp descending.
 TelemetrySchema.index({ sensorId: 1, shipmentId: 1, timestamp: -1 });
 TelemetrySchema.index({ anchorStatus: 1 });
 
