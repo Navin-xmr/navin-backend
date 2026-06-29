@@ -13,6 +13,13 @@ export const getShipmentsQuerySchema = z
 
 export type GetShipmentsQuery = z.infer<typeof getShipmentsQuerySchema>;
 
+export const BulkStatusUpdateBodySchema = z.object({
+  shipmentIds: z.array(z.string().min(1)).min(1).max(50),
+  status: z.nativeEnum(ShipmentStatus),
+});
+
+export type BulkStatusUpdateInput = z.infer<typeof BulkStatusUpdateBodySchema>;
+
 export const CreateShipmentBodySchema = z.object({
   trackingNumber: z.string().optional(),
   origin: z.string().min(1),
@@ -45,3 +52,16 @@ export const ShipmentProofBodySchema = z.object({
 });
 
 export const ShipmentsQuerySchema = getShipmentsQuerySchema;
+
+export const ExportShipmentsQuerySchema = z
+  .object({
+    format: z.enum(['csv', 'json']).default('json'),
+    status: z.string().optional(),
+    origin: z.string().optional(),
+    destination: z.string().optional(),
+    startDate: z.string().optional(),
+    endDate: z.string().optional(),
+  })
+  .strict();
+
+export type ExportShipmentsQuery = z.infer<typeof ExportShipmentsQuerySchema>;

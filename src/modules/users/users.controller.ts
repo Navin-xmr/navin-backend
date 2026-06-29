@@ -69,3 +69,8 @@ export const listUsersController: RequestHandler = async (req, res) => {
     nextCursor: result.nextCursor,
   });
 };
+
+export const getCurrentUserController: RequestHandler = async (req, res) => {
+  const user = await usersService.getCurrentUser(req.user?.userId ?? '');
+  sendResponse(res, 200, true, 'User profile retrieved successfully', user);
+};

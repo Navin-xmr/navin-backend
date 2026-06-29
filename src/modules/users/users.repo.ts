@@ -54,4 +54,10 @@ export async function findUsersByOrganizationId(
     hasMore,
     nextCursor: hasMore && data.length > 0 ? String(data[data.length - 1]._id) : null,
   };
+export async function findUserById(id: string) {
+  return UserModel.findById(id).select('-passwordHash').lean();
+}
+
+export async function findUsersByOrganizationId(organizationId: string) {
+  return UserModel.find({ organizationId }).select('-passwordHash').lean();
 }

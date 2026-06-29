@@ -59,6 +59,7 @@ const PaymentSchema = new Schema(
 
 PaymentSchema.plugin(isoDatePlugin);
 
+// Optimizes retrieving payments associated with an organization, sorted by creation date descending (newest first) for invoicing/billing views.
 PaymentSchema.index({ organizationId: 1, createdAt: -1 });
 PaymentSchema.index({ shipmentId: 1 });
 PaymentSchema.index({ status: 1 });

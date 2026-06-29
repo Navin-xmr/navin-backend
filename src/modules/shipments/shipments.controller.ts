@@ -7,13 +7,16 @@ import {
   updateShipmentStatusService,
   uploadShipmentProofService,
   deleteShipmentService,
+  getShipmentEtaService,
+  exportShipmentsService,
 } from './shipments.service.js';
 import { sendResponse } from '../../shared/http/sendResponse.js';
-import type { GetShipmentsQuery } from './shipments.validation.js';
+import type { GetShipmentsQuery, ExportShipmentsQuery } from './shipments.validation.js';
 import { AppError } from '../../shared/http/errors.js';
 
 export const getShipments = async (req: Request, res: Response) => {
   const query = req.query as unknown as GetShipmentsQuery;
+  const { status, page = 1, limit = 20, origin, destination, ...filters } = query;
   const { status, page = 1, limit = 20, origin, destination } = query;
   // Build explicit filters object to avoid unvalidated query parameters
   const filters: Record<string, unknown> = {};
@@ -105,6 +108,66 @@ export const uploadShipmentProof = async (req: Request, res: Response) => {
   sendResponse(res, 200, true, 'Proof uploaded', shipment);
 };
 
+export const exportShipments = async (req: Request, res: Response) => {
+  const query = req.query as unknown as ExportShipmentsQuery;
+  const { format = 'json', status, origin, destination, startDate, endDate } = query;
+  const organizationId = (req as any).user?.organizationId as string | undefined;
+
+  const data = await exportShipmentsService({
+    organizationId,
+    status,
+    origin,
+    destination,
+    startDate,
+    endDate,
+  });
+
+  const dateStr = new Date().toISOString().slice(0, 10);
+
+  if (format === 'csv') {
+    if (data.length === 0) {
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader(
+        'Content-Disposition',
+        `attachment; filename="shipments-export-${dateStr}.csv"`
+      );
+      res.status(200).send('');
+      return;
+    }
+
+    const headers = Object.keys(data[0] as Record<string, unknown>).filter(
+      k => k !== '__v'
+    );
+    const escape = (v: unknown): string => {
+      const s = v === null || v === undefined ? '' : String(v);
+      return s.includes(',') || s.includes('"') || s.includes('\n')
+        ? `"${s.replace(/"/g, '""')}"`
+        : s;
+    };
+    const rows = [
+      headers.join(','),
+      ...data.map(row =>
+        headers.map(h => escape((row as Record<string, unknown>)[h])).join(',')
+      ),
+    ].join('\n');
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="shipments-export-${dateStr}.csv"`
+    );
+    res.status(200).send(rows);
+    return;
+  }
+
+  res.setHeader('Content-Type', 'application/json');
+  res.setHeader(
+    'Content-Disposition',
+    `attachment; filename="shipments-export-${dateStr}.json"`
+  );
+  res.status(200).json(data);
+};
+
 export const deleteShipment = async (req: Request, res: Response) => {
   const { id } = req.params;
   const shipment = await deleteShipmentService(id);
@@ -115,4 +178,10 @@ export const deleteShipment = async (req: Request, res: Response) => {
   }
 
   sendResponse(res, 200, true, 'Shipment deleted successfully', shipment);
+};
+
+export const getShipmentEta = async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const eta = await getShipmentEtaService(id);
+  sendResponse(res, 200, true, 'Shipment ETA retrieved', eta);
 };

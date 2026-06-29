@@ -13,6 +13,25 @@ import { logger } from '../../shared/logger/logger.js';
 import { invalidateAnalyticsPerformanceCache } from '../analytics/analytics.cache.js';
 import * as paymentsRepo from '../payments/payments.repo.js';
 import { PaymentStatus } from '../payments/payments.model.js';
+import type { BulkStatusUpdateInput } from './shipments.validation.js';
+
+const VALID_TRANSITIONS: Record<ShipmentStatus, ShipmentStatus[]> = {
+  [ShipmentStatus.CREATED]: [ShipmentStatus.IN_TRANSIT, ShipmentStatus.CANCELLED],
+  [ShipmentStatus.IN_TRANSIT]: [ShipmentStatus.DELIVERED, ShipmentStatus.CANCELLED],
+  [ShipmentStatus.DELIVERED]: [],
+  [ShipmentStatus.CANCELLED]: [],
+};
+
+type BulkUpdateResult = {
+  updated: number;
+  failed: Array<{ id: string; reason: string }>;
+};
+import {
+  readShipmentEtaCache,
+  writeShipmentEtaCache,
+  invalidateShipmentEtaCache,
+  type ShipmentEtaPayload,
+} from './shipmentsEta.cache.js';
 
 type ShipmentListResult = {
   data: IShipment[];
@@ -20,6 +39,136 @@ type ShipmentListResult = {
   limit: number;
   total: number;
 };
+
+type Coordinates = {
+  latitude: number;
+  longitude: number;
+};
+
+type TelemetryPoint = {
+  latitude: number;
+  longitude: number;
+  timestamp: Date;
+};
+
+const ETA_POINTS_WINDOW = 8;
+const MIN_EFFECTIVE_SPEED_KMH = 5;
+const DEFAULT_SINGLE_POINT_SPEED_KMH = 40;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function readNumberField(record: Record<string, unknown>, keys: string[]): number | null {
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return value;
+    }
+  }
+
+  return null;
+}
+
+function extractCoordinates(value: unknown): Coordinates | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const latitude = readNumberField(value, ['latitude', 'lat']);
+  const longitude = readNumberField(value, ['longitude', 'lng', 'lon']);
+
+  if (latitude === null || longitude === null) {
+    return null;
+  }
+
+  return { latitude, longitude };
+}
+
+function resolveDestinationCoordinates(metadata: unknown): Coordinates | null {
+  if (!isRecord(metadata)) {
+    return null;
+  }
+
+  const direct = extractCoordinates(metadata.destinationCoordinates);
+  if (direct) {
+    return direct;
+  }
+
+  const nestedDestination = extractCoordinates(metadata.destination);
+  if (nestedDestination) {
+    return nestedDestination;
+  }
+
+  const route = isRecord(metadata.route) ? metadata.route : null;
+  const routeDestination = route ? extractCoordinates(route.destination) : null;
+  if (routeDestination) {
+    return routeDestination;
+  }
+
+  return null;
+}
+
+function toRadians(degrees: number): number {
+  return (degrees * Math.PI) / 180;
+}
+
+function calculateDistanceKm(from: Coordinates, to: Coordinates): number {
+  const earthRadiusKm = 6371;
+  const deltaLatitude = toRadians(to.latitude - from.latitude);
+  const deltaLongitude = toRadians(to.longitude - from.longitude);
+
+  const a =
+    Math.sin(deltaLatitude / 2) * Math.sin(deltaLatitude / 2) +
+    Math.cos(toRadians(from.latitude)) *
+      Math.cos(toRadians(to.latitude)) *
+      Math.sin(deltaLongitude / 2) *
+      Math.sin(deltaLongitude / 2);
+
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return earthRadiusKm * c;
+}
+
+function calculateAverageSpeedKmh(points: TelemetryPoint[]): number {
+  if (points.length < 2) {
+    return DEFAULT_SINGLE_POINT_SPEED_KMH;
+  }
+
+  const chronological = [...points].reverse();
+  let distanceKm = 0;
+  let elapsedHours = 0;
+
+  for (let index = 1; index < chronological.length; index += 1) {
+    const previous = chronological[index - 1];
+    const current = chronological[index];
+
+    const segmentHours = (current.timestamp.getTime() - previous.timestamp.getTime()) / 3600000;
+    if (segmentHours <= 0) {
+      continue;
+    }
+
+    distanceKm += calculateDistanceKm(previous, current);
+    elapsedHours += segmentHours;
+  }
+
+  if (elapsedHours <= 0) {
+    return DEFAULT_SINGLE_POINT_SPEED_KMH;
+  }
+
+  return distanceKm / elapsedHours;
+}
+
+function inferEtaConfidence(pointsCount: number, averageSpeed: number): 'LOW' | 'MEDIUM' | 'HIGH' {
+  if (pointsCount >= 6 && averageSpeed >= 15) {
+    return 'HIGH';
+  }
+
+  if (pointsCount >= 3 && averageSpeed >= 8) {
+    return 'MEDIUM';
+  }
+
+  return 'LOW';
+}
 
 /**
  * Queries shipments directly by filter, skip, and limit.
@@ -193,6 +342,7 @@ export const updateShipmentStatusService = async (
 
   await shipment.save();
   await invalidateAnalyticsPerformanceCache();
+  await invalidateShipmentEtaCache(id);
 
   // Trigger escrow release on delivery
   if (status === ShipmentStatus.DELIVERED) {
@@ -210,6 +360,9 @@ export const updateShipmentStatusService = async (
             PaymentStatus.RELEASED,
             releaseResult.transactionHash
           );
+          console.log(
+            `[Shipment] Escrow released for shipment ${id}, ` +
+              `tx: ${releaseResult.transactionHash}`
           logger.info(
             { shipmentId: id, transactionHash: releaseResult.transactionHash },
             'Escrow released for shipment'
@@ -217,6 +370,7 @@ export const updateShipmentStatusService = async (
         }
       }
     } catch (escrowError) {
+      console.warn(`[Shipment] Failed to trigger escrow release for ${id}:`, escrowError);
       logger.warn({ err: escrowError, shipmentId: id }, 'Failed to trigger escrow release');
       // Don't fail the shipment status update if escrow release fails
       // The payment status can be manually updated later via webhook
@@ -290,6 +444,51 @@ export const uploadShipmentProofService = async (
   return shipment;
 };
 
+const EXPORT_MAX_RECORDS = 10_000;
+
+/**
+ * Exports shipments matching the given filters as an array (max 10,000).
+ * Returns 400 if the result set exceeds the limit.
+ */
+export const exportShipmentsService = async (params: {
+  organizationId?: string;
+  status?: string;
+  origin?: string;
+  destination?: string;
+  startDate?: string;
+  endDate?: string;
+}): Promise<IShipment[]> => {
+  const { organizationId, status, origin, destination, startDate, endDate } = params;
+  const query: FilterQuery<unknown> = {};
+
+  if (organizationId) query.organizationId = organizationId;
+  if (status) query.status = status;
+  if (origin) {
+    const escaped = origin.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    query.origin = { $regex: escaped, $options: 'i' };
+  }
+  if (destination) {
+    const escaped = destination.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    query.destination = { $regex: escaped, $options: 'i' };
+  }
+  if (startDate || endDate) {
+    query.createdAt = {};
+    if (startDate) (query.createdAt as Record<string, unknown>).$gte = new Date(startDate);
+    if (endDate) (query.createdAt as Record<string, unknown>).$lte = new Date(endDate);
+  }
+
+  const count = await Shipment.countDocuments(query);
+  if (count > EXPORT_MAX_RECORDS) {
+    throw new AppError(
+      400,
+      `Export exceeds ${EXPORT_MAX_RECORDS} records (${count} found). Please narrow your filters.`,
+      'EXPORT_TOO_LARGE'
+    );
+  }
+
+  return Shipment.find(query).sort({ createdAt: -1 }).limit(EXPORT_MAX_RECORDS).lean();
+};
+
 /**
  * Soft deletes a shipment and cascades deletion markers to related telemetry and anomaly documents.
  * @param {string} id - Shipment ObjectId.
@@ -305,4 +504,62 @@ export const deleteShipmentService = async (id: string) => {
   ]);
 
   return shipment;
+};
+
+export const getShipmentEtaService = async (id: string): Promise<ShipmentEtaPayload> => {
+  const cached = await readShipmentEtaCache(id);
+  if (cached) {
+    return cached;
+  }
+
+  const shipment = await Shipment.findById(id).lean();
+  if (!shipment) {
+    throw new AppError(404, 'Shipment not found', 'ERR_SHIPMENT_NOT_FOUND');
+  }
+
+  if (shipment.status !== ShipmentStatus.IN_TRANSIT) {
+    const nonTransitPayload: ShipmentEtaPayload = {
+      estimatedArrival: null,
+      reason: `ETA is available only for ${ShipmentStatus.IN_TRANSIT} shipments`,
+    };
+    await writeShipmentEtaCache(id, nonTransitPayload);
+    return nonTransitPayload;
+  }
+
+  const destination = resolveDestinationCoordinates(shipment.offChainMetadata);
+  if (!destination) {
+    throw new AppError(
+      400,
+      'Destination coordinates are missing in shipment metadata',
+      'ERR_SHIPMENT_ETA_DESTINATION_MISSING'
+    );
+  }
+
+  const points = (await Telemetry.find({ shipmentId: id })
+    .select('latitude longitude timestamp')
+    .sort({ timestamp: -1, _id: -1 })
+    .limit(ETA_POINTS_WINDOW)
+    .lean()) as TelemetryPoint[];
+
+  if (points.length === 0) {
+    throw new AppError(404, 'No GPS telemetry data points found', 'ERR_SHIPMENT_ETA_NO_GPS');
+  }
+
+  const latest = points[0];
+  const distanceRemaining = calculateDistanceKm(latest, destination);
+  const averageSpeedRaw = calculateAverageSpeedKmh(points);
+  const averageSpeed = Math.max(averageSpeedRaw, MIN_EFFECTIVE_SPEED_KMH);
+  const confidence = inferEtaConfidence(points.length, averageSpeedRaw);
+  const etaHours = distanceRemaining / averageSpeed;
+  const estimatedArrival = new Date(Date.now() + etaHours * 3600000).toISOString();
+
+  const payload: ShipmentEtaPayload = {
+    estimatedArrival,
+    distanceRemaining: Number(distanceRemaining.toFixed(3)),
+    averageSpeed: Number(averageSpeed.toFixed(3)),
+    confidence,
+  };
+
+  await writeShipmentEtaCache(id, payload);
+  return payload;
 };

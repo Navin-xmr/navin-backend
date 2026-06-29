@@ -1,16 +1,12 @@
-import mongoose from 'mongoose';
+import { OrganizationType } from '../../shared/types/user.js';
+import { UserRole } from '../../shared/constants/index.js';
 import { isoDatePlugin } from '../../shared/plugins/isoDatePlugin.js';
-import { IOrganization, OrganizationType, IUser, UserRole } from '../../shared/types/user.js';
+import mongoose from 'mongoose';
+import { IUser, IOrganization } from '../../shared/types/user.js';
 
-const OrganizationSchema = new mongoose.Schema(
-  {
-    name: { type: String, required: true, unique: true },
-    type: { type: String, enum: Object.values(OrganizationType), required: true },
-  },
-  { timestamps: true }
-);
-
-OrganizationSchema.plugin(isoDatePlugin);
+// Re-export OrganizationModel and OrganizationType from organizations module for backward compatibility
+export { OrganizationType } from '../../shared/types/user.js';
+export { OrganizationModel } from '../organizations/organizations.model.js';
 
 const UserSchema = new mongoose.Schema(
   {
@@ -26,8 +22,8 @@ const UserSchema = new mongoose.Schema(
     timestamps: true,
     toJSON: {
       transform: (_doc, ret) => {
-        const result = ret as any;
-        delete result.passwordHash;
+        const result = ret as unknown;
+        delete (result as Record<string, unknown>).passwordHash;
         return result;
       },
     },
@@ -55,9 +51,6 @@ UserSchema.pre(['find', 'findOne', 'findOneAndUpdate', 'countDocuments'], functi
 UserSchema.pre('aggregate', function () {
   this.pipeline().unshift({ $match: { deletedAt: null } });
 });
-
-export const OrganizationModel = mongoose.model<IOrganization>('Organization', OrganizationSchema);
-export { OrganizationType };
 
 export const UserModel = mongoose.model<IUser>('User', UserSchema);
 export { UserRole };
