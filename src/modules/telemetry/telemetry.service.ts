@@ -9,6 +9,10 @@ import type {
   AnomalyAlertPayload,
   TelemetryUpdatePayload,
 } from '../../shared/types/socketEvents.js';
+import type { BulkTelemetryItem } from './telemetry.validation.js';
+import { AppError } from '../../shared/http/errors.js';
+import { pushStellarAnchorJob, pushAlertJob } from '../../infra/redis/queue.js';
+import { invalidateShipmentEtaCache } from '../shipments/shipmentsEta.cache.js';
 import type { BulkTelemetryItem, TelemetryThresholds } from './telemetry.validation.js';
 import { AppError } from '../../shared/http/errors.js';
 import { pushStellarAnchorJob, pushAlertJob } from '../../infra/redis/queue.js';
@@ -217,6 +221,7 @@ export async function bulkIngestTelemetry(items: BulkTelemetryItem[]) {
     });
 
     createdIds.push(telemetry._id.toString());
+    await invalidateShipmentEtaCache(shipmentId);
 
     await pushStellarAnchorJob({
       telemetryId: telemetry._id.toString(),

@@ -6,6 +6,8 @@ export interface IOrganization {
   _id: string;
   name: string;
   type: OrganizationType;
+  settings?: Record<string, unknown>;
+  deletedAt?: Date;
   createdAt: Date;
   updatedAt: Date;
 }

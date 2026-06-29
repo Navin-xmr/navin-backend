@@ -8,6 +8,8 @@ import {
   patchShipmentStatus,
   uploadShipmentProof,
   deleteShipment,
+  getShipmentEta,
+  exportShipments,
 } from './shipments.controller.js';
 import { requireRole } from '../../shared/middleware/requireRole.js';
 import { requireAuth } from '../../shared/middleware/requireAuth.js';
@@ -20,12 +22,22 @@ import {
   ShipmentPatchBodySchema,
   ShipmentProofBodySchema,
   ShipmentStatusBodySchema,
+  BulkStatusUpdateBodySchema,
+  ExportShipmentsQuerySchema,
 } from './shipments.validation.js';
 
 import { UserRole } from '../../shared/constants/index.js';
 
 export const shipmentsRouter = Router();
 const upload = multer({ storage: multer.memoryStorage() });
+
+shipmentsRouter.get(
+  '/export',
+  requireAuth,
+  requireRole(UserRole.ADMIN, UserRole.MANAGER),
+  validate({ query: ExportShipmentsQuerySchema }),
+  asyncHandler(exportShipments)
+);
 
 shipmentsRouter.get(
   '/',
@@ -68,6 +80,13 @@ shipmentsRouter.delete(
   requireRole(UserRole.ADMIN, UserRole.MANAGER),
   validateRequest({ params: ShipmentIdParamSchema }),
   asyncHandler(deleteShipment)
+);
+
+shipmentsRouter.get(
+  '/:id/eta',
+  requireAuth,
+  validateRequest({ params: ShipmentIdParamSchema }),
+  asyncHandler(getShipmentEta)
 );
 
 export default shipmentsRouter;

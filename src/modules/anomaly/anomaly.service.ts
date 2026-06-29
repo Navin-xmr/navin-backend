@@ -118,21 +118,104 @@ export async function getAnomaliesService(params: {
 }
 
 /**
- * Resolves an existing anomaly record.
+ * Resolves an existing anomaly record, recording who resolved it and an optional note.
  * @param {string} id - Anomaly ObjectId.
+ * @param {string} resolvedBy - ID of the authenticated user performing the resolution.
+ * @param {string=} note - Optional resolution note explaining why it was resolved.
  * @returns {Promise<unknown>} Updated anomaly document.
  * @throws {Error} When the anomaly cannot be found.
  */
-export async function resolveAnomalyService(id: string) {
-  const anomaly = await Anomaly.findByIdAndUpdate(
-    id,
-    { resolved: true },
-    { new: true, runValidators: true }
-  ).lean();
+export async function resolveAnomalyService(id: string, resolvedBy: string, note?: string) {
+  const update: Record<string, unknown> = {
+    resolved: true,
+    resolvedAt: new Date(),
+    resolvedBy,
+  };
+  if (note !== undefined) {
+    update.resolutionNote = note;
+  }
+
+  const anomaly = await Anomaly.findByIdAndUpdate(id, update, {
+    new: true,
+    runValidators: true,
+  }).lean();
 
   if (!anomaly) {
     throw new Error('Anomaly not found');
   }
 
   return anomaly;
+}
+
+/**
+ * Returns aggregated anomaly statistics for dashboard widgets.
+ * Results are cached in Redis for 5 minutes.
+ */
+export async function getAnomalyStatsService(organizationId?: string) {
+  const { getRedisClient } = await import('../../infra/redis/connection.js');
+  const STATS_CACHE_KEY = `anomaly:stats:${organizationId ?? 'global'}`;
+  const STATS_CACHE_TTL = 300;
+
+  let client: import('ioredis').Redis | null = null;
+  try {
+    client = getRedisClient() as import('ioredis').Redis;
+    const cached = await client.get(STATS_CACHE_KEY);
+    if (cached) {
+      return JSON.parse(cached);
+    }
+  } catch {
+    client = null;
+  }
+
+  const matchStage: Record<string, unknown> = { deletedAt: null };
+  if (organizationId) {
+    matchStage.organizationId = organizationId;
+  }
+
+  const [result] = await Anomaly.aggregate([
+    { $match: matchStage },
+    {
+      $facet: {
+        totalActive: [{ $match: { resolved: false } }, { $count: 'count' }],
+        totalAll: [{ $count: 'count' }],
+        resolved: [{ $match: { resolved: true } }, { $count: 'count' }],
+        bySeverity: [
+          { $match: { resolved: false } },
+          { $group: { _id: '$severity', count: { $sum: 1 } } },
+        ],
+        byType: [
+          { $match: { resolved: false } },
+          { $group: { _id: '$type', count: { $sum: 1 } } },
+        ],
+      },
+    },
+  ]);
+
+  const totalActive: number = result.totalActive[0]?.count ?? 0;
+  const totalAll: number = result.totalAll[0]?.count ?? 0;
+  const resolvedCount: number = result.resolved[0]?.count ?? 0;
+
+  const bySeverity: Record<string, number> = { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0 };
+  for (const entry of result.bySeverity) {
+    bySeverity[entry._id] = entry.count;
+  }
+
+  const byType: Record<string, number> = {};
+  for (const entry of result.byType) {
+    byType[entry._id] = entry.count;
+  }
+
+  const resolutionRate = totalAll > 0 ? Math.round((resolvedCount / totalAll) * 100) / 100 : 0;
+
+  const stats = { totalActive, bySeverity, byType, resolutionRate };
+
+  try {
+    if (client) {
+      await client.set(STATS_CACHE_KEY, JSON.stringify(stats), 'EX', STATS_CACHE_TTL);
+    }
+  } catch {
+    // cache write failure is non-fatal
+  }
+
+  return stats;
 }

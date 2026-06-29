@@ -12,6 +12,7 @@ export const PerformanceQuerySchema = z
   .object({
     startDate: utcDateString,
     endDate: utcDateString,
+    granularity: z.enum(['daily', 'weekly', 'monthly']).optional(),
   })
   .refine(({ startDate, endDate }) => startDate <= endDate, {
     message: 'startDate must be <= endDate',

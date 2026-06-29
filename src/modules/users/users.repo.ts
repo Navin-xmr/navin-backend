@@ -14,6 +14,10 @@ export async function findUserByEmail(email: string) {
   return UserModel.findOne({ email }).lean();
 }
 
+export async function findUserById(id: string) {
+  return UserModel.findById(id).select('-passwordHash').lean();
+}
+
 export async function findUsersByOrganizationId(organizationId: string) {
   return UserModel.find({ organizationId }).select('-passwordHash').lean();
 }

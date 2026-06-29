@@ -62,3 +62,8 @@ export const listUsersController: RequestHandler = async (req, res) => {
 
   sendResponse(res, 200, true, 'Users retrieved successfully', users);
 };
+
+export const getCurrentUserController: RequestHandler = async (req, res) => {
+  const user = await usersService.getCurrentUser(req.user?.userId ?? '');
+  sendResponse(res, 200, true, 'User profile retrieved successfully', user);
+};
