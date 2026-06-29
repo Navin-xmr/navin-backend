@@ -10,7 +10,7 @@ import {
   getShipmentEtaService,
 } from './shipments.service.js';
 import { sendResponse } from '../../shared/http/sendResponse.js';
-import type { GetShipmentsQuery } from './shipments.validation.js';
+import type { GetShipmentsQuery, BulkStatusUpdateInput } from './shipments.validation.js';
 import { AppError } from '../../shared/http/errors.js';
 
 export const getShipments = async (req: Request, res: Response) => {

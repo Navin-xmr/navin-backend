@@ -14,6 +14,7 @@ import {
   createUserController,
   createTeamMemberController,
   deleteUserController,
+  getCurrentUserController,
   listUsersController,
   verifyInvitationController,
 } from './users.controller.js';
@@ -22,6 +23,12 @@ import { requireRole } from '../../shared/middleware/requireRole.js';
 import { UserRole } from '../../shared/constants/index.js';
 
 export const usersRouter = Router();
+
+usersRouter.get(
+  '/me',
+  requireAuth,
+  asyncHandler(getCurrentUserController)
+);
 
 usersRouter.post(
   '/',

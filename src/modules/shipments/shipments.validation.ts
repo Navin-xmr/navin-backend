@@ -13,6 +13,13 @@ export const getShipmentsQuerySchema = z
 
 export type GetShipmentsQuery = z.infer<typeof getShipmentsQuerySchema>;
 
+export const BulkStatusUpdateBodySchema = z.object({
+  shipmentIds: z.array(z.string().min(1)).min(1).max(50),
+  status: z.nativeEnum(ShipmentStatus),
+});
+
+export type BulkStatusUpdateInput = z.infer<typeof BulkStatusUpdateBodySchema>;
+
 export const CreateShipmentBodySchema = z.object({
   trackingNumber: z.string().optional(),
   origin: z.string().min(1),

@@ -21,6 +21,7 @@ import {
   ShipmentPatchBodySchema,
   ShipmentProofBodySchema,
   ShipmentStatusBodySchema,
+  BulkStatusUpdateBodySchema,
 } from './shipments.validation.js';
 
 import { UserRole } from '../../shared/constants/index.js';

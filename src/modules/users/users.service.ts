@@ -1,7 +1,7 @@
 import bcrypt from 'bcrypt';
 import { randomBytes } from 'crypto';
 import { AppError } from '../../shared/http/errors.js';
-import { createUser, findUserByEmail, findUsersByOrganizationId } from './users.repo.js';
+import { createUser, findUserByEmail, findUserById, findUsersByOrganizationId } from './users.repo.js';
 import { UserModel } from './users.model.js';
 import jwt from 'jsonwebtoken';
 import { env } from '../../env.js';
@@ -220,5 +220,19 @@ export async function acceptInvitation(input: { token: string; name: string; pas
     organizationId: invitation.organizationId,
   });
 
+  return user;
+}
+
+/**
+ * Gets the current authenticated user's profile.
+ * @param {string} userId - The ID of the current user.
+ * @returns {Promise<unknown>} The user's profile (without passwordHash).
+ * @throws {AppError} When the user is not found.
+ */
+export async function getCurrentUser(userId: string) {
+  const user = await findUserById(userId);
+  if (!user) {
+    throw new AppError(404, 'User not found', 'USER_NOT_FOUND');
+  }
   return user;
 }

@@ -13,6 +13,19 @@ import { logger } from '../../shared/logger/logger.js';
 import { invalidateAnalyticsPerformanceCache } from '../analytics/analytics.cache.js';
 import * as paymentsRepo from '../payments/payments.repo.js';
 import { PaymentStatus } from '../payments/payments.model.js';
+import type { BulkStatusUpdateInput } from './shipments.validation.js';
+
+const VALID_TRANSITIONS: Record<ShipmentStatus, ShipmentStatus[]> = {
+  [ShipmentStatus.CREATED]: [ShipmentStatus.IN_TRANSIT, ShipmentStatus.CANCELLED],
+  [ShipmentStatus.IN_TRANSIT]: [ShipmentStatus.DELIVERED, ShipmentStatus.CANCELLED],
+  [ShipmentStatus.DELIVERED]: [],
+  [ShipmentStatus.CANCELLED]: [],
+};
+
+type BulkUpdateResult = {
+  updated: number;
+  failed: Array<{ id: string; reason: string }>;
+};
 import {
   readShipmentEtaCache,
   writeShipmentEtaCache,

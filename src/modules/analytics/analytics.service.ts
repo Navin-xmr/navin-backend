@@ -1,4 +1,5 @@
 import { Shipment } from '../shipments/shipments.model.js';
+import { Anomaly } from '../anomaly/anomaly.model.js';
 import {
   analyticsPerformanceCacheKey,
   readAnalyticsPerformanceCache,
@@ -16,6 +17,12 @@ export type AnalyticsDashboardPayload = {
     averageDeliveryTimeMs: number;
   }>;
   totalDelayedShipments: number;
+  timeSeries: Array<{
+    date: string;
+    shipmentCount: number;
+    deliveredCount: number;
+    anomalyCount: number;
+  }>;
 };
 
 type AggregationRow = {
@@ -28,7 +35,32 @@ type AggregationFacet = {
   shipmentsByStatus?: AggregationRow[];
   averageDeliveryTimeByLogisticsId?: AggregationRow[];
   delayedShipments?: Array<{ totalDelayed?: unknown }>;
+  timeSeries?: Array<{
+    _id: Date;
+    shipmentCount: number;
+    deliveredCount: number;
+  }>;
 };
+
+type AnomalyTimeSeriesRow = {
+  _id: Date;
+  count: number;
+};
+
+/**
+ * Calculates the default granularity based on date range length.
+ * Defaults to daily when date range ≤30 days, weekly otherwise.
+ * @param {Date} startDate - Start of the date range.
+ * @param {Date} endDate - End of the date range.
+ * @returns {'daily' | 'weekly' | 'monthly'} Default granularity.
+ */
+function calculateDefaultGranularity(startDate: Date, endDate: Date): 'daily' | 'weekly' | 'monthly' {
+  const daysDifference = (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24);
+  if (daysDifference <= 30) {
+    return 'daily';
+  }
+  return 'weekly';
+}
 
 /**
  * Builds analytics dashboard payload for a date range.
@@ -40,15 +72,19 @@ export async function getAnalyticsPerformance(
 ): Promise<AnalyticsDashboardPayload> {
   const startDate = query.startDate;
   const endDate = query.endDate;
-  const cacheKey = analyticsPerformanceCacheKey(startDate.toISOString(), endDate.toISOString());
+  const granularity = query.granularity || calculateDefaultGranularity(startDate, endDate);
+  const cacheKey = analyticsPerformanceCacheKey(startDate.toISOString(), endDate.toISOString(), granularity);
 
   const cached = await readAnalyticsPerformanceCache(cacheKey);
   if (cached) {
     return cached;
   }
 
+  // Map granularity to MongoDB dateTrunc unit
+  const dateTruncUnit = granularity === 'daily' ? 'day' : granularity === 'weekly' ? 'week' : 'month';
+
   // Performance window is based on shipment `createdAt` (the document timestamp).
-  const pipeline = [
+  const shipmentPipeline = [
     {
       $match: {
         createdAt: { $gte: startDate, $lte: endDate },
@@ -106,11 +142,31 @@ export async function getAnalyticsPerformance(
             $count: 'totalDelayed',
           },
         ],
+        timeSeries: [
+          {
+            $group: {
+              _id: {
+                $dateTrunc: {
+                  date: '$createdAt',
+                  unit: dateTruncUnit,
+                  timezone: 'UTC',
+                },
+              },
+              shipmentCount: { $sum: 1 },
+              deliveredCount: {
+                $sum: {
+                  $cond: [{ $ne: ['$deliveredTimestamp', null] }, 1, 0],
+                },
+              },
+            },
+          },
+          { $sort: { _id: 1 } },
+        ],
       },
     },
   ];
 
-  const [facet] = (await Shipment.aggregate(pipeline).option({
+  const [shipmentFacet] = (await Shipment.aggregate(shipmentPipeline).option({
     maxTimeMS: 5000,
   })) as AggregationFacet[];
 
@@ -119,6 +175,8 @@ export async function getAnalyticsPerformance(
     total: Number(row.total ?? 0),
   }));
 
+  const averageDeliveryTimeByLogisticsId = (shipmentFacet?.averageDeliveryTimeByLogisticsId ?? []).map(
+    (row: any) => ({
   const averageDeliveryTimeByLogisticsId = (facet?.averageDeliveryTimeByLogisticsId ?? []).map(
     (row: AggregationRow) => ({
       logisticsId: String(row._id),
@@ -126,7 +184,14 @@ export async function getAnalyticsPerformance(
     })
   );
 
-  const totalDelayedShipments = Number(facet?.delayedShipments?.[0]?.totalDelayed ?? 0);
+  const totalDelayedShipments = Number(shipmentFacet?.delayedShipments?.[0]?.totalDelayed ?? 0);
+
+  const timeSeries = (shipmentFacet?.timeSeries ?? []).map(row => ({
+    date: row._id.toISOString(),
+    shipmentCount: Number(row.shipmentCount ?? 0),
+    deliveredCount: Number(row.deliveredCount ?? 0),
+    anomalyCount: Number(anomalyMap.get(row._id.toISOString()) ?? 0),
+  }));
 
   const result = {
     startDate: startDate.toISOString(),
@@ -134,6 +199,7 @@ export async function getAnalyticsPerformance(
     shipmentsByStatus,
     averageDeliveryTimeByLogisticsId,
     totalDelayedShipments,
+    timeSeries,
   };
 
   await writeAnalyticsPerformanceCache(cacheKey, result);
