@@ -14,3 +14,9 @@ export const LoginBodySchema = z.object({
 
 export type SignupInput = z.infer<typeof SignupBodySchema>;
 export type LoginInput = z.infer<typeof LoginBodySchema>;
+
+export const RefreshBodySchema = z.object({
+  token: z.string().min(1),
+});
+
+export type RefreshInput = z.infer<typeof RefreshBodySchema>;
