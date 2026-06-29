@@ -22,6 +22,11 @@ export const AcceptInvitationBodySchema = z.object({
   password: z.string().min(6),
 });
 
-export const ListUsersQuerySchema = z.object({}).strict();
+export const ListUsersQuerySchema = z
+  .object({
+    limit: z.coerce.number().min(1).max(100).default(20),
+    cursor: z.string().optional(),
+  })
+  .strict();
 
 export type ListUsersQuery = z.infer<typeof ListUsersQuerySchema>;
