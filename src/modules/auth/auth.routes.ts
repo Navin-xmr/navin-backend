@@ -10,12 +10,15 @@ import {
   ForgotPasswordBodySchema,
   ResetPasswordBodySchema,
 } from './auth.validation.js';
+import { SignupBodySchema, LoginBodySchema, RefreshBodySchema } from './auth.validation.js';
+import { signupController, loginController, logoutController, refreshController } from './auth.controller.js';
 import {
   signupController,
   loginController,
   logoutController,
   forgotPasswordController,
   resetPasswordController,
+  refreshController,
 } from './auth.controller.js';
 import {
   createApiKeyController,
@@ -41,6 +44,11 @@ authRouter.post(
   asyncHandler(loginController)
 );
 authRouter.post('/logout', asyncHandler(requireAuth), asyncHandler(logoutController));
+authRouter.post(
+  '/refresh',
+  validateRequest({ body: RefreshBodySchema }),
+  asyncHandler(refreshController)
+);
 
 // PUBLIC: password-reset-flow
 authRouter.post(

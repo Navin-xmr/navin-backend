@@ -13,3 +13,7 @@ export const AnomalyQuerySchema = z.object({
 export const ResolveAnomalyParamsSchema = z.object({
   id: z.string().trim().min(1),
 });
+
+export const ResolveAnomalyBodySchema = z.object({
+  note: z.string().trim().max(1000).optional(),
+});

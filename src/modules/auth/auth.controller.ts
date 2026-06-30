@@ -1,5 +1,6 @@
 import type { RequestHandler } from 'express';
 import { signup, login, logout, forgotPassword, resetPassword } from './auth.service.js';
+import { signup, login, logout, refreshToken } from './auth.service.js';
 import { sendResponse } from '../../shared/http/sendResponse.js';
 
 export const signupController: RequestHandler = async (req, res) => {
@@ -26,4 +27,8 @@ export const forgotPasswordController: RequestHandler = async (req, res) => {
 export const resetPasswordController: RequestHandler = async (req, res) => {
   await resetPassword(req.body.token as string, req.body.newPassword as string);
   sendResponse(res, 200, true, 'Password reset successfully', null);
+export const refreshController: RequestHandler = async (req, res) => {
+  const { token } = req.body as { token: string };
+  const result = await refreshToken(token);
+  sendResponse(res, 200, true, 'Token refreshed', result);
 };

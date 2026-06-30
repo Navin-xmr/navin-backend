@@ -1,6 +1,7 @@
 import { jest, describe, beforeAll, it, expect } from '@jest/globals';
 import request from 'supertest';
 import type { Application } from 'express';
+import { createSocketIoMock, createStellarServiceMock, createUsersModelMock } from './helpers/mocks.js';
 
 type UserRecord = { _id: string; email: string; passwordHash: string; role: string } & Record<
   string,
@@ -8,49 +9,28 @@ type UserRecord = { _id: string; email: string; passwordHash: string; role: stri
 >;
 const usersData: UserRecord[] = [];
 
-await jest.unstable_mockModule('../src/modules/users/users.model.js', () => {
-  const UserModel = {
-    findOne: (query: { email: string }) => {
-      const user = usersData.find(u => u.email === query.email);
-      return Promise.resolve(user || null);
+await jest.unstable_mockModule('../src/modules/users/users.model.js', () =>
+  createUsersModelMock({
+    UserModel: {
+      findOne: jest.fn((query: { email: string }) => {
+        const user = usersData.find(u => u.email === query.email);
+        return Promise.resolve(user || null);
+      }),
+      create: jest.fn((data: Record<string, unknown>) => {
+        const user = { ...data, _id: String(usersData.length) } as UserRecord;
+        usersData.push(user);
+        return Promise.resolve(user);
+      }),
+      find: jest.fn(),
+      findById: jest.fn(),
+      findByIdAndUpdate: jest.fn(),
     },
-    create: (data: Record<string, unknown>) => {
-      const user = { ...data, _id: String(usersData.length) } as UserRecord;
-      usersData.push(user);
-      return Promise.resolve(user);
-    },
-  };
-  const OrganizationModel = {
-    findById: () => Promise.resolve(null),
-  };
-  const UserRole = {
-    SUPER_ADMIN: 'SUPER_ADMIN',
-    ADMIN: 'ADMIN',
-    MANAGER: 'MANAGER',
-    VIEWER: 'VIEWER',
-    CUSTOMER: 'CUSTOMER',
-  };
-  const OrganizationType = {
-    ENTERPRISE: 'ENTERPRISE',
-    LOGISTICS: 'LOGISTICS',
-  };
-  return { UserModel, OrganizationModel, UserRole, OrganizationType };
-});
+  })
+);
 
-await jest.unstable_mockModule('../src/services/stellar.service.js', () => ({
-  tokenizeShipment: jest.fn(),
-  anchorTelemetryHash: jest.fn(),
-  releaseEscrow: jest.fn(),
-  getStellarExplorerUrl: jest.fn(() => 'https://stellar.expert/explorer/testnet/tx/mock'),
-}));
+await jest.unstable_mockModule('../src/services/stellar.service.js', () => createStellarServiceMock());
 
-await jest.unstable_mockModule('../src/infra/socket/io.js', () => ({
-  initSocketIO: jest.fn(),
-  getIO: jest.fn(),
-  emitAnomalyDetected: jest.fn(),
-  emitTelemetryUpdate: jest.fn(),
-  emitStatusUpdate: jest.fn(),
-}));
+await jest.unstable_mockModule('../src/infra/socket/io.js', () => createSocketIoMock());
 
 describe('Login Rate Limiting', () => {
   let app: Application;

@@ -37,10 +37,19 @@ const ShipmentSchema = new Schema(
 
 ShipmentSchema.plugin(isoDatePlugin);
 
+// Optimizes filtering shipments by their operational status, sorted by creation date descending (newest first).
 ShipmentSchema.index({ status: 1, createdAt: -1 });
+
+// Optimizes retrieving shipments for a specific enterprise customer, sorted by creation date descending.
 ShipmentSchema.index({ enterpriseId: 1, createdAt: -1 });
+
+// Optimizes retrieving shipments for a specific logistics carrier, sorted by creation date descending.
 ShipmentSchema.index({ logisticsId: 1, createdAt: -1 });
+
+// Optimizes global shipment listings sorted by creation date descending with deterministic pagination.
 ShipmentSchema.index({ createdAt: -1, _id: -1 });
+
+// Multi-field text index optimizing free-text search across origin and destination locations.
 ShipmentSchema.index({ origin: 'text', destination: 'text' });
 
 // Soft delete middleware
