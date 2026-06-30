@@ -10,7 +10,7 @@ describe('shipment status cache invalidation', () => {
     const save = jest.fn(async () => undefined);
     const shipmentDoc = {
       _id: 'shipment-1',
-      status: 'CREATED',
+      status: 'IN_TRANSIT',
       milestones: [] as Array<Record<string, unknown>>,
       updatedAt: new Date(),
       save,

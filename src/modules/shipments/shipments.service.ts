@@ -13,6 +13,7 @@ import { logger } from '../../shared/logger/logger.js';
 import { invalidateAnalyticsPerformanceCache } from '../analytics/analytics.cache.js';
 import * as paymentsRepo from '../payments/payments.repo.js';
 import { PaymentStatus } from '../payments/payments.model.js';
+import { validateStatusTransition } from '../../shared/constants/shipmentStateMachine.js';
 import type { BulkStatusUpdateInput } from './shipments.validation.js';
 
 const VALID_TRANSITIONS: Record<ShipmentStatus, ShipmentStatus[]> = {
@@ -293,9 +294,7 @@ export const updateShipmentStatusService = async (
 
   if (shipment.status === status) return shipment;
 
-  if (!Object.values(ShipmentStatus).includes(status)) {
-    throw new Error('Invalid status');
-  }
+  validateStatusTransition(shipment.status as ShipmentStatus, status);
 
   const previousStatus = shipment.status;
   shipment.status = status;
