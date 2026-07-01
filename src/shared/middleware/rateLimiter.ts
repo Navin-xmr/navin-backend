@@ -1,15 +1,35 @@
 import rateLimit from 'express-rate-limit';
 import type { Request, Response } from 'express';
 import { sendResponse } from '../http/sendResponse.js';
+import { ErrorCodes } from '../http/errors.js';
 
 const isDev = process.env.NODE_ENV !== 'production';
+
+const createRateLimitHandler = (message: string) => (req: Request, res: Response) => {
+  const rateLimitState = (req as Request & { rateLimit?: { resetTime?: Date } }).rateLimit;
+  const retryAfter = rateLimitState?.resetTime
+    ? Math.max(1, Math.ceil((rateLimitState.resetTime.getTime() - Date.now()) / 1000))
+    : Math.ceil(isDev ? 60 : 15 * 60);
+
+  res.setHeader('Retry-After', String(retryAfter));
+
+  sendResponse(
+    res,
+    429,
+    false,
+    message,
+    null,
+    undefined,
+    { retryAfter }
+  );
+};
 
 export const standardLimiter = rateLimit({
   windowMs: isDev ? 60 * 1000 : 15 * 60 * 1000,
   limit: 100,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { success: false, message: 'Too many requests, please try again later.' },
+  handler: createRateLimitHandler('Too many requests, please try again later.'),
 });
 
 export const strictLimiter = rateLimit({
@@ -17,7 +37,7 @@ export const strictLimiter = rateLimit({
   limit: 10,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { success: false, message: 'Too many requests, please slow down.' },
+  handler: createRateLimitHandler('Too many requests, please slow down.'),
 });
 
 export const loginLimiter = rateLimit({

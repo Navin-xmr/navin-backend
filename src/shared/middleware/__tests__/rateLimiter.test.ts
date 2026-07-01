@@ -25,6 +25,28 @@ describe('standardLimiter', () => {
     const res = await request(app).get('/test');
     expect(res.headers['ratelimit-limit']).toBeDefined();
     expect(res.headers['ratelimit-remaining']).toBeDefined();
+    expect(res.headers['ratelimit-reset']).toBeDefined();
+  });
+
+  it('returns standard error envelope on 429 with Retry-After header', async () => {
+    jest.resetModules();
+    const { standardLimiter: freshLimiter } = await import('../rateLimiter.js');
+    const app = buildTestApp(freshLimiter);
+
+    for (let i = 0; i < 100; i += 1) {
+      await request(app).get('/test');
+    }
+
+    const res = await request(app).get('/test');
+    expect(res.status).toBe(429);
+    expect(res.body).toEqual({
+      success: false,
+      message: 'Too many requests, please try again later.',
+      data: null,
+      retryAfter: expect.any(Number),
+    });
+    expect(res.headers['retry-after']).toBeDefined();
+    expect(Number(res.headers['retry-after'])).toBeGreaterThan(0);
   });
 
   it('uses a one-minute window in development', async () => {

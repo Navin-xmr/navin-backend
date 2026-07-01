@@ -2,6 +2,16 @@ openapi: 3.0.0
 info:
   title: Navin Backend API
   version: 1.0.0
+x-rate-limit:
+  standard:
+    limit: 100
+    window: 15 minutes
+  strict:
+    limit: 20
+    window: 15 minutes
+  login:
+    limit: 5
+    window: 15 minutes
 paths:
   /api/webhooks/iot:
     post:
@@ -1207,17 +1217,17 @@ paths:
                         updatedAt:
                           type: string
                           format: date-time
-meta:
-                     type: object
-                     properties:
-                       nextCursor:
-                         type: string
-                         nullable: true
-                       hasMore:
-                         type: boolean
-                       page:
-                         type: integer
-   /api/organizations:
+                  meta:
+                    type: object
+                    properties:
+                      nextCursor:
+                        type: string
+                        nullable: true
+                      hasMore:
+                        type: boolean
+                      page:
+                        type: integer
+  /api/organizations:
      post:
        summary: Create an organization
        description: Creates a new organization. Requires SUPER_ADMIN role.

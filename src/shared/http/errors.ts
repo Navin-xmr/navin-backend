@@ -66,6 +66,7 @@ export const ErrorCodes = {
   INVALID_TRANSITION: 'ERR_SHIPMENT_INVALID_TRANSITION',
   STELLAR_CONFIG: 'ERR_STELLAR_CONFIG',
   STELLAR_INVALID_HASH: 'ERR_STELLAR_INVALID_HASH',
+  RATE_LIMIT_EXCEEDED: 'ERR_RATE_LIMIT_EXCEEDED',
 } as const;
 
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];
