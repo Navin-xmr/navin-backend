@@ -1833,6 +1833,17 @@ paths:
           schema:
             type: string
           description: Anomaly ID
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                note:
+                  type: string
+                  maxLength: 1000
+                  description: Optional resolution note
       responses:
         '200':
           description: Anomaly resolved
