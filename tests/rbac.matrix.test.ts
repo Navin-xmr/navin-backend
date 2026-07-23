@@ -308,6 +308,37 @@ describe('RBAC Matrix Integration Tests', () => {
   }
 
   describe('Role-Based Access Control Matrix', () => {
+    // Test POST /api/users (admin-only user creation)
+    describe('POST /api/users', () => {
+      for (const role of ROLES) {
+        const allowedRoles = RBAC_MATRIX['POST /api/users'];
+        const shouldAllow = allowedRoles.includes(role);
+
+        it(`${role} ${shouldAllow ? 'should access' : 'should NOT access'} POST /api/users`, async () => {
+          const token = generateToken(role);
+
+          const res = await request(app)
+            .post('/api/users')
+            .set('Authorization', `Bearer ${token}`)
+            .send({ email: 'newuser@test.com', name: 'New User' });
+
+          if (shouldAllow) {
+            expect([201, 400, 409]).toContain(res.status);
+          } else {
+            expect(res.status).toBe(403);
+          }
+        });
+      }
+
+      it('should reject unauthenticated requests with 401', async () => {
+        const res = await request(app)
+          .post('/api/users')
+          .send({ email: 'newuser@test.com', name: 'New User' });
+
+        expect(res.status).toBe(401);
+      });
+    });
+
     // Test POST /api/shipments (create)
     describe('POST /api/shipments', () => {
       for (const role of ROLES) {
@@ -538,7 +569,7 @@ describe('RBAC Matrix Integration Tests', () => {
       expect(res.status).toBe(403);
     });
 
-    it('VIEWER can hit public user registration endpoint', async () => {
+    it('VIEWER should NOT be able to create users (admin-only endpoint)', async () => {
       const token = generateToken(UserRole.VIEWER);
 
       const res = await request(app)
@@ -551,7 +582,7 @@ describe('RBAC Matrix Integration Tests', () => {
           role: UserRole.VIEWER,
         });
 
-      expect([201, 400, 409]).toContain(res.status);
+      expect(res.status).toBe(403);
     });
 
     it('VIEWER should be able to read shipments', async () => {

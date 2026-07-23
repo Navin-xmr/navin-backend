@@ -25,14 +25,13 @@ describe('TelemetrySchema index definitions', () => {
   });
 });
 
-import { getTelemetryThresholds } from '../src/modules/telemetry/telemetry.service.js';
-
 /**
  * Unit tests for getTelemetryThresholds service function.
  * Validates Requirement 2.3.
  */
 describe('getTelemetryThresholds', () => {
-  it('returns the hardcoded threshold object { maxTemp: 85, maxHumidity: 90, minBatteryLevel: 20 }', () => {
+  it('returns the hardcoded threshold object { maxTemp: 85, maxHumidity: 90, minBatteryLevel: 20 }', async () => {
+    const { getTelemetryThresholds } = await import('../src/modules/telemetry/telemetry.service.js');
     const result = getTelemetryThresholds();
     expect(result).toEqual({ maxTemp: 85, maxHumidity: 90, minBatteryLevel: 20 });
   });
@@ -41,6 +40,8 @@ describe('getTelemetryThresholds', () => {
 import request from 'supertest';
 import jwt from 'jsonwebtoken';
 import type { Application } from 'express';
+
+const socketIoPath = new URL('../src/infra/socket/io.js', import.meta.url).href;
 
 /**
  * Regression tests for controller bug fixes in getTelemetry.
@@ -109,7 +110,7 @@ describe('getTelemetry controller bug fixes', () => {
         },
       }));
 
-      await jest.unstable_mockModule('../src/infra/socket/io.js', () => ({
+      await jest.unstable_mockModule(socketIoPath, () => ({
         initSocketIO: jest.fn(),
         getIO: jest.fn(),
         emitAnomalyDetected: jest.fn(),
@@ -164,7 +165,7 @@ describe('getTelemetry controller bug fixes', () => {
         markTelemetryAnchorFailed: jest.fn(),
       }));
 
-      await jest.unstable_mockModule('../src/infra/socket/io.js', () => ({
+      await jest.unstable_mockModule(socketIoPath, () => ({
         initSocketIO: jest.fn(),
         getIO: jest.fn(),
         emitAnomalyDetected: jest.fn(),
@@ -250,7 +251,7 @@ describe('GET /api/telemetry/thresholds', () => {
     jest.clearAllMocks();
     jest.resetModules();
 
-    await jest.unstable_mockModule('../src/infra/socket/io.js', () => ({
+    await jest.unstable_mockModule(socketIoPath, () => ({
       initSocketIO: jest.fn(),
       getIO: jest.fn(),
       emitAnomalyDetected: jest.fn(),
@@ -387,6 +388,7 @@ describe('POST /api/telemetry/bulk — Socket.io broadcast (example-based)', () 
   let app: Application;
 
   beforeEach(async () => {
+    jest.resetModules();
     jest.clearAllMocks();
 
     let createCallCount = 0;
@@ -406,7 +408,7 @@ describe('POST /api/telemetry/bulk — Socket.io broadcast (example-based)', () 
         )
     );
 
-    await jest.unstable_mockModule('../src/infra/socket/io.js', () => ({
+    await jest.unstable_mockModule(socketIoPath, () => ({
       initSocketIO: jest.fn(),
       getIO: jest.fn(),
       emitAnomalyDetected: jest.fn(),
@@ -522,7 +524,7 @@ describe('bulkIngestTelemetry — Property 1: emit count equals item count', () 
       const mockEmit = jest.fn();
       let createCallCount = 0;
 
-      await jest.unstable_mockModule('../src/infra/socket/io.js', () => ({
+      await jest.unstable_mockModule(socketIoPath, () => ({
         initSocketIO: jest.fn(),
         getIO: jest.fn(),
         emitAnomalyDetected: jest.fn(),
@@ -629,7 +631,7 @@ describe('bulkIngestTelemetry — Property 2: emit payload contains all required
       const mockEmit = jest.fn();
       let createCallCount = 0;
 
-      await jest.unstable_mockModule('../src/infra/socket/io.js', () => ({
+      await jest.unstable_mockModule(socketIoPath, () => ({
         initSocketIO: jest.fn(),
         getIO: jest.fn(),
         emitAnomalyDetected: jest.fn(),

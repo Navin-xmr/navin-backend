@@ -3,7 +3,12 @@ import * as usersService from './users.service.js';
 import { sendResponse } from '../../shared/http/sendResponse.js';
 
 export const createUserController: RequestHandler = async (req, res) => {
-  const user = await usersService.registerUser(req.body);
+  const user = await usersService.registerUser({
+    email: req.body.email,
+    name: req.body.name,
+    role: req.body.role,
+    organizationId: req.user?.organizationId,
+  });
   sendResponse(res, 201, true, 'User registered successfully', user);
 };
 
@@ -50,10 +55,22 @@ export const acceptInvitationController: RequestHandler = async (req, res) => {
 };
 
 export const listUsersController: RequestHandler = async (req, res) => {
-  const users = await usersService.listOrganizationUsers({
+  const query = req.query as unknown as import('./users.validation.js').ListUsersQuery;
+  const result = await usersService.listOrganizationUsers({
     organizationId: req.user?.organizationId,
     role: req.user?.role,
+    limit: query.limit,
+    cursor: query.cursor,
   });
 
-  sendResponse(res, 200, true, 'Users retrieved successfully', users);
+  sendResponse(res, 200, true, 'Users retrieved successfully', result.data, {
+    total: result.total,
+    hasMore: result.hasMore,
+    nextCursor: result.nextCursor,
+  });
+};
+
+export const getCurrentUserController: RequestHandler = async (req, res) => {
+  const user = await usersService.getCurrentUser(req.user?.userId ?? '');
+  sendResponse(res, 200, true, 'User profile retrieved successfully', user);
 };

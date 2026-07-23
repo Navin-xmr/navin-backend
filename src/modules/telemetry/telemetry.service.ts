@@ -9,6 +9,10 @@ import type {
   AnomalyAlertPayload,
   TelemetryUpdatePayload,
 } from '../../shared/types/socketEvents.js';
+import type { BulkTelemetryItem } from './telemetry.validation.js';
+import { AppError } from '../../shared/http/errors.js';
+import { pushStellarAnchorJob, pushAlertJob } from '../../infra/redis/queue.js';
+import { invalidateShipmentEtaCache } from '../shipments/shipmentsEta.cache.js';
 import type { BulkTelemetryItem, TelemetryThresholds } from './telemetry.validation.js';
 import { AppError, ErrorCodes } from '../../shared/http/errors.js';
 import { pushStellarAnchorJob, pushAlertJob } from '../../infra/redis/queue.js';
@@ -218,6 +222,7 @@ export async function bulkIngestTelemetry(items: BulkTelemetryItem[]) {
     });
 
     createdIds.push(telemetry._id.toString());
+    await invalidateShipmentEtaCache(shipmentId);
 
     await pushStellarAnchorJob({
       telemetryId: telemetry._id.toString(),
@@ -255,7 +260,7 @@ export async function bulkIngestTelemetry(items: BulkTelemetryItem[]) {
 
         if (result.detected) {
           await Promise.all(
-            result.anomalies.map(async (anomaly) => {
+            result.anomalies.map(async anomaly => {
               const anomalyPayload: AnomalyAlertPayload = {
                 anomalyId: anomaly._id,
                 shipmentId: anomaly.shipmentId,
@@ -284,7 +289,8 @@ export async function bulkIngestTelemetry(items: BulkTelemetryItem[]) {
       } catch (err) {
         logger.error({ err, shipmentId }, 'Background anomaly detection failed');
       }
-    });  }
+    });
+  }
 
   return { insertedCount: createdIds.length, insertedIds: createdIds };
 }

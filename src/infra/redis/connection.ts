@@ -36,6 +36,15 @@ export function getRedisConnection(): Redis {
   return getRedisClient();
 }
 
+/** Returns connection details suitable for BullMQ Worker/Queue constructors. */
+export function getBullMQConnection(): { host: string; port: number } {
+  const client = getRedisClient();
+  return {
+    host: client.options.host ?? '127.0.0.1',
+    port: client.options.port ?? 6379,
+  };
+}
+
 export async function disconnectRedis(): Promise<void> {
   if (redisClient) {
     await (redisClient as import('ioredis').Redis).quit();

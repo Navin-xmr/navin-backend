@@ -1,5 +1,9 @@
 import type { Request, Response } from 'express';
-import { getTelemetryService, bulkIngestTelemetry, getTelemetryThresholds } from './telemetry.service.js';
+import {
+  getTelemetryService,
+  bulkIngestTelemetry,
+  getTelemetryThresholds,
+} from './telemetry.service.js';
 import { sendResponse } from '../../shared/http/sendResponse.js';
 import type { BulkTelemetryBody } from './telemetry.validation.js';
 

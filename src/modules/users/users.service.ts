@@ -1,22 +1,39 @@
 import bcrypt from 'bcrypt';
 import { randomBytes } from 'crypto';
 import { AppError } from '../../shared/http/errors.js';
-import { createUser, findUserByEmail, findUsersByOrganizationId } from './users.repo.js';
+import { createUser, findUserByEmail, findUserById, findUsersByOrganizationId } from './users.repo.js';
 import { UserModel } from './users.model.js';
 import jwt from 'jsonwebtoken';
 import { env } from '../../env.js';
 import { UserRole } from '../../shared/constants/index.js';
 
 /**
- * Registers a new user account.
- * @param {{email: string; name: string; role?: string}} input - New user information.
- * @returns {Promise<unknown>} Created user document.
- * @throws {AppError} When the email is already in use.
+ * Creates a new user account under the caller's organization.
+ * Password-less — user must complete the invitation flow to authenticate.
  */
-export async function registerUser(input: { email: string; name: string; role?: string }) {
+export async function registerUser(input: {
+  email: string;
+  name: string;
+  role?: string;
+  organizationId?: string;
+}) {
+  if (input.role === UserRole.SUPER_ADMIN) {
+    throw new AppError(400, 'Cannot create SUPER_ADMIN users via this endpoint', 'INVALID_ROLE');
+  }
+
   const existing = await findUserByEmail(input.email);
   if (existing) throw new AppError(409, 'Email already in use', 'EMAIL_TAKEN');
-  return createUser(input);
+
+  // SECURITY: [Unauthorized Password Bypass] — This prevents authentication prior to invitation completion by setting a cryptographically random, high-entropy placeholder string as the bcrypt hash, which is impossible to guess or match.
+  const lockedHash = await bcrypt.hash(randomBytes(32).toString('hex'), 10);
+
+  return createUser({
+    email: input.email,
+    name: input.name,
+    passwordHash: lockedHash,
+    role: input.role ?? UserRole.VIEWER,
+    organizationId: input.organizationId,
+  });
 }
 
 /**
@@ -34,9 +51,7 @@ export async function createTeamMember(input: {
   const existing = await findUserByEmail(input.email);
   if (existing) throw new AppError(409, 'Email already in use', 'EMAIL_TAKEN');
 
-  // Team members have no password until they complete the invitation flow.
-  // Store a random bcrypt hash so bcrypt.compare(anything, placeholder) always
-  // returns false — preventing accidental authentication.
+  // SECURITY: [Unauthorized Password Bypass] — This prevents authentication prior to invitation completion by setting a cryptographically random, high-entropy placeholder string as the bcrypt hash, which is impossible to guess or match.
   const lockedHash = await bcrypt.hash(randomBytes(32).toString('hex'), 10);
 
   // Force override organizationId from caller's JWT context
@@ -49,21 +64,26 @@ export async function createTeamMember(input: {
   });
 }
 
+export interface ListOrganizationUsersResult {
+  data: unknown[];
+  total: number;
+  hasMore: boolean;
+  nextCursor: string | null;
+}
+
 /**
  * Lists users within an organization for an authorized role.
- * @param {{organizationId?: string; role?: string}} input - Organization and role scope.
- * @returns {Promise<unknown[]>} Organization users matching the role and org.
+ * @param {{organizationId?: string; role?: string; limit?: number; cursor?: string}} input - Organization and role scope.
+ * @returns {Promise<ListOrganizationUsersResult>} Paginated organization users matching the role and org.
  * @throws {AppError} When authorization or organization context is missing.
  */
 export async function listOrganizationUsers(input: {
   organizationId?: string;
   role?: string;
-}) {
-  const allowedRoles = [
-    UserRole.SUPER_ADMIN,
-    UserRole.ADMIN,
-    UserRole.MANAGER,
-  ];
+  limit?: number;
+  cursor?: string;
+}): Promise<ListOrganizationUsersResult> {
+  const allowedRoles = [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER];
 
   if (!input.role || !allowedRoles.includes(input.role as UserRole)) {
     throw new AppError(403, 'Forbidden: insufficient role', 'FORBIDDEN');
@@ -73,7 +93,17 @@ export async function listOrganizationUsers(input: {
     throw new AppError(403, 'Organization context is required', 'FORBIDDEN');
   }
 
-  return findUsersByOrganizationId(input.organizationId);
+  const page = await findUsersByOrganizationId(input.organizationId, {
+    limit: input.limit,
+    cursor: input.cursor,
+  });
+
+  return {
+    data: page.data,
+    total: page.total,
+    hasMore: page.hasMore,
+    nextCursor: page.nextCursor,
+  };
 }
 
 /**
@@ -212,5 +242,19 @@ export async function acceptInvitation(input: { token: string; name: string; pas
     organizationId: invitation.organizationId,
   });
 
+  return user;
+}
+
+/**
+ * Gets the current authenticated user's profile.
+ * @param {string} userId - The ID of the current user.
+ * @returns {Promise<unknown>} The user's profile (without passwordHash).
+ * @throws {AppError} When the user is not found.
+ */
+export async function getCurrentUser(userId: string) {
+  const user = await findUserById(userId);
+  if (!user) {
+    throw new AppError(404, 'User not found', 'USER_NOT_FOUND');
+  }
   return user;
 }

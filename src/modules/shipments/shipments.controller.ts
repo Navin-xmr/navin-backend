@@ -7,9 +7,12 @@ import {
   updateShipmentStatusService,
   uploadShipmentProofService,
   deleteShipmentService,
+  getShipmentEtaService,
+  exportShipmentsService,
+  shipmentsToCSV,
 } from './shipments.service.js';
 import { sendResponse } from '../../shared/http/sendResponse.js';
-import type { GetShipmentsQuery } from './shipments.validation.js';
+import type { GetShipmentsQuery, ExportShipmentsQuery } from './shipments.validation.js';
 import { AppError, ErrorCodes } from '../../shared/http/errors.js';
 
 export const getShipments = async (req: Request, res: Response) => {
@@ -20,7 +23,12 @@ export const getShipments = async (req: Request, res: Response) => {
   if (req.user?.organizationId) {
     filters.organizationId = req.user.organizationId;
   }
-  const { data, page: currentPage, limit: currentLimit, total } = await getShipmentsService({
+  const {
+    data,
+    page: currentPage,
+    limit: currentLimit,
+    total,
+  } = await getShipmentsService({
     status,
     page: Number(page),
     limit: Number(limit),
@@ -29,10 +37,10 @@ export const getShipments = async (req: Request, res: Response) => {
     filters,
   });
 
-  sendResponse(res, 200, true, 'Shipments retrieved', data, { 
-    page: currentPage, 
-    limit: currentLimit, 
-    total 
+  sendResponse(res, 200, true, 'Shipments retrieved', data, {
+    page: currentPage,
+    limit: currentLimit,
+    total,
   });
 };
 
@@ -98,6 +106,40 @@ export const uploadShipmentProof = async (req: Request, res: Response) => {
   sendResponse(res, 200, true, 'Proof uploaded', shipment);
 };
 
+export const exportShipments = async (req: Request, res: Response) => {
+  const query = req.query as unknown as ExportShipmentsQuery;
+  const { format = 'json', status, origin, destination, startDate, endDate } = query;
+  const organizationId = req.user?.organizationId;
+
+  const shipments = await exportShipmentsService({
+    organizationId,
+    status,
+    origin,
+    destination,
+    startDate,
+    endDate,
+  });
+
+  const dateStr = new Date().toISOString().slice(0, 10);
+
+  if (format === 'csv') {
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="shipments-export-${dateStr}.csv"`
+    );
+    res.status(200).send(shipmentsToCSV(shipments));
+    return;
+  }
+
+  res.setHeader('Content-Type', 'application/json');
+  res.setHeader(
+    'Content-Disposition',
+    `attachment; filename="shipments-export-${dateStr}.json"`
+  );
+  res.status(200).json(shipments);
+};
+
 export const deleteShipment = async (req: Request, res: Response) => {
   const { id } = req.params;
   const shipment = await deleteShipmentService(id);
@@ -108,4 +150,10 @@ export const deleteShipment = async (req: Request, res: Response) => {
   }
 
   sendResponse(res, 200, true, 'Shipment deleted successfully', shipment);
+};
+
+export const getShipmentEta = async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const eta = await getShipmentEtaService(id);
+  sendResponse(res, 200, true, 'Shipment ETA retrieved', eta);
 };
