@@ -161,7 +161,7 @@ export async function refreshToken(token: string): Promise<{ token: string; expi
   }
 
   const user = await UserModel.findById(payload.userId);
-  if (!user || (user as any).deletedAt) {
+  if (!user || user.deletedAt) {
     throw new AppError(401, 'User no longer exists', 'USER_NOT_FOUND');
   }
 
