@@ -49,7 +49,7 @@ type AnomalyTimeSeriesRow = {
 
 /**
  * Calculates the default granularity based on date range length.
- * Defaults to daily when date range ≤30 days, weekly otherwise.
+ * Defaults to daily when date range <= 30 days, weekly otherwise.
  * @param {Date} startDate - Start of the date range.
  * @param {Date} endDate - End of the date range.
  * @returns {'daily' | 'weekly' | 'monthly'} Default granularity.
@@ -170,14 +170,40 @@ export async function getAnalyticsPerformance(
     maxTimeMS: 5000,
   })) as AggregationFacet[];
 
-  const shipmentsByStatus = (facet?.shipmentsByStatus ?? []).map((row: AggregationRow) => ({
+  // Get anomaly time series
+  const anomalyTimeSeries = await Anomaly.aggregate([
+    {
+      $match: {
+        timestamp: { $gte: startDate, $lte: endDate },
+      },
+    },
+    {
+      $group: {
+        _id: {
+          $dateTrunc: {
+            date: '$timestamp',
+            unit: dateTruncUnit,
+            timezone: 'UTC',
+          },
+        },
+        count: { $sum: 1 },
+      },
+    },
+    { $sort: { _id: 1 } },
+  ]) as AnomalyTimeSeriesRow[];
+
+  // Create a map for anomalies for easy lookup
+  const anomalyMap = new Map<string, number>();
+  anomalyTimeSeries.forEach(row => {
+    anomalyMap.set(row._id.toISOString(), row.count);
+  });
+
+  const shipmentsByStatus = (shipmentFacet?.shipmentsByStatus ?? []).map((row: AggregationRow) => ({
     status: String(row._id),
     total: Number(row.total ?? 0),
   }));
 
   const averageDeliveryTimeByLogisticsId = (shipmentFacet?.averageDeliveryTimeByLogisticsId ?? []).map(
-    (row: any) => ({
-  const averageDeliveryTimeByLogisticsId = (facet?.averageDeliveryTimeByLogisticsId ?? []).map(
     (row: AggregationRow) => ({
       logisticsId: String(row._id),
       averageDeliveryTimeMs: Number(row.averageDeliveryTimeMs ?? 0),

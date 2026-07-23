@@ -16,13 +16,6 @@ import { PaymentStatus } from '../payments/payments.model.js';
 import { validateStatusTransition } from '../../shared/constants/shipmentStateMachine.js';
 import type { BulkStatusUpdateInput } from './shipments.validation.js';
 
-const VALID_TRANSITIONS: Record<ShipmentStatus, ShipmentStatus[]> = {
-  [ShipmentStatus.CREATED]: [ShipmentStatus.IN_TRANSIT, ShipmentStatus.CANCELLED],
-  [ShipmentStatus.IN_TRANSIT]: [ShipmentStatus.DELIVERED, ShipmentStatus.CANCELLED],
-  [ShipmentStatus.DELIVERED]: [],
-  [ShipmentStatus.CANCELLED]: [],
-};
-
 type BulkUpdateResult = {
   updated: number;
   failed: Array<{ id: string; reason: string }>;
@@ -283,6 +276,7 @@ export const patchShipmentService = async (id: string, offChainMetadata: unknown
  * @param {ShipmentStatus} status - New shipment status.
  * @param {{userId?: string; walletAddress?: string}=} actor - Optional actor metadata.
  * @returns {Promise<unknown>} Updated shipment document or null when not found.
+ * @throws {AppError} 400 when the status transition is invalid.
  */
 export const updateShipmentStatusService = async (
   id: string,
@@ -486,44 +480,6 @@ export const exportShipmentsService = async (params: {
   }
 
   return Shipment.find(query).sort({ createdAt: -1 }).limit(EXPORT_MAX_RECORDS).lean();
-};
-
-/**
- * Exports shipments as raw records for CSV/JSON download (max 10,000).
- * Applies same filters as the list endpoint.
- */
-export const exportShipmentsService = async (params: {
-  status?: string;
-  origin?: string;
-  destination?: string;
-  startDate?: string;
-  endDate?: string;
-  organizationId?: string;
-}) => {
-  const { status, origin, destination, startDate, endDate, organizationId } = params;
-  const query: FilterQuery<unknown> = {};
-
-  if (organizationId) query.organizationId = organizationId;
-  if (status) query.status = status;
-  if (origin) query.origin = { $regex: origin.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), $options: 'i' };
-  if (destination) query.destination = { $regex: destination.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), $options: 'i' };
-  if (startDate || endDate) {
-    query.createdAt = {};
-    if (startDate) (query.createdAt as Record<string, unknown>).$gte = new Date(startDate);
-    if (endDate) (query.createdAt as Record<string, unknown>).$lte = new Date(endDate);
-  }
-
-  const EXPORT_LIMIT = 10_000;
-  const total = await Shipment.countDocuments(query);
-  if (total > EXPORT_LIMIT) {
-    throw new AppError(
-      400,
-      `Export exceeds ${EXPORT_LIMIT} records (${total} found). Narrow your filters.`,
-      'EXPORT_LIMIT_EXCEEDED'
-    );
-  }
-
-  return Shipment.find(query).sort({ createdAt: -1 }).lean();
 };
 
 /**
