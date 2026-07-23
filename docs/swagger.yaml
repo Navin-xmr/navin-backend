@@ -1267,15 +1267,22 @@ paths:
               schema:
                 type: object
                 properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
                   data:
                     type: array
                     items:
                       $ref: '#/components/schemas/Anomaly'
-                  nextCursor:
-                    type: string
-                    nullable: true
-                  hasMore:
-                    type: boolean
+                  meta:
+                    type: object
+                    properties:
+                      nextCursor:
+                        type: string
+                        nullable: true
+                      hasMore:
+                        type: boolean
         '401':
           description: Unauthorized
           content:
@@ -1309,7 +1316,11 @@ paths:
               schema:
                 type: object
                 properties:
-                  anomaly:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
                     $ref: '#/components/schemas/Anomaly'
         '401':
           description: Unauthorized

@@ -26,7 +26,7 @@ const UserSchema = new mongoose.Schema(
     timestamps: true,
     toJSON: {
       transform: (_doc, ret) => {
-        const result = ret as any;
+        const result = ret as Record<string, unknown>;
         delete result.passwordHash;
         return result;
       },

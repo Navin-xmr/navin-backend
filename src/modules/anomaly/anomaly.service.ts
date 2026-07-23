@@ -1,5 +1,6 @@
 import { Anomaly } from './anomaly.model.js';
 import type { FilterQuery } from 'mongoose';
+import { AppError, ErrorCodes } from '../../shared/http/errors.js';
 import { evaluateTelemetry } from '../../services/anomaly.service.js';
 
 interface TelemetryData {
@@ -121,7 +122,7 @@ export async function getAnomaliesService(params: {
  * Resolves an existing anomaly record.
  * @param {string} id - Anomaly ObjectId.
  * @returns {Promise<unknown>} Updated anomaly document.
- * @throws {Error} When the anomaly cannot be found.
+ * @throws {AppError} 404 when the anomaly cannot be found.
  */
 export async function resolveAnomalyService(id: string) {
   const anomaly = await Anomaly.findByIdAndUpdate(
@@ -131,7 +132,7 @@ export async function resolveAnomalyService(id: string) {
   ).lean();
 
   if (!anomaly) {
-    throw new Error('Anomaly not found');
+    throw new AppError(404, 'Anomaly not found', ErrorCodes.NOT_FOUND);
   }
 
   return anomaly;

@@ -10,17 +10,15 @@ import {
 } from './shipments.service.js';
 import { sendResponse } from '../../shared/http/sendResponse.js';
 import type { GetShipmentsQuery } from './shipments.validation.js';
-import { AppError } from '../../shared/http/errors.js';
+import { AppError, ErrorCodes } from '../../shared/http/errors.js';
 
 export const getShipments = async (req: Request, res: Response) => {
   const query = req.query as unknown as GetShipmentsQuery;
   const { status, page = 1, limit = 20, origin, destination } = query;
   // Build explicit filters object to avoid unvalidated query parameters
   const filters: Record<string, unknown> = {};
-  const user = (req as any).user;
-  if (user?.organizationId) {
-    // @ts-ignore
-    filters.organizationId = user.organizationId;
+  if (req.user?.organizationId) {
+    filters.organizationId = req.user.organizationId;
   }
   const { data, page: currentPage, limit: currentLimit, total } = await getShipmentsService({
     status,
@@ -89,7 +87,7 @@ export const uploadShipmentProof = async (req: Request, res: Response) => {
   const file = req.file;
 
   if (!file) {
-    throw new AppError(400, 'No file uploaded', 'BAD_REQUEST');
+    throw new AppError(400, 'No file uploaded', ErrorCodes.BAD_REQUEST);
   }
 
   const shipment = await uploadShipmentProofService(id, file, {

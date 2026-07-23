@@ -6,7 +6,7 @@ import { UserModel } from '../users/users.model.js';
 import { emitStatusUpdate } from '../../infra/socket/io.js';
 import { Anomaly } from '../anomaly/anomaly.model.js';
 import { Telemetry } from '../telemetry/telemetry.model.js';
-import { AppError } from '../../shared/http/errors.js';
+import { AppError, ErrorCodes } from '../../shared/http/errors.js';
 import { IShipment, ShipmentStatus } from '../../shared/types/shipment.js';
 import { auditLog } from '../../shared/utils/auditLog.js';
 import { logger } from '../../shared/logger/logger.js';
@@ -129,6 +129,7 @@ export const patchShipmentService = async (id: string, offChainMetadata: unknown
  * @param {ShipmentStatus} status - New shipment status.
  * @param {{userId?: string; walletAddress?: string}=} actor - Optional actor metadata.
  * @returns {Promise<unknown>} Updated shipment document or null when not found.
+ * @throws {AppError} 400 when the status value is invalid.
  */
 export const updateShipmentStatusService = async (
   id: string,
@@ -141,7 +142,7 @@ export const updateShipmentStatusService = async (
   if (shipment.status === status) return shipment;
 
   if (!Object.values(ShipmentStatus).includes(status)) {
-    throw new Error('Invalid status');
+    throw new AppError(400, 'Invalid status value', ErrorCodes.BAD_REQUEST);
   }
 
   const previousStatus = shipment.status;

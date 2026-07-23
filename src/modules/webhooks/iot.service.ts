@@ -1,7 +1,7 @@
 import { generateDataHash } from '../../shared/utils/crypto.js';
 import * as telemetryService from '../telemetry/telemetry.service.js';
 import { TelemetryAnchorStatus } from '../telemetry/telemetry.model.js';
-import { AppError } from '../../shared/http/errors.js';
+import { AppError, ErrorCodes } from '../../shared/http/errors.js';
 import { detectAnomaly } from '../anomaly/anomaly.service.js';
 import { emitAnomalyDetected, emitTelemetryUpdate } from '../../infra/socket/io.js';
 import { pushAlertJob, pushStellarAnchorJob } from '../../infra/redis/queue.js';
@@ -73,7 +73,7 @@ export async function processIotWebhook(body: IotWebhookBody) {
   }
 
   if (!shipmentId) {
-    throw new AppError(400, 'shipmentId could not be resolved', 'BAD_REQUEST');
+    throw new AppError(400, 'shipmentId could not be resolved', ErrorCodes.BAD_REQUEST);
   }
 
   const dataHash = generateDataHash(normalizedBody.rawPayload);

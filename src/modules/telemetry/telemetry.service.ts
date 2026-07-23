@@ -10,7 +10,7 @@ import type {
   TelemetryUpdatePayload,
 } from '../../shared/types/socketEvents.js';
 import type { BulkTelemetryItem, TelemetryThresholds } from './telemetry.validation.js';
-import { AppError } from '../../shared/http/errors.js';
+import { AppError, ErrorCodes } from '../../shared/http/errors.js';
 import { pushStellarAnchorJob, pushAlertJob } from '../../infra/redis/queue.js';
 import logger from '../../shared/logger/logger.js';
 
@@ -136,7 +136,7 @@ export async function getTelemetryService(params: {
   if (organizationId) {
     // Find shipments belonging to the user's organization and filter telemetry by those shipment IDs
     const shipments = await Shipment.find({ organizationId }).select('_id').lean();
-    const shipmentIds = shipments.map((s: any) => s._id);
+    const shipmentIds = shipments.map((s: { _id: string }) => s._id);
     if (shipmentIds.length > 0) {
       query.shipmentId = { $in: shipmentIds };
     } else {
@@ -177,7 +177,8 @@ export function getTelemetryThresholds(): TelemetryThresholds {
  * Ingests multiple telemetry items in bulk and schedules downstream processing.
  * @param {BulkTelemetryItem[]} items - List of telemetry payloads to ingest.
  * @returns {Promise<{insertedCount: number; insertedIds: string[]}>} Summary of inserted telemetry documents.
- * @throws {AppError} When a matching active shipment cannot be resolved.
+ * @throws {AppError} 400 when the shipmentId cannot be resolved.
+ * @throws {AppError} 404 when a matching active shipment cannot be resolved.
  */
 export async function bulkIngestTelemetry(items: BulkTelemetryItem[]) {
   const createdIds: string[] = [];
@@ -190,14 +191,14 @@ export async function bulkIngestTelemetry(items: BulkTelemetryItem[]) {
         throw new AppError(
           404,
           `No active shipment found for sensor ${item.sensorId}`,
-          'NOT_FOUND'
+          ErrorCodes.NOT_FOUND
         );
       }
       shipmentId = shipment._id.toString();
     }
 
     if (!shipmentId) {
-      throw new AppError(400, 'shipmentId could not be resolved', 'BAD_REQUEST');
+      throw new AppError(400, 'shipmentId could not be resolved', ErrorCodes.BAD_REQUEST);
     }
 
     const dataHash = generateDataHash(item as unknown);
