@@ -72,6 +72,7 @@ shipmentsRouter.patch(
 shipmentsRouter.patch(
   '/:id/status',
   requireAuth,
+  requireRole(UserRole.ADMIN, UserRole.MANAGER),
   validateRequest({ params: ShipmentIdParamSchema, body: ShipmentStatusBodySchema }),
   asyncHandler(patchShipmentStatus)
 );
