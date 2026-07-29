@@ -55,6 +55,7 @@
     "@types/express": "^4.17.25",
     "@types/jest": "^30.0.0",
     "@types/jsonwebtoken": "^9.0.10",
+    "@types/mongodb-memory-server": "^2.3.0",
     "@types/morgan": "^1.9.10",
     "@types/multer": "^2.1.0",
     "@types/node": "^22.19.19",

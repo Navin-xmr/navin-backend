@@ -22,7 +22,6 @@ import {
   resetPasswordController,
   refreshController,
   registerCompanyController,
-  setup2faController,
 } from './auth.controller.js';
 import {
   createApiKeyController,
@@ -80,9 +79,6 @@ authRouter.post(
   asyncHandler(resetPasswordController)
 );
 
-// 2FA setup (protected by JWT auth)
-authRouter.post('/2fa/setup', asyncHandler(requireAuth), asyncHandler(setup2faController));
-
 // API Key management routes (protected by JWT auth + admin role)
 authRouter.post(
   '/api-keys',
@@ -132,6 +128,8 @@ authRouter.post(
   '/2fa/backup-codes/regenerate',
   asyncHandler(requireAuth),
   asyncHandler(regenerateBackupCodesController)
+);
+
 // Session management routes (protected by JWT auth)
 authRouter.get('/sessions', asyncHandler(requireAuth), asyncHandler(listSessionsController));
 authRouter.delete(
