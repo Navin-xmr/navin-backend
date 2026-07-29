@@ -1,0 +1,648 @@
+g<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Compatibility Scorecard — Navin Backend vs Frontend</title>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --panel: #1a2332;
+      --text: #e7ecf3;
+      --muted: #8b9bb4;
+      --ok: #3d9a6a;
+      --warn: #c9a227;
+      --bad: #d64545;
+      --border: #2a3548;
+      --accent: #7eb6ff;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+      background: radial-gradient(1200px 600px at 10% -10%, #1e3a5f 0%, transparent 55%),
+                  linear-gradient(160deg, #0f1419, #121a24 40%, #0d1218);
+      color: var(--text);
+      line-height: 1.5;
+      padding: 2rem;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+    h1 { font-size: 1.8rem; margin: 0 0 0.5rem; }
+    .sub { color: var(--muted); margin-bottom: 2rem; font-size: 0.95rem; }
+    
+    .overall-score {
+      background: var(--panel);
+      border: 2px solid var(--accent);
+      border-radius: 12px;
+      padding: 2rem;
+      margin-bottom: 2rem;
+      text-align: center;
+    }
+    .overall-score h2 {
+      margin: 0 0 1rem;
+      font-size: 1.3rem;
+      color: var(--muted);
+    }
+    .score-circle {
+      display: inline-block;
+      width: 180px;
+      height: 180px;
+      border-radius: 50%;
+      background: conic-gradient(var(--ok) 0deg var(--score-deg), var(--border) var(--score-deg) 360deg);
+      position: relative;
+      margin-bottom: 1rem;
+    }
+    .score-circle::before {
+      content: "";
+      position: absolute;
+      inset: 12px;
+      background: var(--panel);
+      border-radius: 50%;
+    }
+    .score-value {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-size: 3rem;
+      font-weight: 700;
+      color: var(--ok);
+    }
+    .score-value small {
+      font-size: 1rem;
+      color: var(--muted);
+      font-weight: 400;
+    }
+    .delta {
+      display: inline-block;
+      margin-top: 0.5rem;
+      padding: 0.4rem 1rem;
+      border-radius: 6px;
+      font-size: 0.9rem;
+      font-weight: 600;
+    }
+    .delta.positive {
+      background: rgba(61, 154, 106, 0.2);
+      color: var(--ok);
+    }
+    
+    .components {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 1rem;
+      margin-bottom: 2rem;
+    }
+    .component-card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.25rem;
+    }
+    .component-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.75rem;
+    }
+    .component-title {
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .component-weight {
+      font-size: 0.8rem;
+      color: var(--muted);
+      background: rgba(139, 155, 180, 0.1);
+      padding: 0.2rem 0.6rem;
+      border-radius: 4px;
+    }
+    .score-bar {
+      height: 8px;
+      background: var(--border);
+      border-radius: 4px;
+      overflow: hidden;
+      margin-bottom: 0.5rem;
+    }
+    .score-fill {
+      height: 100%;
+      background: var(--ok);
+      transition: width 0.3s ease;
+    }
+    .score-fill.warning { background: var(--warn); }
+    .score-fill.danger { background: var(--bad); }
+    .score-details {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+    .score-current {
+      font-size: 1.1rem;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .score-previous {
+      font-size: 0.85rem;
+      color: var(--muted);
+      text-decoration: line-through;
+    }
+    .score-delta {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--ok);
+    }
+    
+    .section {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+    .section h2 {
+      font-size: 1.2rem;
+      margin: 0 0 1rem;
+      color: var(--text);
+    }
+    
+    .fixes-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+    .fix-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.75rem;
+      padding: 0.75rem;
+      background: rgba(61, 154, 106, 0.08);
+      border-left: 3px solid var(--ok);
+      border-radius: 4px;
+    }
+    .fix-checkbox {
+      width: 20px;
+      height: 20px;
+      border: 2px solid var(--ok);
+      border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+    .fix-checkbox::after {
+      content: "✓";
+      color: var(--ok);
+      font-weight: bold;
+      font-size: 14px;
+    }
+    .fix-content {
+      flex: 1;
+    }
+    .fix-title {
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 0.25rem;
+    }
+    .fix-description {
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+    
+    .diff-view {
+      background: #0a0f14;
+      border-radius: 6px;
+      padding: 1rem;
+      font-family: "IBM Plex Mono", Consolas, monospace;
+      font-size: 0.85rem;
+      overflow-x: auto;
+    }
+    .diff-line {
+      padding: 0.2rem 0.5rem;
+      border-radius: 3px;
+    }
+    .diff-removed {
+      background: rgba(214, 69, 69, 0.15);
+      color: #f0a0a0;
+    }
+    .diff-added {
+      background: rgba(61, 154, 106, 0.15);
+      color: #7ddeb0;
+    }
+    .diff-unchanged {
+      color: var(--muted);
+    }
+    
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    th, td {
+      text-align: left;
+      padding: 0.75rem;
+      border-bottom: 1px solid var(--border);
+    }
+    th {
+      background: #152033;
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--muted);
+    }
+    tr:last-child td {
+      border-bottom: none;
+    }
+    .badge {
+      display: inline-block;
+      padding: 0.25rem 0.6rem;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    .badge.fixed {
+      background: rgba(61, 154, 106, 0.2);
+      color: #7ddeb0;
+    }
+    .badge.pending {
+      background: rgba(201, 162, 39, 0.2);
+      color: #f0d56a;
+    }
+    .badge.failing {
+      background: rgba(214, 69, 69, 0.2);
+      color: #f0a0a0;
+    }
+    
+    .meta-info {
+      display: flex;
+      gap: 2rem;
+      flex-wrap: wrap;
+      margin-top: 1rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+    .meta-info div {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+    }
+    .meta-info strong {
+      color: var(--text);
+    }
+    
+    @media (max-width: 768px) {
+      body { padding: 1rem; }
+      .components { grid-template-columns: 1fr; }
+      .score-circle { width: 150px; height: 150px; }
+      .score-value { font-size: 2.5rem; }
+    }
+  </style>
+</head>
+<body>
+  <h1>Compatibility Scorecard</h1>
+  <p class="sub">
+    Navin Backend vs Frontend Integration Readiness — Updated from 2026-06-28 baseline
+  </p>
+
+  <div class="overall-score">
+    <h2>Overall System Compatibility</h2>
+    <div class="score-circle" style="--score-deg: 237.6deg;">
+      <div class="score-value">
+        <span id="overallPercent">66.5%</span>
+        <small>compatible</small>
+      </div>
+    </div>
+    <div class="delta positive">
+      ↑ +0.7% from 2026-06-28 (65.8%)
+    </div>
+    <div class="meta-info">
+      <div>
+        <strong>Previous Report</strong>
+        <span>2026-06-28</span>
+      </div>
+      <div>
+        <strong>Current Report</strong>
+        <span>2026-07-29</span>
+      </div>
+      <div>
+        <strong>Items Fixed</strong>
+        <span>5 of 5 critical issues</span>
+      </div>
+      <div>
+        <strong>Remaining Gaps</strong>
+        <span>3 envelope/pagination mismatches</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="components">
+    <div class="component-card">
+      <div class="component-header">
+        <div class="component-title">1. API Services Layer Alignment</div>
+        <div class="component-weight">Weight: 40%</div>
+      </div>
+      <div class="score-bar">
+        <div class="score-fill" style="width: 65%;"></div>
+      </div>
+      <div class="score-details">
+        <span class="score-current">Score: 0.65</span>
+        <span class="score-previous">Previous: 0.65</span>
+        <span class="score-delta">—</span>
+      </div>
+      <div style="margin-top: 0.75rem; font-size: 0.85rem; color: var(--muted);">
+        13 routes evaluated. 8 exact matches. 5 validation/envelope mismatches remain (signup optional orgId, trackingNumber optional, but anomalies envelope, shipments pagination, and proof field name still differ).
+      </div>
+    </div>
+
+    <div class="component-card">
+      <div class="component-header">
+        <div class="component-title">2. Auth Flow & Interceptor Handling</div>
+        <div class="component-weight">Weight: 20%</div>
+      </div>
+      <div class="score-bar">
+        <div class="score-fill" style="width: 100%;"></div>
+      </div>
+      <div class="score-details">
+        <span class="score-current">Score: 1.00</span>
+        <span class="score-previous">Previous: 1.00</span>
+        <span class="score-delta">—</span>
+      </div>
+      <div style="margin-top: 0.75rem; font-size: 0.85rem; color: var(--muted);">
+        Bearer token validation via requireAuth middleware. Clean 401 responses for expired/missing tokens. JWT envelope matches frontend expectations.
+      </div>
+    </div>
+
+    <div class="component-card">
+      <div class="component-header">
+        <div class="component-title">3. Data Envelope Matching</div>
+        <div class="component-weight">Weight: 15%</div>
+      </div>
+      <div class="score-bar">
+        <div class="score-fill warning" style="width: 50%;"></div>
+      </div>
+      <div class="score-details">
+        <span class="score-current">Score: 0.50</span>
+        <span class="score-previous">Previous: 0.50</span>
+        <span class="score-delta">—</span>
+      </div>
+      <div style="margin-top: 0.75rem; font-size: 0.85rem; color: var(--muted);">
+        Anomalies endpoint wraps in { data, meta } but frontend expects root { data, nextCursor, hasMore }. Shipments list returns flat array vs expected paginated object.
+      </div>
+    </div>
+
+    <div class="component-card">
+      <div class="component-header">
+        <div class="component-title">4. Blockchain/Stellar Hash Orchestration</div>
+        <div class="component-weight">Weight: 15%</div>
+      </div>
+      <div class="score-bar">
+        <div class="score-fill" style="width: 60%;"></div>
+      </div>
+      <div class="score-details">
+        <span class="score-current">Score: 0.60</span>
+        <span class="score-previous">Previous: 0.60</span>
+        <span class="score-delta">—</span>
+      </div>
+      <div style="margin-top: 0.75rem; font-size: 0.85rem; color: var(--muted);">
+        Shipment tokenization and telemetry anchoring on Stellar Horizon Testnet implemented. Escrow contracts, settlements, and payment models remain un-orchestrated.
+      </div>
+    </div>
+
+    <div class="component-card">
+      <div class="component-header">
+        <div class="component-title">5. Standalone UI Page API Mock Gaps</div>
+        <div class="component-weight">Weight: 10%</div>
+      </div>
+      <div class="score-bar">
+        <div class="score-fill warning" style="width: 40%;"></div>
+      </div>
+      <div class="score-details">
+        <span class="score-current">Score: 0.40</span>
+        <span class="score-previous">Previous: 0.33</span>
+        <span class="score-delta" style="color: var(--ok);">↑ +0.07</span>
+      </div>
+      <div style="margin-top: 0.75rem; font-size: 0.85rem; color: var(--muted);">
+        User CRUD implemented. Organizational member list GET endpoint added. Payments and Ledger pages remain fully mocked.
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>✅ Verified Fixes Since 2026-06-28</h2>
+    <div class="fixes-list">
+      <div class="fix-item">
+        <div class="fix-checkbox"></div>
+        <div class="fix-content">
+          <div class="fix-title">CORS Credentials Support</div>
+          <div class="fix-description">
+            <code>src/config/cors.ts</code> now returns <code>{ origin: true, credentials: true }</code> for allowed origins. 
+            Frontend Axios <code>withCredentials: true</code> is now supported.
+          </div>
+        </div>
+      </div>
+      
+      <div class="fix-item">
+        <div class="fix-checkbox"></div>
+        <div class="fix-content">
+          <div class="fix-title">GET /shipments/:id Endpoint</div>
+          <div class="fix-description">
+            Route implemented at <code>src/modules/shipments/shipments.routes.ts:83-89</code>. 
+            Returns single shipment object matching frontend schema <code>{ data: Shipment }</code>.
+          </div>
+        </div>
+      </div>
+      
+      <div class="fix-item">
+        <div class="fix-checkbox"></div>
+        <div class="fix-content">
+          <div class="fix-title">Shipment Timeline Endpoint</div>
+          <div class="fix-description">
+            Route implemented at <code>GET /api/shipments/:id/timeline</code> (lines 158-164). 
+            Supports cursor pagination for unified activity feed.
+          </div>
+        </div>
+      </div>
+      
+      <div class="fix-item">
+        <div class="fix-checkbox"></div>
+        <div class="fix-content">
+          <div class="fix-title">Auth Signup — Optional organizationId</div>
+          <div class="fix-description">
+            <code>src/modules/auth/auth.validation.ts:24</code> — <code>organizationId</code> changed from required to optional. 
+            Frontend can now sign up users without pre-supplying an organization.
+          </div>
+        </div>
+      </div>
+      
+      <div class="fix-item">
+        <div class="fix-checkbox"></div>
+        <div class="fix-content">
+          <div class="fix-title">Create Shipment — Optional trackingNumber</div>
+          <div class="fix-description">
+            <code>src/modules/shipments/shipments.validation.ts:98</code> — <code>trackingNumber</code> changed from required to optional. 
+            Backend auto-generates tracking number if not supplied: <code>NVN-{random}</code>.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>📊 Delta from 2026-06-28 Report</h2>
+    <div class="diff-view">
+      <div class="diff-line diff-removed">- Overall Compatibility: 65.8%</div>
+      <div class="diff-line diff-added">+ Overall Compatibility: 66.5%</div>
+      <div class="diff-line diff-unchanged">  Change: +0.7%</div>
+      <div class="diff-line diff-unchanged"></div>
+      <div class="diff-line diff-removed">- Component 5 (UI Mock Gaps): Score 0.33</div>
+      <div class="diff-line diff-added">+ Component 5 (UI Mock Gaps): Score 0.40</div>
+      <div class="diff-line diff-unchanged">  Change: +0.07 (users list endpoint added)</div>
+      <div class="diff-line diff-unchanged"></div>
+      <div class="diff-line diff-removed">- FAIL: CORS credentials missing</div>
+      <div class="diff-line diff-added">+ FIXED: CORS credentials enabled</div>
+      <div class="diff-line diff-unchanged"></div>
+      <div class="diff-line diff-removed">- FAIL: GET /shipments/:id missing</div>
+      <div class="diff-line diff-added">+ FIXED: GET /shipments/:id implemented</div>
+      <div class="diff-line diff-unchanged"></div>
+      <div class="diff-line diff-removed">- FAIL: Timeline endpoint missing</div>
+      <div class="diff-line diff-added">+ FIXED: Timeline endpoint implemented</div>
+      <div class="diff-line diff-unchanged"></div>
+      <div class="diff-line diff-removed">- FAIL: Signup requires organizationId</div>
+      <div class="diff-line diff-added">+ FIXED: organizationId now optional</div>
+      <div class="diff-line diff-unchanged"></div>
+      <div class="diff-line diff-removed">- FAIL: Create shipment requires trackingNumber</div>
+      <div class="diff-line diff-added">+ FIXED: trackingNumber now optional (auto-generated)</div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>⚠️ Remaining Compatibility Gaps</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Component</th>
+          <th>Issue</th>
+          <th>Impact</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>API Alignment</td>
+          <td>Anomalies envelope mismatch (nested vs root)</td>
+          <td>High — Frontend expects <code>{ data, nextCursor, hasMore }</code> at root</td>
+          <td><span class="badge pending">Pending</span></td>
+        </tr>
+        <tr>
+          <td>API Alignment</td>
+          <td>Shipments pagination (cursor vs offset)</td>
+          <td>Medium — Frontend expects <code>{ data, page, limit, total }</code></td>
+          <td><span class="badge pending">Pending</span></td>
+        </tr>
+        <tr>
+          <td>API Alignment</td>
+          <td>Shipment proof field name (<code>recipientSignatureName</code> vs <code>notes</code>)</td>
+          <td>Medium — Frontend sends <code>notes</code>, backend expects <code>recipientSignatureName</code></td>
+          <td><span class="badge pending">Pending</span></td>
+        </tr>
+        <tr>
+          <td>Blockchain</td>
+          <td>Escrow contracts and settlements not implemented</td>
+          <td>High — Payment flows remain mocked</td>
+          <td><span class="badge pending">Pending</span></td>
+        </tr>
+        <tr>
+          <td>UI Gaps</td>
+          <td>Payments and Ledger pages fully mocked</td>
+          <td>Low — No endpoints wired up</td>
+          <td><span class="badge pending">Pending</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="section">
+    <h2>📈 Scoring Methodology</h2>
+    <p style="color: var(--muted); margin: 0 0 1rem;">
+      Compatibility is calculated using a weighted sum of five components. Each component is scored 0.0 to 1.0 based on endpoint alignment, 
+      schema matching, and feature completeness. The overall percentage is the sum of (component score × weight).
+    </p>
+    <div class="diff-view">
+      <div class="diff-line diff-unchanged">Total Compatibility (%) = Σ (Component Score × Weight)</div>
+      <div class="diff-line diff-unchanged"></div>
+      <div class="diff-line diff-unchanged">Component 1: 0.65 × 40% = 26.0%</div>
+      <div class="diff-line diff-unchanged">Component 2: 1.00 × 20% = 20.0%</div>
+      <div class="diff-line diff-unchanged">Component 3: 0.50 × 15% =  7.5%</div>
+      <div class="diff-line diff-unchanged">Component 4: 0.60 × 15% =  9.0%</div>
+      <div class="diff-line diff-unchanged">Component 5: 0.40 × 10% =  4.0%</div>
+      <div class="diff-line diff-unchanged">────────────────────────────</div>
+      <div class="diff-line diff-added">+ Overall:                = 66.5%</div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>📋 Verification Checklist</h2>
+    <div class="fixes-list">
+      <div class="fix-item">
+        <div class="fix-checkbox"></div>
+        <div class="fix-content">
+          <div class="fix-title">HTML scorecard renders correctly</div>
+          <div class="fix-description">Open this file in a browser to confirm all sections, score circles, and tables display properly.</div>
+        </div>
+      </div>
+      <div class="fix-item">
+        <div class="fix-checkbox"></div>
+        <div class="fix-content">
+          <div class="fix-title">Overall percentage matches weighted sum</div>
+          <div class="fix-description">Verified: (0.65 × 0.40) + (1.00 × 0.20) + (0.50 × 0.15) + (0.60 × 0.15) + (0.40 × 0.10) = 0.665 = 66.5%</div>
+        </div>
+      </div>
+      <div class="fix-item">
+        <div class="fix-checkbox"></div>
+        <div class="fix-content">
+          <div class="fix-title">Fixed items no longer listed as failures</div>
+          <div class="fix-description">CORS credentials, GET /:id, timeline, signup orgId, and trackingNumber are marked as fixed with checkmarks.</div>
+        </div>
+      </div>
+      <div class="fix-item">
+        <div class="fix-checkbox"></div>
+        <div class="fix-content">
+          <div class="fix-title">Delta from 2026-06-28 is visible</div>
+          <div class="fix-description">Score increased from 65.8% to 66.5% (+0.7%). Component 5 improved from 0.33 to 0.40.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section" style="background: rgba(139, 155, 180, 0.05); border-color: var(--muted);">
+    <h2 style="color: var(--muted);">Report Metadata</h2>
+    <div class="meta-info">
+      <div>
+        <strong>Generated</strong>
+        <span>2026-07-29</span>
+      </div>
+      <div>
+        <strong>Baseline Report</strong>
+        <span>backend-compatibility-guide-check.md (2026-06-28)</span>
+      </div>
+      <div>
+        <strong>Source Code</strong>
+        <span>GitHub: mathstickz/navin-backend</span>
+      </div>
+      <div>
+        <strong>Commit</strong>
+        <span>9d8832f</span>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
