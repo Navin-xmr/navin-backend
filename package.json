@@ -24,7 +24,7 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1114.0",
     "@aws-sdk/s3-request-presigner": "^3.1114.0",
-    "@stellar/stellar-sdk": "^14.5.0",
+    "@stellar/stellar-sdk": "^17.0.0",
     "bcrypt": "^6.0.0",
     "bullmq": "^5.58.5",
     "cloudinary": "^2.10.1",
