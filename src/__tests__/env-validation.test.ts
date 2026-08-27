@@ -1,9 +1,21 @@
 import { describe, it, expect } from '@jest/globals';
 import { spawn } from 'node:child_process';
+import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
+
+// Run src/env.ts directly through tsx (rather than raw `node -e "import '../env.js'"`)
+// so this works against TypeScript source with no build step — a plain Node child
+// process has no `.ts` support and no `.js`→`.ts` resolution, so the previous
+// `-e` approach could never actually resolve regardless of cwd.
+const require = createRequire(import.meta.url);
+const tsxCliPath = require.resolve('tsx/cli');
+const testDir = path.dirname(fileURLToPath(import.meta.url));
+const envEntryPath = path.resolve(testDir, '..', 'env.ts');
 
 function runWithEnv(
   extra: Record<string, string> = {}
-): Promise<{ code: number | null; stderr: string }> {
+): Promise<{ code: number | null; output: string }> {
   const baseEnv: Record<string, string> = {
     NODE_ENV: 'test',
     PORT: '3000',
@@ -15,23 +27,28 @@ function runWithEnv(
   };
 
   return new Promise(resolve => {
-    const child = spawn(process.execPath, ['--input-type=module', '-e', 'import "../env.js";'], {
+    const child = spawn(process.execPath, [tsxCliPath, envEntryPath], {
       env: { ...process.env, ...baseEnv },
       stdio: ['ignore', 'pipe', 'pipe'],
       timeout: 10_000,
     });
 
-    let stderr = '';
+    // env.ts logs its validation errors through pino, which writes to stdout —
+    // capture both streams so assertions can check either.
+    let output = '';
+    child.stdout?.on('data', (chunk: Buffer) => {
+      output += chunk.toString();
+    });
     child.stderr?.on('data', (chunk: Buffer) => {
-      stderr += chunk.toString();
+      output += chunk.toString();
     });
 
     child.on('close', code => {
-      resolve({ code, stderr });
+      resolve({ code, output });
     });
 
     child.on('error', () => {
-      resolve({ code: 1, stderr });
+      resolve({ code: 1, output });
     });
   });
 }
@@ -71,6 +88,22 @@ describe('env validation', () => {
 
   it('rejects invalid URL for FRONTEND_URL', async () => {
     const { code } = await runWithEnv({ FRONTEND_URL: 'not-a-url' });
+    expect(code).not.toBe(0);
+  });
+
+  it('fails fast when STELLAR_NETWORK is not testnet or public', async () => {
+    const { code, output } = await runWithEnv({ STELLAR_NETWORK: 'devnet' });
+    expect(code).not.toBe(0);
+    expect(output).toContain('STELLAR_NETWORK');
+  });
+
+  it('accepts an explicit HORIZON_URL override', async () => {
+    const { code } = await runWithEnv({ HORIZON_URL: 'https://horizon.example.com' });
+    expect(code).toBe(0);
+  });
+
+  it('rejects an invalid HORIZON_URL', async () => {
+    const { code } = await runWithEnv({ HORIZON_URL: 'not-a-url' });
     expect(code).not.toBe(0);
   });
 });

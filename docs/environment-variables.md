@@ -29,7 +29,8 @@ Cross-check source: `src/env.ts`, `.env.example`, and `process.env` / `env.*` us
 
 | Variable | Validated | `.env.example` | Used in code | Required vs optional | Notes / implementing issue |
 |----------|:---------:|:--------------:|:------------:|----------------------|----------------------------|
-| `STELLAR_NETWORK` | yes | yes | yes | Optional (default `testnet`) | `testnet` \| `public`; dynamic Horizon switching tracked in [#360](https://github.com/Navin-xmr/navin-backend/issues/360) |
+| `STELLAR_NETWORK` | yes | yes | yes | Optional (default `testnet`) | `testnet` \| `public`; selects the default Horizon/Soroban URLs (`src/config/stellarNetwork.ts`, implementing [#360](https://github.com/Navin-xmr/navin-backend/issues/360)); an unrecognized value fails fast at boot |
+| `HORIZON_URL` | yes | no | yes | Optional — overrides the URL `STELLAR_NETWORK` derives | `src/services/stellar.service.ts` via `config.horizonUrl` |
 | `STELLAR_SECRET_KEY` | yes | yes | yes | Optional at boot; **required** for anchoring/signing | Horizon/SDK workers (`src/services/stellar.service.ts`) |
 | `STELLAR_WEBHOOK_SECRET` | yes | yes | yes | Optional at boot; **required** for webhook HMAC | `verifyStellarSignature` middleware |
 
@@ -100,7 +101,7 @@ Cross-check source: `src/env.ts`, `.env.example`, and `process.env` / `env.*` us
 Every `env.*` / `process.env.*` name under `src/` should appear above:
 
 - [x] `ALLOWED_ORIGINS`, `CORS_ORIGIN`, `JWT_SECRET`, `MONGO_URI`, `NODE_ENV`, `PORT`, `REDIS_URL`
-- [x] `STELLAR_NETWORK`, `STELLAR_SECRET_KEY`, `STELLAR_WEBHOOK_SECRET`
+- [x] `STELLAR_NETWORK`, `HORIZON_URL`, `STELLAR_SECRET_KEY`, `STELLAR_WEBHOOK_SECRET`
 - [x] `FRONTEND_URL`, `SENDGRID_API_KEY`, `SMTP_*`
 - [x] `TWILIO_*`, `S3_*`, `SOROBAN_RPC_URL`, `ESCROW_CONTRACT_ID`, `SENTRY_DSN`
 - [x] `LOG_LEVEL` (unvalidated)
