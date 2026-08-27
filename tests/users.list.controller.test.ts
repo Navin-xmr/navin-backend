@@ -86,7 +86,6 @@ describe('GET /api/users', () => {
     expect(Array.isArray(res.body.data)).toBe(true);
     expect(res.body.data).toHaveLength(5);
     expect(res.body.meta).toEqual({
-      total: 5,
       hasMore: false,
       nextCursor: null,
     });
