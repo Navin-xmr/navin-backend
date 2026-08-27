@@ -56,7 +56,24 @@ npm run dev
 
 The API is now available at `http://localhost:3000/api`.
 
-> Prefer containers? See `docker-compose.yml` (mongo + redis + app). Note the compose stack is under repair — track progress in `TODO.md` Part 2 before relying on it.
+### Docker Compose (mongo + redis + app)
+
+The compose stack boots the API in **production mode** (see `ENV NODE_ENV=production` in the `Dockerfile` runner stage). For hot-reload local development, use `npm run dev` with `.env` instead.
+
+```bash
+# Optional: override secrets from a local env file (recommended)
+cp .env.example .env
+# JWT_SECRET in .env.example is already ≥32 characters (required by src/env.ts)
+
+docker compose up -d --build
+docker compose logs -f app   # expect: HTTP server listening
+curl http://localhost:3000/api/health
+docker compose exec app whoami   # node (non-root runner)
+```
+
+- **JWT_SECRET:** must be at least 32 characters. Compose provides a dev default; override via `.env` or `JWT_SECRET=... docker compose up`.
+- **Startup order:** `app` waits for healthy `mongo` and `redis` before starting.
+- **Clean reset:** `docker compose down -v && docker compose up -d --build`
 
 ### Verify Installation
 
