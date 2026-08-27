@@ -1,5 +1,13 @@
 import { describe, it, expect } from '@jest/globals';
 import { spawn } from 'node:child_process';
+import { pathToFileURL } from 'node:url';
+import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+// Resolve absolute path to src/env.ts from this file's location so that
+// relative specifiers inside the spawned process never resolve against CWD.
+const __dirname = fileURLToPath(new URL('.', import.meta.url));
+const envFileUrl = pathToFileURL(resolve(__dirname, '../../src/env.js')).href;
 
 function runWithEnv(
   extra: Record<string, string> = {}
@@ -15,18 +23,22 @@ function runWithEnv(
   };
 
   return new Promise(resolve => {
-    const child = spawn(process.execPath, ['--input-type=module', '-e', 'import "../env.js";'], {
-      env: { ...process.env, ...baseEnv },
-      stdio: ['ignore', 'pipe', 'pipe'],
-      timeout: 10_000,
-    });
+    const child = spawn(
+      process.execPath,
+      ['--input-type=module', '-e', `import '${envFileUrl}';`],
+      {
+        env: { ...process.env, ...baseEnv },
+        stdio: ['ignore', 'pipe', 'pipe'],
+        timeout: 10_000,
+      }
+    );
 
     let stderr = '';
     child.stderr?.on('data', (chunk: Buffer) => {
       stderr += chunk.toString();
     });
 
-    child.on('close', code => {
+    child.on('close', (code: number | null) => {
       resolve({ code, stderr });
     });
 
@@ -43,13 +55,15 @@ describe('env validation', () => {
   });
 
   it('fails when MONGO_URI is missing', async () => {
-    const { code } = await runWithEnv({ MONGO_URI: '' });
+    const { code, stderr } = await runWithEnv({ MONGO_URI: '' });
     expect(code).not.toBe(0);
+    expect(stderr).toMatch(/MONGO_URI/);
   });
 
   it('fails when JWT_SECRET is missing', async () => {
-    const { code } = await runWithEnv({ JWT_SECRET: '' });
+    const { code, stderr } = await runWithEnv({ JWT_SECRET: '' });
     expect(code).not.toBe(0);
+    expect(stderr).toMatch(/JWT_SECRET/);
   });
 
   it('accepts optional vars without error', async () => {
@@ -65,12 +79,14 @@ describe('env validation', () => {
   });
 
   it('rejects invalid URL for SENTRY_DSN', async () => {
-    const { code } = await runWithEnv({ SENTRY_DSN: 'not-a-url' });
+    const { code, stderr } = await runWithEnv({ SENTRY_DSN: 'not-a-url' });
     expect(code).not.toBe(0);
+    expect(stderr).toMatch(/SENTRY_DSN/);
   });
 
   it('rejects invalid URL for FRONTEND_URL', async () => {
-    const { code } = await runWithEnv({ FRONTEND_URL: 'not-a-url' });
+    const { code, stderr } = await runWithEnv({ FRONTEND_URL: 'not-a-url' });
     expect(code).not.toBe(0);
+    expect(stderr).toMatch(/FRONTEND_URL/);
   });
 });
