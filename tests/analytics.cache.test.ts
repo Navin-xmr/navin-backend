@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import jwt from 'jsonwebtoken';
 import request from 'supertest';
 import type { Application } from 'express';
+import { fakeAggregate, fakeModel } from './helpers/fakeModel.js';
 
 describe('analytics redis cache', () => {
   let app: Application;
@@ -33,23 +34,20 @@ describe('analytics redis cache', () => {
       redisConnection: {},
     }));
 
-    const mockAggregate = jest.fn((pipeline: unknown) => ({
-      option: jest.fn(async () => {
-        aggregateExecutions.count += 1;
-        return [
-          {
-            shipmentsByStatus: [{ _id: 'DELIVERED', total: 4 }],
-            averageDeliveryTimeByLogisticsId: [{ _id: 'log-1', averageDeliveryTimeMs: 2000 }],
-            delayedShipments: [{ totalDelayed: 1 }],
-          },
-        ];
-      }),
-    }));
+    const mockAggregate = jest.fn((_pipeline: unknown[]) => {
+      aggregateExecutions.count += 1;
+      return fakeAggregate([
+        {
+          shipmentsByStatus: [{ _id: 'DELIVERED', total: 4 }],
+          averageDeliveryTimeByLogisticsId: [{ _id: 'log-1', averageDeliveryTimeMs: 2000 }],
+          delayedShipments: [{ totalDelayed: 1 }],
+        },
+      ]);
+    });
+    const shipmentModel = fakeModel({ aggregate: mockAggregate });
 
     await jest.unstable_mockModule('../src/modules/shipments/shipments.model.js', () => ({
-      Shipment: {
-        aggregate: mockAggregate,
-      },
+      Shipment: shipmentModel,
       ShipmentStatus: {
         CREATED: 'CREATED',
         IN_TRANSIT: 'IN_TRANSIT',

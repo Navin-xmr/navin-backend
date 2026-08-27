@@ -731,11 +731,16 @@ export const uploadShipmentProofService = async (
     { new: true }
   );
 
+  if (!shipment) {
+    throw new AppError(404, 'Shipment not found', ErrorCodes.SHIPMENT_NOT_FOUND);
+  }
+
   // Write PROOF_SUBMITTED ledger block
   try {
     await createLedgerBlockService({
       shipmentId: id,
-      eventType: MilestoneEvent.PROOF_SUBMITTED,
+      milestoneEvent: MilestoneEvent.PROOF_SUBMITTED,
+      shipmentReference: shipment?.trackingNumber,
       transactionHash: shipment?.stellarTxHash ?? undefined,
       metadata: {
         proofUrl,
