@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { AppError } from '../src/shared/http/errors.js';
+import { mockModule } from './helpers/mockFactory.js';
 
 describe('users service and repo', () => {
   beforeEach(() => {
@@ -15,11 +16,11 @@ describe('users service and repo', () => {
     const findUserByEmail = jest.fn(async () => null);
     const findUsersByOrganizationId = jest.fn(async () => []);
 
-    await jest.unstable_mockModule('../src/modules/users/users.repo.js', () => ({
+    await mockModule('../src/modules/users/users.repo.js', {
       createUser,
       findUserByEmail,
       findUsersByOrganizationId,
-    }));
+    });
 
     const { registerUser } = await import('../src/modules/users/users.service.js');
     const result = await registerUser({ email: 'new@example.com', name: 'New User' });
@@ -34,11 +35,11 @@ describe('users service and repo', () => {
     const findUserByEmail = jest.fn(async () => ({ _id: 'u1', email: 'existing@example.com' }));
     const findUsersByOrganizationId = jest.fn(async () => []);
 
-    await jest.unstable_mockModule('../src/modules/users/users.repo.js', () => ({
+    await mockModule('../src/modules/users/users.repo.js', {
       createUser,
       findUserByEmail,
       findUsersByOrganizationId,
-    }));
+    });
 
     const { registerUser } = await import('../src/modules/users/users.service.js');
 
