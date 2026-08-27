@@ -7,6 +7,7 @@ import {
   createShipmentService,
   patchShipmentService,
   updateShipmentStatusService,
+  bulkUpdateShipmentStatusService,
   uploadShipmentProofService,
   createDisputeService,
   deleteShipmentService,
@@ -31,6 +32,7 @@ import type {
   ShipmentIdParam,
   ShipmentPatchBody,
   ShipmentStatusInput,
+  BulkStatusUpdateInput,
 } from './shipments.validation.js';
 import { AppError, ErrorCodes } from '../../shared/http/errors.js';
 
@@ -226,6 +228,32 @@ export const patchShipmentStatus = async (req: Request, res: Response) => {
     return;
   }
   sendResponse(res, 200, true, 'Shipment status updated', updated);
+};
+
+/**
+ * Updates multiple shipments' status in a single bulk request. Returns partial results —
+ * one shipment failing never rolls back updates already applied to others.
+ * Requires auth and ADMIN / MANAGER.
+ *
+ * @param req.body.shipmentIds - Shipment ids to update (1–50).
+ * @param req.body.status - Target `ShipmentStatus` applied to each shipment.
+ * @returns HTTP 200 with envelope `{ success, message, data }` where data is
+ *   `{ updated, failed: Array<{ id, reason }> }`.
+ * @throws {AppError} 401 ERR_AUTH_INVALID — when JWT auth fails.
+ * @throws {AppError} 403 ERR_PERMISSION_DENIED — when the caller lacks ADMIN / MANAGER.
+ * @throws {AppError} 400 VALIDATION_ERROR — when body validation fails.
+ */
+export const bulkUpdateShipmentStatus = async (req: Request, res: Response) => {
+  const { shipmentIds, status } = req.body as BulkStatusUpdateInput;
+  const user = req.user;
+
+  const result = await bulkUpdateShipmentStatusService(
+    { shipmentIds, status },
+    user?.organizationId ?? '',
+    { userId: user?.userId }
+  );
+
+  sendResponse(res, 200, true, 'Bulk status update completed', result);
 };
 
 /**

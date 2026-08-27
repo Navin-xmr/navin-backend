@@ -27,8 +27,12 @@ import { logger } from '../../shared/logger/logger.js';
 import { invalidateAnalyticsPerformanceCache } from '../analytics/analytics.cache.js';
 import * as paymentsRepo from '../payments/payments.repo.js';
 import { PaymentStatus } from '../payments/payments.model.js';
-import { validateStatusTransition } from '../../shared/constants/shipmentStateMachine.js';
+import {
+  validateStatusTransition,
+  ALLOWED_TRANSITIONS,
+} from '../../shared/constants/shipmentStateMachine.js';
 import { createLedgerBlockService } from '../ledger/ledger.service.js';
+import type { BulkStatusUpdateInput } from './shipments.validation.js';
 
 import { offsetSkip } from '../../shared/utils/pagination.js';
 import {
@@ -687,6 +691,172 @@ export const updateShipmentStatusService = async (
   });
 
   return shipment;
+};
+
+type BulkUpdateResult = {
+  updated: number;
+  failed: Array<{ id: string; reason: string }>;
+};
+
+/**
+ * Updates multiple shipments' status in bulk. Returns partial results — failures for
+ * one shipment never roll back successful updates already applied to others.
+ * Each successful update emits a `status_update` WebSocket event.
+ * @param {BulkStatusUpdateInput} input - Bulk update payload (`shipmentIds`, `status`).
+ * @param {string} organizationId - Caller's organization id for ownership validation.
+ * @param {{ userId?: string }=} actor - Optional actor metadata for audit/milestone attribution.
+ * @returns {Promise<BulkUpdateResult>} Count of updated shipments plus per-id failure reasons
+ *   (`NOT_FOUND`, `WRONG_ORG`, `INVALID_TRANSITION`, `UPDATE_FAILED`).
+ */
+export const bulkUpdateShipmentStatusService = async (
+  input: BulkStatusUpdateInput,
+  organizationId: string,
+  actor?: { userId?: string }
+): Promise<BulkUpdateResult> => {
+  const { shipmentIds, status } = input;
+  const failed: Array<{ id: string; reason: string }> = [];
+  let updatedCount = 0;
+
+  // Fetched by id only (no org filter at the query level) so an org mismatch can be
+  // reported as WRONG_ORG below instead of being indistinguishable from NOT_FOUND.
+  const shipments = await Shipment.find({ _id: { $in: shipmentIds } }).lean();
+
+  const foundShipments = new Map(shipments.map(s => [s._id.toString(), s]));
+
+  for (const id of shipmentIds) {
+    const existing = foundShipments.get(id);
+
+    if (!existing) {
+      failed.push({ id, reason: 'NOT_FOUND' });
+      continue;
+    }
+
+    const enterpriseId = existing.enterpriseId?.toString?.();
+    const logisticsId = existing.logisticsId?.toString?.();
+    if (enterpriseId !== organizationId && logisticsId !== organizationId) {
+      failed.push({ id, reason: 'WRONG_ORG' });
+      continue;
+    }
+
+    const allowedTransitions = ALLOWED_TRANSITIONS[existing.status as ShipmentStatus] ?? [];
+    if (!allowedTransitions.includes(status)) {
+      failed.push({ id, reason: 'INVALID_TRANSITION' });
+      continue;
+    }
+
+    const previousStatus = existing.status;
+
+    const milestone = {
+      name: status,
+      timestamp: new Date(),
+      description: `Status changed to ${status}`,
+    } as {
+      name: string;
+      timestamp: Date;
+      description?: string;
+      userId?: string;
+      walletAddress?: string;
+    };
+
+    if (actor?.userId) {
+      milestone.userId = actor.userId;
+      const userLookup = UserModel.findById(actor.userId) as
+        | {
+            select?: (projection: { walletAddress: 1 }) => {
+              lean: <T>() => Promise<T | null>;
+            };
+          }
+        | Promise<{ walletAddress?: string } | null>
+        | null;
+
+      if (userLookup && typeof userLookup === 'object' && 'select' in userLookup) {
+        const found = await userLookup
+          .select?.({ walletAddress: 1 })
+          .lean<{ walletAddress?: string }>();
+        if (found?.walletAddress) {
+          milestone.walletAddress = found.walletAddress;
+        }
+      } else {
+        const found = await (userLookup as Promise<{ walletAddress?: string } | null>);
+        if (found?.walletAddress) {
+          milestone.walletAddress = found.walletAddress;
+        }
+      }
+    }
+
+    try {
+      const shipment = await Shipment.findByIdAndUpdate(
+        id,
+        { status, $push: { milestones: milestone } },
+        { new: true }
+      );
+      if (!shipment) {
+        failed.push({ id, reason: 'NOT_FOUND' });
+        continue;
+      }
+
+      await invalidateAnalyticsPerformanceCache();
+
+      if (status === ShipmentStatus.DELIVERED) {
+        try {
+          const payment = await paymentsRepo.getPaymentByShipmentId(id);
+          if (payment) {
+            const releaseResult = await releaseEscrow({
+              paymentId: payment._id.toString(),
+              shipmentId: id,
+            });
+
+            if (releaseResult.success && releaseResult.transactionHash) {
+              await paymentsRepo.updatePaymentStatus(
+                payment._id.toString(),
+                PaymentStatus.RELEASED,
+                releaseResult.transactionHash
+              );
+              logger.info(
+                { shipmentId: id, transactionHash: releaseResult.transactionHash },
+                'Escrow released for shipment'
+              );
+            }
+          }
+        } catch (escrowError) {
+          logger.warn({ err: escrowError, shipmentId: id }, 'Failed to trigger escrow release');
+        }
+      }
+
+      if (actor?.userId) {
+        auditLog({
+          userId: actor.userId,
+          action: 'SHIPMENT_STATUS_CHANGED',
+          resourceId: id,
+          timestamp: new Date(),
+          metadata: { previousStatus, newStatus: status },
+        });
+      }
+
+      emitStatusUpdate(id, {
+        shipmentId: id,
+        status: shipment.status,
+        milestones: shipment.milestones.map(m => ({
+          name: m.name,
+          timestamp: m.timestamp instanceof Date ? m.timestamp.toISOString() : m.timestamp,
+          description: m.description ?? undefined,
+          userId: m.userId?.toString() ?? undefined,
+          walletAddress: m.walletAddress ?? undefined,
+        })),
+        updatedAt:
+          shipment.updatedAt instanceof Date
+            ? shipment.updatedAt.toISOString()
+            : shipment.updatedAt,
+      });
+
+      updatedCount++;
+    } catch (err) {
+      logger.error({ err, shipmentId: id }, 'Failed to update shipment status');
+      failed.push({ id, reason: 'UPDATE_FAILED' });
+    }
+  }
+
+  return { updated: updatedCount, failed };
 };
 
 /**
