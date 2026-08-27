@@ -9,6 +9,12 @@ services:
     volumes:
       - mongo_data:/data/db
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
 
   redis:
     image: redis:7-alpine
@@ -16,22 +22,34 @@ services:
     ports:
       - "6379:6379"
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
 
   app:
     build: .
     container_name: navin_app
     ports:
       - "3000:3000"
+    # Optional: copy .env.example to .env and override secrets locally.
+    # Compose does not set NODE_ENV — the image defaults to production (#499).
+    env_file:
+      - path: .env
+        required: false
     environment:
-      - NODE_ENV=development
-      - PORT=3000
-      - MONGO_URI=mongodb://mongo:27017/navin_dev
-      - REDIS_URL=redis://redis:6379
-      - JWT_SECRET=dev-secret-key-replace-in-prod
-      - STELLAR_NETWORK=testnet
+      PORT: 3000
+      MONGO_URI: mongodb://mongo:27017/navin_dev
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-key-replace-in-prod-min-32-chars}
+      STELLAR_NETWORK: testnet
     depends_on:
-      - mongo
-      - redis
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health"]

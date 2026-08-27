@@ -19,6 +19,8 @@ RUN npm run build
 FROM node:20-alpine AS runner
 WORKDIR /app
 
+ENV NODE_ENV=production
+
 COPY --from=deps    /app/node_modules ./node_modules
 COPY --from=builder /app/dist         ./dist
 
@@ -28,9 +30,13 @@ COPY docs ./dist/docs
 
 COPY package.json ./
 
+RUN chown -R node:node /app
+
 EXPOSE 3000
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
   CMD wget --no-verbose --tries=1 --spider http://localhost:3000/api/health || exit 1
+
+USER node
 
 CMD ["node", "dist/src/main.js"]
