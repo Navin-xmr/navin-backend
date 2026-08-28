@@ -501,7 +501,8 @@ Configuration is validated at boot with Zod (`src/env.ts`) — the process **exi
 | `PORT` | No | `3000` | HTTP listen port |
 | `NODE_ENV` | No | `development` | `development` \| `test` \| `production` |
 | `REDIS_URL` | No | `redis://127.0.0.1:6379` | Redis (BullMQ queues, SSE, caches) |
-| `STELLAR_NETWORK` | No | `testnet` | `testnet` \| `public` |
+| `STELLAR_NETWORK` | No | `testnet` | `testnet` \| `public`; selects the default Horizon/Soroban URLs |
+| `HORIZON_URL` | Optional | *(derived from `STELLAR_NETWORK`)* | Overrides the Horizon URL |
 | `STELLAR_SECRET_KEY` | Optional | — | Horizon signing key (required for anchoring jobs) |
 | `STELLAR_WEBHOOK_SECRET` | Optional | — | HMAC secret for `/api/webhooks/stellar` (min 16 chars) |
 | `FRONTEND_URL` | No | `http://localhost:3000` | Invite / password-reset link base |
@@ -509,7 +510,7 @@ Configuration is validated at boot with Zod (`src/env.ts`) — the process **exi
 | `TOTP_ENCRYPTION_KEY` | Optional* | — | 64-hex AES-256 key for 2FA secrets (*required in production*) |
 | `STORAGE_PROVIDER` | No | `mock` | `mock` \| `s3` \| `r2` \| `cloudinary` |
 
-The full matrix — SMTP, SendGrid, Twilio, S3/Cloudinary keys, Soroban placeholders, Sentry — lives in [`docs/environment-variables.md`](docs/environment-variables.md) and [`.env.example`](.env.example). There are **no** `JWT_EXPIRY`, `STELLAR_HORIZON_URL`, `STELLAR_NETWORK_PASSPHRASE`, or `API_KEY_PREFIX` variables; token TTL is fixed in code and the Horizon URL/network passphrase derive from `STELLAR_NETWORK`.
+The full matrix — SMTP, SendGrid, Twilio, S3/Cloudinary keys, Soroban placeholders, Sentry — lives in [`docs/environment-variables.md`](docs/environment-variables.md) and [`.env.example`](.env.example). There are **no** `JWT_EXPIRY`, `STELLAR_NETWORK_PASSPHRASE`, or `API_KEY_PREFIX` variables; token TTL is fixed in code and the network passphrase derives from `STELLAR_NETWORK`. The Horizon URL also derives from `STELLAR_NETWORK` by default, but can be overridden with `HORIZON_URL` (see `src/config/stellarNetwork.ts`); an unrecognized `STELLAR_NETWORK` value fails fast at startup.
 
 ---
 

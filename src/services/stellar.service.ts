@@ -11,7 +11,7 @@ import { config } from '../config/index.js';
 import { AppError, ErrorCodes } from '../shared/http/errors.js';
 import { logger } from '../shared/logger/logger.js';
 
-const horizon = new Horizon.Server('https://horizon-testnet.stellar.org');
+const horizon = new Horizon.Server(config.horizonUrl);
 
 /**
  * Creates a Stellar manage-data transaction for a shipment and returns token metadata.
