@@ -66,6 +66,7 @@ describe('GET /api/users', () => {
     await jest.unstable_mockModule('../src/modules/users/users.repo.js', () => ({
       createUser: jest.fn(),
       findUserByEmail: jest.fn(),
+      findUserById: jest.fn(),
       findUsersByOrganizationId,
     }));
 
