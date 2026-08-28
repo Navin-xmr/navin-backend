@@ -28,6 +28,10 @@ await jest.unstable_mockModule('../src/modules/auth/auth.service.js', () => ({
   verifyToken: jest.fn((token: string) => jwt.verify(token, JWT_SECRET) as { userId: string; role: string; jti?: string }),
   forgotPassword: jest.fn(),
   resetPassword: jest.fn(),
+  refreshToken: jest.fn(),
+  registerCompany: jest.fn(),
+  setup2fa: jest.fn(),
+  changePassword: jest.fn(),
 }));
 
 await jest.unstable_mockModule('../src/infra/redis/connection.js', () => ({
