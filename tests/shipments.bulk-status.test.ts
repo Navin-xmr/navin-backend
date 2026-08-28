@@ -52,10 +52,20 @@ await jest.unstable_mockModule('../src/modules/shipments/shipments.model.js', ()
       const doc = { ...found, save: async () => doc } as ShipmentRecord;
       return Promise.resolve(doc);
     },
-    findByIdAndUpdate: (id: string) => {
+    findByIdAndUpdate: (
+      id: string,
+      update?: { status?: string; $push?: { milestones?: ShipmentRecord['milestones'][number] } }
+    ) => {
       const idx = shipmentsData.findIndex(d => String(d._id) === String(id));
       if (idx === -1) return Promise.resolve(null);
-      return Promise.resolve(shipmentsData[idx]);
+      const current = shipmentsData[idx];
+      if (update?.status) {
+        current.status = update.status;
+      }
+      if (update?.$push?.milestones) {
+        current.milestones = [...current.milestones, update.$push.milestones];
+      }
+      return Promise.resolve(current);
     },
     countDocuments: () => Promise.resolve(shipmentsData.length),
     deleteMany: () => {
@@ -88,11 +98,21 @@ await jest.unstable_mockModule('../src/modules/users/users.model.js', () => ({
         walletAddress: '0xABC123',
       }),
   },
+  OrganizationModel: {},
+  UserRole: {
+    SUPER_ADMIN: 'SUPER_ADMIN',
+    ADMIN: 'ADMIN',
+    MANAGER: 'MANAGER',
+    VIEWER: 'VIEWER',
+    CUSTOMER: 'CUSTOMER',
+  },
 }));
 
 await jest.unstable_mockModule('../src/services/stellar.service.js', () => ({
   tokenizeShipment: jest.fn(),
+  anchorTelemetryHash: jest.fn(),
   releaseEscrow: jest.fn(() => Promise.resolve({ success: true, transactionHash: 'mock-tx-hash' })),
+  getStellarExplorerUrl: jest.fn((txHash: string) => `https://stellar.expert/explorer/testnet/tx/${txHash}`),
 }));
 
 await jest.unstable_mockModule('../src/infra/socket/io.js', () => ({
@@ -100,10 +120,18 @@ await jest.unstable_mockModule('../src/infra/socket/io.js', () => ({
   getIO: jest.fn(),
   emitStatusUpdate: jest.fn(),
   emitPaymentStatusChange: jest.fn(),
+  emitAnomalyDetected: jest.fn(),
+  emitTelemetryUpdate: jest.fn(),
 }));
 
 await jest.unstable_mockModule('../src/modules/analytics/analytics.cache.js', () => ({
   invalidateAnalyticsPerformanceCache: jest.fn(),
+  analyticsPerformanceCacheKey: jest.fn(() => 'analytics:performance:mock'),
+  readAnalyticsPerformanceCache: jest.fn(() => Promise.resolve(null)),
+  writeAnalyticsPerformanceCache: jest.fn(),
+  analyticsSummaryCacheKey: jest.fn(() => 'analytics:summary:mock'),
+  readAnalyticsSummaryCache: jest.fn(() => Promise.resolve(null)),
+  writeAnalyticsSummaryCache: jest.fn(),
 }));
 
 await jest.unstable_mockModule('../src/modules/payments/payments.repo.js', () => ({
@@ -149,7 +177,7 @@ describe('Bulk Status Update API', () => {
     const res = await request(app)
       .patch('/api/shipments/bulk/status')
       .set('Authorization', `Bearer ${token}`)
-      .send({ shipmentIds: [], status: 'IN_TRANSIT' });
+      .send({ shipmentIds: ['1'], status: 'IN_TRANSIT' });
     expect(res.status).toBe(200);
   });
 
