@@ -1,5 +1,5 @@
 import { jest, describe, it, expect, beforeEach, beforeAll } from '@jest/globals';
-import crypto from 'crypto';
+import jwt from 'jsonwebtoken';
 
 // Mock data
 const invitations: Record<string, unknown>[] = [];
@@ -115,7 +115,6 @@ await jest.unstable_mockModule('../src/modules/invitations/invitations.model.js'
   return { InvitationModel, InvitationStatus };
 });
 
-const jwt = await import('jsonwebtoken');
 const {
   createAndSendInvitation,
   resendInvitation,
@@ -123,7 +122,7 @@ const {
   getInvitationInfo,
   acceptInvitationWithPassword,
 } = await import('../src/modules/invitations/invitations.service.js');
-const { AppError } = await import('../src/shared/http/errors.js');
+const { ErrorCodes } = await import('../src/shared/http/errors.js');
 
 describe('#352 - Persistent Invitations Model', () => {
   const jwtSecret = process.env.JWT_SECRET ?? 'test-secret-key-at-least-32-chars-long';
@@ -227,28 +226,32 @@ describe('#352 - Persistent Invitations Model', () => {
     const inv = invitations[0] as Record<string, unknown>;
     expect(inv.status).toBe('REVOKED');
 
-    // Try to accept revoked invitation
-    try {
-      await acceptInvitationWithPassword({
+    await expect(
+      acceptInvitationWithPassword({
         token: token.token,
         name: 'User',
         password: 'SecurePass123',
-      });
-      expect.fail('Should not accept revoked invitation');
-    } catch (err) {
-      const error = err as AppError;
-      expect(error.statusCode).toBe(400);
-    }
+      })
+    ).rejects.toMatchObject({ statusCode: 400, code: ErrorCodes.BAD_REQUEST });
   });
 
   it('should return 404 for invalid invitation token in info endpoint', async () => {
-    try {
-      await getInvitationInfo('invalid.token.here');
-      expect.fail('Should throw error');
-    } catch (err) {
-      const error = err as AppError;
-      expect(error.statusCode).toBe(401);
-    }
+    const missingInvitationToken = jwt.sign(
+      {
+        type: 'COMPANY_INVITATION',
+        invitationId: 'missing-invitation-id',
+        email: 'nobody@test.com',
+        role: 'VIEWER',
+        organizationId: 'org-1',
+      },
+      jwtSecret,
+      { expiresIn: '1h' }
+    );
+
+    await expect(getInvitationInfo(missingInvitationToken)).rejects.toMatchObject({
+      statusCode: 404,
+      code: ErrorCodes.NOT_FOUND,
+    });
   });
 
   it('should prevent duplicate pending invitations for same email', async () => {
@@ -260,19 +263,15 @@ describe('#352 - Persistent Invitations Model', () => {
       organizationId: 'org-1',
     });
 
-    try {
-      await createAndSendInvitation({
+    await expect(
+      createAndSendInvitation({
         email: 'unique@test.com',
         role: 'MANAGER',
         inviterId: 'user-1',
         inviterRole: 'ADMIN',
         organizationId: 'org-1',
-      });
-      expect.fail('Should not allow duplicate');
-    } catch (err) {
-      const error = err as AppError;
-      expect(error.statusCode).toBe(409);
-    }
+      })
+    ).rejects.toMatchObject({ statusCode: 409, code: 'DUPLICATE_KEY' });
   });
 
   it('should store tokenHash uniquely for security', async () => {
@@ -341,29 +340,22 @@ describe('#352 - Persistent Invitations Model', () => {
     const inv = invitations[0] as Record<string, unknown>;
     (inv as any).expiresAt = new Date(Date.now() - 1000); // Past date
 
-    try {
-      await getInvitationInfo(token.token);
-      expect.fail('Should throw expired error');
-    } catch (err) {
-      const error = err as AppError;
-      expect(error.statusCode).toBe(400);
-    }
+    await expect(getInvitationInfo(token.token)).rejects.toMatchObject({
+      statusCode: 400,
+      code: ErrorCodes.BAD_REQUEST,
+    });
   });
 
   it('should enforce role-based invitation permissions', async () => {
-    // ADMIN trying to invite SUPER_ADMIN (not allowed)
-    try {
-      await createAndSendInvitation({
-        email: 'superadmin@test.com',
-        role: 'SUPER_ADMIN',
+    // ADMIN cannot invite ADMIN (allowedByRole check → 403 FORBIDDEN)
+    await expect(
+      createAndSendInvitation({
+        email: 'another-admin@test.com',
+        role: 'ADMIN',
         inviterId: 'user-1',
         inviterRole: 'ADMIN',
         organizationId: 'org-1',
-      });
-      expect.fail('Should not allow SUPER_ADMIN invite');
-    } catch (err) {
-      const error = err as AppError;
-      expect(error.statusCode).toBe(400);
-    }
+      })
+    ).rejects.toMatchObject({ statusCode: 403, code: ErrorCodes.FORBIDDEN });
   });
 });
