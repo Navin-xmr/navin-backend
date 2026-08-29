@@ -20,57 +20,96 @@ await jest.unstable_mockModule('../src/infra/redis/connection.js', () => ({
   getRedisClient: () => mockRedisClient,
 }));
 
+function asDate(value: unknown): Date {
+  return value instanceof Date ? value : new Date(0);
+}
+
+function periodKpis(period: Record<string, unknown>[]) {
+  const withTransit = period.filter(s => s.transitDays !== null && s.transitDays !== undefined);
+  const avgTransitDays =
+    withTransit.reduce((sum, s) => sum + Number(s.transitDays ?? 0), 0) /
+    Math.max(1, withTransit.length);
+  return {
+    totalShipments: period.length,
+    onTimeCount: period.filter(s => s.isOnTime === true).length,
+    dispatchedCount: period.filter(s => s.isOnTime !== null).length,
+    disputedCount: period.filter(s => (Array.isArray(s.disputes) ? s.disputes : []).length > 0)
+      .length,
+    avgTransitDays: avgTransitDays || 0,
+  };
+}
+
+function buildSummaryRows() {
+  const now = new Date();
+  const sixtyDaysAgo = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000);
+  const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+  const currentPeriod = shipments.filter(s => asDate(s.createdAt) >= thirtyDaysAgo);
+  const previousPeriod = shipments.filter(s => {
+    const createdAt = asDate(s.createdAt);
+    return createdAt >= sixtyDaysAgo && createdAt < thirtyDaysAgo;
+  });
+
+  const sparklineByDay = new Map<
+    number,
+    {
+      _id: Date;
+      shipmentCount: number;
+      onTimeCount: number;
+      dispatchedCount: number;
+      transitSum: number;
+      transitN: number;
+      disputedCount: number;
+    }
+  >();
+
+  for (const s of currentPeriod) {
+    const day = new Date(asDate(s.createdAt));
+    day.setUTCHours(0, 0, 0, 0);
+    const key = day.getTime();
+    const row = sparklineByDay.get(key) ?? {
+      _id: day,
+      shipmentCount: 0,
+      onTimeCount: 0,
+      dispatchedCount: 0,
+      transitSum: 0,
+      transitN: 0,
+      disputedCount: 0,
+    };
+    row.shipmentCount += 1;
+    if (s.isOnTime === true) row.onTimeCount += 1;
+    if (s.isOnTime !== null) row.dispatchedCount += 1;
+    if ((Array.isArray(s.disputes) ? s.disputes : []).length > 0) row.disputedCount += 1;
+    if (s.transitDays !== null && s.transitDays !== undefined) {
+      row.transitSum += Number(s.transitDays);
+      row.transitN += 1;
+    }
+    sparklineByDay.set(key, row);
+  }
+
+  const currentSparklines = [...sparklineByDay.values()].map(row => ({
+    _id: row._id,
+    shipmentCount: row.shipmentCount,
+    onTimeCount: row.onTimeCount,
+    dispatchedCount: row.dispatchedCount,
+    avgTransitDays: row.transitN ? row.transitSum / row.transitN : 0,
+    disputedCount: row.disputedCount,
+  }));
+
+  return [
+    {
+      currentKpis: [periodKpis(currentPeriod)],
+      previousKpis: [periodKpis(previousPeriod)],
+      currentSparklines,
+    },
+  ];
+}
+
 await jest.unstable_mockModule('../src/modules/shipments/shipments.model.js', () => {
   const ShipmentModel = {
-    aggregate: jest.fn().mockImplementation(async (pipeline) => {
-      // Simplified aggregation for testing
-      const now = new Date();
-      const sixtyDaysAgo = new Date(now.getTime() - 60 * 24 * 60 * 60 * 1000);
-      const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-
-      const currentPeriod = shipments.filter((s: any) => s.createdAt >= thirtyDaysAgo);
-      const previousPeriod = shipments.filter((s: any) => s.createdAt >= sixtyDaysAgo && s.createdAt < thirtyDaysAgo);
-
-      // Calculate metrics
-      const currentOnTime = currentPeriod.filter((s: any) => s.isOnTime === true).length;
-      const currentDispatched = currentPeriod.filter((s: any) => s.isOnTime !== null).length;
-      const currentDisputed = currentPeriod.filter((s: any) => (s.disputes || []).length > 0).length;
-      const currentTransit = currentPeriod
-        .filter((s: any) => s.transitDays !== null)
-        .reduce((sum, s: any) => sum + (s.transitDays || 0), 0) / Math.max(1, currentPeriod.filter((s: any) => s.transitDays !== null).length);
-
-      const prevOnTime = previousPeriod.filter((s: any) => s.isOnTime === true).length;
-      const prevDispatched = previousPeriod.filter((s: any) => s.isOnTime !== null).length;
-      const prevDisputed = previousPeriod.filter((s: any) => (s.disputes || []).length > 0).length;
-      const prevTransit = previousPeriod
-        .filter((s: any) => s.transitDays !== null)
-        .reduce((sum, s: any) => sum + (s.transitDays || 0), 0) / Math.max(1, previousPeriod.filter((s: any) => s.transitDays !== null).length);
-
-      return [
-        {
-          currentKpis: [
-            {
-              totalShipments: currentPeriod.length,
-              onTimeCount: currentOnTime,
-              dispatchedCount: currentDispatched,
-              disputedCount: currentDisputed,
-              avgTransitDays: currentTransit || 0,
-            },
-          ],
-          previousKpis: [
-            {
-              totalShipments: previousPeriod.length,
-              onTimeCount: prevOnTime,
-              dispatchedCount: prevDispatched,
-              disputedCount: prevDisputed,
-              avgTransitDays: prevTransit || 0,
-            },
-          ],
-          currentSparklines: [],
-        },
-      ];
-    }),
-    option: jest.fn().mockReturnThis(),
+    aggregate: jest.fn(() => ({
+      option: jest.fn(async () => buildSummaryRows()),
+    })),
   };
 
   return { Shipment: ShipmentModel };
@@ -147,7 +186,9 @@ describe('#356 - Analytics Summary with KPI Sparklines', () => {
   });
 
   it('should cache result and return same data without re-aggregation', async () => {
-    const Shipment = await import('../src/modules/shipments/shipments.model.js').then(m => m.Shipment);
+    const Shipment = await import('../src/modules/shipments/shipments.model.js').then(
+      m => m.Shipment
+    );
     const aggregateSpy = jest.spyOn(Shipment, 'aggregate');
 
     // First call
@@ -238,17 +279,17 @@ describe('#356 - Analytics Summary with KPI Sparklines', () => {
   it('sparklines should all be arrays of numbers >= 0', async () => {
     const summary = await getAnalyticsSummary({});
 
-    summary.onTimeDeliverySparkline.forEach((v, i) => {
+    summary.onTimeDeliverySparkline.forEach(v => {
       expect(typeof v).toBe('number');
       expect(v).toBeGreaterThanOrEqual(0);
     });
 
-    summary.shipmentsSparkline.forEach((v, i) => {
+    summary.shipmentsSparkline.forEach(v => {
       expect(typeof v).toBe('number');
       expect(v).toBeGreaterThanOrEqual(0);
     });
 
-    summary.disputesSparkline.forEach((v, i) => {
+    summary.disputesSparkline.forEach(v => {
       expect(typeof v).toBe('number');
       expect(v).toBeGreaterThanOrEqual(0);
     });
