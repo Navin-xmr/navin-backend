@@ -1,9 +1,7 @@
 import { describe, it, expect, jest } from '@jest/globals';
 import express from 'express';
 import request from 'supertest';
-import { standardLimiter, loginLimiter } from '../rateLimiter.js';
-
-import rateLimit from 'express-rate-limit';
+import { standardLimiter, strictLimiter, loginLimiter } from '../rateLimiter.js';
 import type { RequestHandler } from 'express';
 
 function buildTestApp(limiter: RequestHandler) {
@@ -39,37 +37,50 @@ describe('standardLimiter', () => {
 
     const res = await request(app).get('/test');
     expect(res.status).toBe(429);
-    expect(res.body).toEqual({
-      success: false,
-      message: 'Too many requests, please try again later.',
-      data: null,
-      retryAfter: expect.any(Number),
-    });
+    expect(res.body).toEqual(
+      expect.objectContaining({
+        success: false,
+        message: 'Too many requests, please try again later.',
+        data: null,
+        retryAfter: expect.any(Number),
+      })
+    );
     expect(res.headers['retry-after']).toBeDefined();
     expect(Number(res.headers['retry-after'])).toBeGreaterThan(0);
   });
 
   it('uses a one-minute window in development', async () => {
     const previousEnv = process.env.NODE_ENV;
-    process.env.NODE_ENV = 'development';
-    jest.resetModules();
 
-    const { standardLimiter: devLimiter } = await import('../rateLimiter.js');
-    const app = buildTestApp(devLimiter);
+    try {
+      process.env.NODE_ENV = 'development';
+      jest.resetModules();
 
-    for (let i = 0; i < 100; i += 1) {
-      const res = await request(app).get('/test');
-      expect(res.status).toBe(200);
+      const { standardLimiter: devLimiter } = await import('../rateLimiter.js');
+      const app = buildTestApp(devLimiter);
+
+      for (let i = 0; i < 100; i += 1) {
+        const res = await request(app).get('/test');
+        expect(res.status).toBe(200);
+      }
+
+      const limited = await request(app).get('/test');
+      expect(limited.status).toBe(429);
+      expect(limited.body).toEqual(
+        expect.objectContaining({
+          success: false,
+          message: 'Too many requests, please try again later.',
+          data: null,
+          retryAfter: expect.any(Number),
+        })
+      );
+    } finally {
+      if (previousEnv === undefined) {
+        delete process.env.NODE_ENV;
+      } else {
+        process.env.NODE_ENV = previousEnv;
+      }
     }
-
-    const limited = await request(app).get('/test');
-    expect(limited.status).toBe(429);
-    expect(limited.body).toEqual({
-      success: false,
-      message: 'Too many requests, please try again later.',
-    });
-
-    process.env.NODE_ENV = previousEnv;
   });
 
   it('rate limits requests with invalid bearer tokens', async () => {
@@ -85,10 +96,14 @@ describe('standardLimiter', () => {
     const limited = await request(app).get('/test').set('Authorization', 'Bearer invalid-token');
 
     expect(limited.status).toBe(429);
-    expect(limited.body).toEqual({
-      success: false,
-      message: 'Too many requests, please try again later.',
-    });
+    expect(limited.body).toEqual(
+      expect.objectContaining({
+        success: false,
+        message: 'Too many requests, please try again later.',
+        data: null,
+        retryAfter: expect.any(Number),
+      })
+    );
   });
 });
 
@@ -117,21 +132,21 @@ describe('loginLimiter', () => {
 
 describe('strictLimiter', () => {
   it('returns 429 after exceeding limit', async () => {
-    const app = buildTestApp(
-      rateLimit({
-        windowMs: 60000,
-        limit: 3,
-        standardHeaders: true,
-        legacyHeaders: false,
-        message: { success: false, message: 'Too many requests, please slow down.' },
-      })
-    );
+    const app = buildTestApp(strictLimiter);
 
-    for (let i = 0; i < 3; i++) await request(app).get('/test');
+    for (let i = 0; i < 10; i++) await request(app).get('/test');
     const res = await request(app).get('/test');
 
     expect(res.status).toBe(429);
     expect(res.body.success).toBe(false);
     expect(res.body.message).toBe('Too many requests, please slow down.');
+    expect(res.body).toEqual(
+      expect.objectContaining({
+        success: false,
+        message: 'Too many requests, please slow down.',
+        data: null,
+        retryAfter: expect.any(Number),
+      })
+    );
   });
 });
