@@ -174,11 +174,22 @@ describe('Bulk Status Update API', () => {
 
   it('should return 200 for MANAGER role', async () => {
     const token = generateToken({ userId: 'manager-1', role: 'MANAGER', organizationId: 'org1' });
+
+    shipmentsData.push({
+      _id: 's-manager-1',
+      status: 'CREATED',
+      enterpriseId: 'org1',
+      logisticsId: 'org2',
+      milestones: [],
+    });
+
     const res = await request(app)
       .patch('/api/shipments/bulk/status')
       .set('Authorization', `Bearer ${token}`)
-      .send({ shipmentIds: ['1'], status: 'IN_TRANSIT' });
+      .send({ shipmentIds: ['s-manager-1'], status: 'IN_TRANSIT' });
     expect(res.status).toBe(200);
+    expect(res.body.data.updated).toBe(1);
+    expect(res.body.data.failed).toHaveLength(0);
   });
 
   it('should return 400 when shipmentIds array is empty', async () => {

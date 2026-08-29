@@ -95,7 +95,7 @@ describe('Issue #266: requireRole on API key management routes', () => {
         .post('/api/auth/api-keys')
         .set('Authorization', `Bearer ${makeToken('ADMIN')}`)
         .send({ name: 'test-key', organizationId: 'org-1' });
-      expect(res.status).not.toBe(403);
+      expect(res.status).toBe(201);
     });
 
     it('allows SUPER_ADMIN role', async () => {
@@ -103,7 +103,7 @@ describe('Issue #266: requireRole on API key management routes', () => {
         .post('/api/auth/api-keys')
         .set('Authorization', `Bearer ${makeToken('SUPER_ADMIN')}`)
         .send({ name: 'test-key', organizationId: 'org-1' });
-      expect(res.status).not.toBe(403);
+      expect(res.status).toBe(201);
     });
 
     it('returns 401 without token', async () => {
@@ -133,14 +133,14 @@ describe('Issue #266: requireRole on API key management routes', () => {
       const res = await request(app)
         .get('/api/auth/api-keys/org-1')
         .set('Authorization', `Bearer ${makeToken('ADMIN')}`);
-      expect(res.status).not.toBe(403);
+      expect(res.status).toBe(200);
     });
 
     it('allows SUPER_ADMIN role', async () => {
       const res = await request(app)
         .get('/api/auth/api-keys/org-1')
         .set('Authorization', `Bearer ${makeToken('SUPER_ADMIN')}`);
-      expect(res.status).not.toBe(403);
+      expect(res.status).toBe(200);
     });
 
     it('returns 401 without token', async () => {
@@ -169,14 +169,14 @@ describe('Issue #266: requireRole on API key management routes', () => {
       const res = await request(app)
         .delete('/api/auth/api-keys/key-1')
         .set('Authorization', `Bearer ${makeToken('ADMIN')}`);
-      expect(res.status).not.toBe(403);
+      expect(res.status).toBe(200);
     });
 
     it('allows SUPER_ADMIN role', async () => {
       const res = await request(app)
         .delete('/api/auth/api-keys/key-1')
         .set('Authorization', `Bearer ${makeToken('SUPER_ADMIN')}`);
-      expect(res.status).not.toBe(403);
+      expect(res.status).toBe(200);
     });
 
     it('returns 401 without token', async () => {
