@@ -7,6 +7,7 @@ import {
   CreateInvitationBodySchema,
   CreateUserBodySchema,
   ListUsersQuerySchema,
+  UpdateCurrentUserBodySchema,
   VerifyInvitationQuerySchema,
 } from './users.validation.js';
 import {
@@ -14,9 +15,11 @@ import {
   createInvitationController,
   createUserController,
   createTeamMemberController,
+  deleteCurrentUserController,
   deleteUserController,
   getCurrentUserController,
   listUsersController,
+  updateCurrentUserController,
   verifyInvitationController,
 } from './users.controller.js';
 import { requireAuth } from '../../shared/middleware/requireAuth.js';
@@ -26,6 +29,15 @@ import { UserRole } from '../../shared/constants/index.js';
 export const usersRouter = Router();
 
 usersRouter.get('/me', requireAuth, asyncHandler(getCurrentUserController));
+
+usersRouter.patch(
+  '/me',
+  requireAuth,
+  validateRequest({ body: UpdateCurrentUserBodySchema }),
+  asyncHandler(updateCurrentUserController)
+);
+
+usersRouter.delete('/me', requireAuth, asyncHandler(deleteCurrentUserController));
 
 usersRouter.post(
   '/',
