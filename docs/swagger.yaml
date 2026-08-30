@@ -221,6 +221,7 @@ paths:
     get:
       summary: Health check
       description: Public health endpoint used by load balancers and uptime monitors.
+      security: []
       responses:
         '200':
           description: Service health metadata
@@ -588,6 +589,7 @@ paths:
                     type: string
                     example: OTP sent successfully
                   data:
+                    type: string
                     nullable: true
                     example: null
         '400':
@@ -616,6 +618,7 @@ paths:
                   retryAfter:
                     type: integer
                   data:
+                    type: string
                     nullable: true
   /api/notifications/phone/verify-otp:
     post:
@@ -710,6 +713,7 @@ paths:
                   retryAfter:
                     type: integer
                   data:
+                    type: string
                     nullable: true
 
   /api/public/tracking/{trackingNumber}:
@@ -722,6 +726,7 @@ paths:
         Unauthenticated public tracking surface expected by the frontend.
         No dedicated implementing issue yet (planned alongside shipments UX).
       x-implemented: false
+      security: []
       parameters:
         - in: path
           name: trackingNumber
@@ -913,6 +918,7 @@ paths:
                     type: string
                     example: Session revoked successfully
                   data:
+                    type: string
                     nullable: true
                     example: null
         '401':
@@ -997,6 +1003,7 @@ paths:
                   message:
                     type: string
                   data:
+                    type: string
                     nullable: true
   /api/auth/register/company:
     post:
@@ -1275,6 +1282,7 @@ paths:
                     type: string
                     example: API key revoked
                   data:
+                    type: string
                     nullable: true
         '401':
           description: Missing or invalid authorization token
@@ -2054,6 +2062,7 @@ paths:
                   retryAfter:
                     type: integer
                   data:
+                    type: string
                     nullable: true
   /api/auth/refresh:
     post:
@@ -2157,50 +2166,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-  /api/auth/2fa/setup:
-    post:
-      summary: Initiate TOTP 2FA setup
-      description: >-
-        Generates a new TOTP secret for the authenticated user, encrypts it at
-        rest (AES-256-GCM), and returns an `otpauth://` URI rendered as a base64
-        PNG QR code data URL. The user should scan this with an authenticator app
-        (e.g. Google Authenticator, Authy). **2FA is not yet enabled** after this
-        call — the user must verify a valid TOTP code via the upcoming verify
-        endpoint to activate protection.
-      tags:
-        - Auth
-      security:
-        - bearerAuth: []
-      responses:
-        '200':
-          description: QR code data URL generated successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: true
-                  message:
-                    type: string
-                    example: '2FA setup initiated. Scan the QR code with your authenticator app.'
-                  data:
-                    type: object
-                    properties:
-                      qrCodeUrl:
-                        type: string
-                        description: >-
-                          Base64 PNG data URL (`data:image/png;base64,...`) to
-                          be displayed as a QR code for the user to scan.
-                        example: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA...'
-        '401':
-          description: Missing or invalid auth token
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-
   /api/auth/forgot-password:
     post:
       summary: Request a password reset email
@@ -2209,6 +2174,7 @@ paths:
         success response to prevent email enumeration.
       tags:
         - Auth
+      security: []
       requestBody:
         required: true
         content:
@@ -2235,6 +2201,7 @@ paths:
                   message:
                     type: string
                   data:
+                    type: string
                     nullable: true
         '400':
           description: Invalid email format
@@ -2361,6 +2328,7 @@ paths:
                   retryAfter:
                     type: integer
                   data:
+                    type: string
                     nullable: true
   /api/auth/2fa:
     delete:
@@ -2397,6 +2365,7 @@ paths:
                   message:
                     type: string
                   data:
+                    type: string
                     nullable: true
         '400':
           description: 2FA is not enabled on this account
@@ -2452,7 +2421,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-  /api/auth/api-keys/{organizationId}:
+  /api/auth/api-keys/{id}:
     get:
       summary: List API keys for an organization
       description: Returns all active API keys for the specified organization (without exposing the raw keys)
@@ -2460,7 +2429,7 @@ paths:
         - bearerAuth: []
       parameters:
         - in: path
-          name: organizationId
+          name: id
           required: true
           schema:
             type: string
@@ -2500,7 +2469,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-  /api/auth/api-keys/{apiKeyId}:
     delete:
       summary: Revoke an API key
       description: Deactivates an API key, preventing it from being used for authentication
@@ -2508,7 +2476,7 @@ paths:
         - bearerAuth: []
       parameters:
         - in: path
-          name: apiKeyId
+          name: id
           required: true
           schema:
             type: string
@@ -4360,6 +4328,7 @@ paths:
                     type: string
                     example: Password changed successfully
                   data:
+                    type: string
                     nullable: true
                     example: null
         '400':
@@ -5026,6 +4995,8 @@ paths:
                       - type: object
                         properties:
                           estimatedArrival:
+                            type: string
+                            format: date-time
                             nullable: true
                           reason:
                             type: string
