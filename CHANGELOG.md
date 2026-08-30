@@ -21,6 +21,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Corrected `docs/PAGINATION.md` pagination strategy table: users dual-mode is live, documented the payments `total` meta variance, added shipment timeline to the cursor list (#576)
+
+### Changed
+
 - Documented Horizon escrow fallback and Soroban integration plan in `docs/blockchain.md` (#395)
 - Documented storage adapter contract in `docs/storage-adapter.md` and expanded JSDoc on `mockStorageService` (#397)
 - Added `reports/generate-coverage.js` and `reports/API_SURFACE_COVERAGE.html` to detect swagger.yaml vs Express route drift (#399)

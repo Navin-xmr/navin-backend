@@ -243,7 +243,7 @@ Tests use `jest.unstable_mockModule()`; merged source now imports symbols the mo
 - [ ] **N6. websockets.md — UPDATE**: auth example must send RAW JWT (socketAuth does not strip Bearer — current example fails handshake); full 9-status enum for `shipment:status`; mark `notification:new` as defined-but-dead (zero emitters, no join path); `.js`→`.ts` ref; note SSE fanout
 - [ ] **N7. environment-variables.md — UPDATE**: add TOTP_ENCRYPTION_KEY, Cloudinary trio; flip STORAGE_PROVIDER/S3_* to validated+used (incl. `r2`); reconcile FRONTEND_URL default (env.ts:69 says :3000, .env.example says :5173)
 - [ ] **N8. DATABASE.md — UPDATE**: add Migrations § (migrate-mongo workflow, changelog collection, scripts); extend index coverage (LedgerBlock, ApiKey, anchorStatus, severity); fix text-index columns (missing trackingNumber); placeholder note for future dataHash index
-- [ ] **N9. PAGINATION.md — UPDATE**: users dual-mode is LIVE (not "(target)"); document payments deviation (meta always includes total); add shipment-timeline to cursor list
+- [x] **N9. PAGINATION.md — UPDATE**: users dual-mode is LIVE (not "(target)"); document payments deviation (meta always includes total); add shipment-timeline to cursor list
 
 ### O. Root docs & conventions
 
