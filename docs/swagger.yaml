@@ -221,6 +221,7 @@ paths:
     get:
       summary: Health check
       description: Public health endpoint used by load balancers and uptime monitors.
+      security: []
       responses:
         '200':
           description: Service health metadata
@@ -425,6 +426,7 @@ paths:
         Planned SMS OTP verification endpoints (Twilio).
         Implementing issue: https://github.com/Navin-xmr/navin-backend/issues/364
       x-implemented: false
+      security: []
       responses:
         '501':
           description: Not implemented
@@ -436,6 +438,7 @@ paths:
         **NOT IMPLEMENTED** — stub for frontend discovery.
         Implementing issue: https://github.com/Navin-xmr/navin-backend/issues/364
       x-implemented: false
+      security: []
       responses:
         '501':
           description: Not implemented
@@ -450,6 +453,7 @@ paths:
         Unauthenticated public tracking surface expected by the frontend.
         No dedicated implementing issue yet (planned alongside shipments UX).
       x-implemented: false
+      security: []
       parameters:
         - in: path
           name: trackingNumber
@@ -641,6 +645,7 @@ paths:
                     type: string
                     example: Session revoked successfully
                   data:
+                    type: string
                     nullable: true
                     example: null
         '401':
@@ -725,6 +730,7 @@ paths:
                   message:
                     type: string
                   data:
+                    type: string
                     nullable: true
   /api/auth/register/company:
     post:
@@ -1584,6 +1590,7 @@ paths:
                   retryAfter:
                     type: integer
                   data:
+                    type: string
                     nullable: true
   /api/auth/logout:
     post:
@@ -1612,50 +1619,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-  /api/auth/2fa/setup:
-    post:
-      summary: Initiate TOTP 2FA setup
-      description: >-
-        Generates a new TOTP secret for the authenticated user, encrypts it at
-        rest (AES-256-GCM), and returns an `otpauth://` URI rendered as a base64
-        PNG QR code data URL. The user should scan this with an authenticator app
-        (e.g. Google Authenticator, Authy). **2FA is not yet enabled** after this
-        call — the user must verify a valid TOTP code via the upcoming verify
-        endpoint to activate protection.
-      tags:
-        - Auth
-      security:
-        - bearerAuth: []
-      responses:
-        '200':
-          description: QR code data URL generated successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: true
-                  message:
-                    type: string
-                    example: '2FA setup initiated. Scan the QR code with your authenticator app.'
-                  data:
-                    type: object
-                    properties:
-                      qrCodeUrl:
-                        type: string
-                        description: >-
-                          Base64 PNG data URL (`data:image/png;base64,...`) to
-                          be displayed as a QR code for the user to scan.
-                        example: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA...'
-        '401':
-          description: Missing or invalid auth token
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-
   /api/auth/forgot-password:
     post:
       summary: Request a password reset email
@@ -1664,6 +1627,7 @@ paths:
         success response to prevent email enumeration.
       tags:
         - Auth
+      security: []
       requestBody:
         required: true
         content:
@@ -1690,6 +1654,7 @@ paths:
                   message:
                     type: string
                   data:
+                    type: string
                     nullable: true
         '400':
           description: Invalid email format
@@ -1816,6 +1781,7 @@ paths:
                   retryAfter:
                     type: integer
                   data:
+                    type: string
                     nullable: true
   /api/auth/2fa:
     delete:
@@ -1852,6 +1818,7 @@ paths:
                   message:
                     type: string
                   data:
+                    type: string
                     nullable: true
         '400':
           description: 2FA is not enabled on this account
@@ -1907,7 +1874,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-  /api/auth/api-keys/{organizationId}:
+  /api/auth/api-keys/{id}:
     get:
       summary: List API keys for an organization
       description: Returns all active API keys for the specified organization (without exposing the raw keys)
@@ -1915,7 +1882,7 @@ paths:
         - bearerAuth: []
       parameters:
         - in: path
-          name: organizationId
+          name: id
           required: true
           schema:
             type: string
@@ -1955,7 +1922,6 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-  /api/auth/api-keys/{apiKeyId}:
     delete:
       summary: Revoke an API key
       description: Deactivates an API key, preventing it from being used for authentication
@@ -1963,7 +1929,7 @@ paths:
         - bearerAuth: []
       parameters:
         - in: path
-          name: apiKeyId
+          name: id
           required: true
           schema:
             type: string
@@ -2993,252 +2959,6 @@ paths:
 
   /api/settlements/{id}:
     get:
-      summary: Get payments history (legacy — prefer /api/settlements)
-      description: Returns settlement records for the authenticated user's organization. Both `/api/payments` and `/api/settlements` resolve to the same router.
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: query
-          name: status
-          schema:
-            type: string
-            enum: [Pending, Escrowed, Released, Failed, Disputed]
-          description: Filter payments by status.
-        - in: query
-          name: cursor
-      summary: Get settlement detail
-      description: Returns full settlement detail including escrowRelease subdocument.
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
-          description: Settlement ObjectId.
-      responses:
-        '200':
-          description: Settlement retrieved successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                  message:
-                    type: string
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/Settlement'
-                  meta:
-                    type: object
-                    properties:
-                      total:
-                        type: integer
-                      hasMore:
-                        type: boolean
-                      nextCursor:
-                        type: string
-                        nullable: true
-                    $ref: '#/components/schemas/Settlement'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          description: Settlement not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-
-  /api/settlements/{id}/dispute:
-    post:
-      summary: Dispute a settlement
-      description: |
-        Transitions the settlement status to `Disputed` and records dispute metadata
-        (`disputedAt`, `disputeReason`, `additionalNotes`) in `escrowRelease`.
-        Restricted to ADMIN and MANAGER roles.
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
-          description: Settlement ObjectId.
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - reason
-              properties:
-                reason:
-                  type: string
-                  minLength: 1
-                  description: Reason for the dispute.
-                notes:
-                  type: string
-                  description: Optional additional context.
-      responses:
-        '200':
-          description: Settlement disputed successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                  message:
-                    type: string
-                  data:
-                    $ref: '#/components/schemas/Settlement'
-        '400':
-          description: Validation error
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          description: Forbidden — VIEWER role cannot dispute
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '404':
-          description: Settlement not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-
-  /api/settlements:
-    get:
-      summary: List settlements
-      description: Returns settlement records for the authenticated user's organization (cursor-paginated).
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: query
-          name: status
-          schema:
-            type: string
-            enum: [Pending, Escrowed, Released, Failed, Disputed]
-          description: Filter by status.
-        - in: query
-          name: cursor
-          schema:
-            type: string
-          description: Cursor for next-page pagination.
-        - in: query
-          name: limit
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 100
-            default: 20
-      responses:
-        '200':
-          description: Settlements retrieved successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                  message:
-                    type: string
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/Settlement'
-                  meta:
-                    type: object
-                    properties:
-                      total:
-                        type: integer
-                      hasMore:
-                        type: boolean
-                      nextCursor:
-                        type: string
-                        nullable: true
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-
-  /api/settlements/summary:
-    get:
-      summary: Get settlement summary with sparkline
-      description: |
-        Returns aggregated settlement totals and a per-day sparkline array for the chosen period.
-        Results are cached in Redis for 5 minutes.
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: query
-          name: period
-          schema:
-            type: string
-            enum: [week, month, quarter]
-            default: week
-          description: Aggregation window. `week`=7 days, `month`=30 days, `quarter`=90 days.
-      responses:
-        '200':
-          description: Summary retrieved successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                  message:
-                    type: string
-                  data:
-                    type: object
-                    properties:
-                      totalReleased:
-                        type: number
-                        description: Sum of released settlement amounts in the period.
-                      totalInEscrow:
-                        type: number
-                        description: Sum of escrowed settlement amounts in the period.
-                      totalPending:
-                        type: number
-                        description: Sum of pending settlement amounts in the period.
-                      sparkline:
-                        type: array
-                        items:
-                          type: number
-                        description: One entry per day in the period (released amounts per day).
-                      period:
-                        type: string
-                        enum: [week, month, quarter]
-        '400':
-          description: Invalid period value
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-
-  /api/settlements/{id}:
-    get:
       summary: Get settlement detail
       description: Returns full settlement detail including escrowRelease subdocument.
       security:
@@ -3826,6 +3546,7 @@ paths:
                     type: string
                     example: Password changed successfully
                   data:
+                    type: string
                     nullable: true
                     example: null
         '400':
@@ -4469,6 +4190,8 @@ paths:
                       - type: object
                         properties:
                           estimatedArrival:
+                            type: string
+                            format: date-time
                             nullable: true
                           reason:
                             type: string
