@@ -78,8 +78,23 @@ export const ListUsersQuerySchema = z
     message: 'Use either cursor or page for pagination, not both.',
   });
 
+/**
+ * Body schema for `PATCH /api/users/me`.
+ *
+ * Business domain: self-service profile update. All fields optional so the
+ * frontend can send only what changed. `companyName` is special — it updates
+ * the linked Organization's name and is restricted to ADMIN / SUPER_ADMIN by
+ * the service layer (not here, so the schema stays role-agnostic).
+ */
+export const UpdateCurrentUserBodySchema = z.object({
+  fullName: z.string().trim().min(1).optional(),
+  email: z.string().email().optional(),
+  companyName: z.string().trim().min(1).optional(),
+});
+
 export type CreateUserBody = z.infer<typeof CreateUserBodySchema>;
 export type CreateInvitationBody = z.infer<typeof CreateInvitationBodySchema>;
 export type VerifyInvitationQuery = z.infer<typeof VerifyInvitationQuerySchema>;
 export type AcceptInvitationBody = z.infer<typeof AcceptInvitationBodySchema>;
 export type ListUsersQuery = z.infer<typeof ListUsersQuerySchema>;
+export type UpdateCurrentUserBody = z.infer<typeof UpdateCurrentUserBodySchema>;
