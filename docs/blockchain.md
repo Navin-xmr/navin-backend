@@ -32,6 +32,14 @@ Config / network:
 - Horizon server is currently hard-coded to `https://horizon-testnet.stellar.org` in code
 - Explorer links: `getStellarExplorerUrl(txHash)` → stellar.expert
 
+### Error Handling Note
+
+In `src/services/stellar.service.ts:157–160`, `releaseEscrow` catches any submission or network errors and swallows them, returning `{ success: false }` instead of throwing an `AppError`. Callers handle unfulfilled settlements via payment retry status.
+
+### Event Indexing & Confirmation Tracking
+
+A background BullMQ worker (`src/workers/stellar-indexer.worker.ts:112–132`) runs on a 30-second interval (`STELLAR_INDEXER_JOB`). It calls `indexStellarTransactions`, polling Horizon account operations to verify on-chain confirmations and update settlement records in MongoDB.
+
 ### Why this is a fallback
 
 `manageData` entries prove that the backend account recorded an event; they do
@@ -53,65 +61,28 @@ Escrow “release” today is an audit write, not a fund disbursement.
 | Milestone confirmation | Off-chain status + optional ledger block | `confirm_milestone` on-contract |
 | Release on delivery | `manageData` release marker | `release` moves funds / finalizes state |
 | Read escrow state | DB + payment documents | `get_state` via Soroban RPC |
-| Event indexing | N/A | [#361](https://github.com/Navin-xmr/navin-backend/issues/361) indexer |
-| Network / explorer URLs | Partially hard-coded | [#363](https://github.com/Navin-xmr/navin-backend/issues/363) dynamic URLs |
+| Event indexing | Polling indexer (`stellar-indexer.worker.ts`) | On-chain event indexer ([#361](https://github.com/Navin-xmr/navin-backend/issues/361)) |
+| Network / explorer URLs | Partially hard-coded | Dynamic URLs ([#363](https://github.com/Navin-xmr/navin-backend/issues/363)) |
 
 Until Soroban lands, keep Horizon paths as the **default fallback** so create /
 delivery flows continue to work without `SOROBAN_RPC_URL` or `ESCROW_CONTRACT_ID`.
 
 ---
 
-## Target contract methods
+## Target Interface & Migration Plan
 
-The escrow contract (issue [#360](https://github.com/Navin-xmr/navin-backend/issues/360))
-should expose at least:
+The target Soroban escrow contract method definitions and TypeScript interfaces are specified in [docs/chain-interface.md](file:///home/izk/Documents/DRIPS/navin-backend/docs/chain-interface.md) (marked **DRAFT v0**).
 
-| Method | Purpose |
-|--------|---------|
-| `initialize` | Create escrow for a shipment (parties, amount, token, milestone schedule) |
-| `confirm_milestone` | Record that a lifecycle milestone was confirmed (carrier / oracle / backend) |
-| `release` | Release escrowed value to the payee when delivery conditions are met |
-| `get_state` | Return current escrow status, confirmed milestones, and balances for UI |
+### Migration Plan (ChainAdapter Port Architecture)
 
-Suggested TypeScript service surface (illustrative):
+Instead of temporary config-presence flags spread across services, the integration moves behind a unified `ChainAdapter` port:
 
-```ts
-interface EscrowContractClient {
-  initialize(params: {
-    shipmentId: string;
-    payer: string;
-    payee: string;
-    amount: string;
-    asset: string;
-  }): Promise<{ txHash: string; escrowId: string }>;
-
-  confirmMilestone(params: {
-    escrowId: string;
-    milestone: string;
-    actor: string;
-  }): Promise<{ txHash: string }>;
-
-  release(params: {
-    escrowId: string;
-    shipmentId: string;
-  }): Promise<{ txHash: string }>;
-
-  getState(escrowId: string): Promise<{
-    status: 'INITIALIZED' | 'IN_PROGRESS' | 'RELEASED' | 'DISPUTED';
-    milestones: Array<{ name: string; confirmed: boolean }>;
-    amount: string;
-  }>;
-}
-```
-
-Implementation plan (high level):
-
-1. Deploy / register escrow WASM; set `ESCROW_CONTRACT_ID`.
-2. Add Soroban RPC client using `SOROBAN_RPC_URL` + network passphrase from `STELLAR_NETWORK`.
-3. Wrap Horizon helpers: if Soroban config is present, prefer contract calls; else keep `manageData` fallback.
-4. Persist `escrowId` / contract tx hashes on payment / shipment documents.
-5. Index contract events ([#361](https://github.com/Navin-xmr/navin-backend/issues/361)) into the ledger / settlements modules.
-6. Parameterize Horizon + explorer base URLs ([#363](https://github.com/Navin-xmr/navin-backend/issues/363)).
+1. **Interface Freeze**: Formalize `ChainAdapter` port interface in `docs/chain-interface.md`.
+2. **Implement `SimulatedAdapter`**: Package existing Horizon `manageData` logic into `SimulatedAdapter` implementing `ChainAdapter`.
+3. **Implement `SorobanAdapter`**: Build `SorobanAdapter` using Soroban RPC client (`SOROBAN_RPC_URL`) and smart contract (`ESCROW_CONTRACT_ID`).
+4. **Adapter Factory**: Instantiate the appropriate `ChainAdapter` dynamically via factory configuration.
+5. **Persist Contract Identifiers**: Persist `escrowId` / transaction hashes on payment and shipment documents.
+6. **Indexer Integration**: Extend `stellar-indexer.worker.ts` to index Soroban contract events into settlements and ledger modules.
 
 ---
 
@@ -207,9 +178,8 @@ UI / detail
 
 ## Operational notes
 
-- Prefer **feature-flagging** on presence of `SOROBAN_RPC_URL` + `ESCROW_CONTRACT_ID`
-  rather than a hard cutover so staging can validate the contract while prod keeps
-  Horizon until indexer and explorer URL work (#361 / #363) are ready.
+- Use the `ChainAdapter` factory (`SimulatedAdapter` vs `SorobanAdapter`) to select runtime provider cleanly.
 - Never log `STELLAR_SECRET_KEY` or raw contract signing payloads.
 - Keep response envelopes unchanged; expose new on-chain fields only under
   documented shipment / payment / settlement schemas in `docs/swagger.yaml`.
+
