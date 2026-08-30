@@ -14,6 +14,9 @@ import jwt from 'jsonwebtoken';
 import { UserModel, OrganizationModel } from '../src/modules/users/users.model.js';
 import { Shipment } from '../src/modules/shipments/shipments.model.js';
 
+// Hoist heavy bootstrap outside per-hook budget (Issue #495)
+const { buildApp } = await import('../src/app.js');
+
 describe('Issues #147, #150, #154, #155 - Integration Tests', () => {
   let app: Application;
   let testOrgId: string;
@@ -21,8 +24,6 @@ describe('Issues #147, #150, #154, #155 - Integration Tests', () => {
   let managerToken: string;
 
   beforeAll(async () => {
-    // Import app
-    const { buildApp } = await import('../src/app.js');
     app = buildApp();
 
     // Create test organization
@@ -59,7 +60,7 @@ describe('Issues #147, #150, #154, #155 - Integration Tests', () => {
       { userId: managerUser._id.toString(), role: 'MANAGER', organizationId: testOrgId },
       process.env.JWT_SECRET!
     );
-  });
+  }, 120_000);
 
   afterAll(async () => {
     await UserModel.deleteMany({ email: { $regex: /test|navin\.io/ } });
