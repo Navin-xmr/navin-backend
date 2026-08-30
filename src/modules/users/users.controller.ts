@@ -7,6 +7,7 @@ import type {
   VerifyInvitationQuery,
   AcceptInvitationBody,
   ListUsersQuery,
+  UpdateCurrentUserBody,
 } from './users.validation.js';
 
 /**
@@ -178,4 +179,48 @@ export const listUsersController: RequestHandler = async (req, res) => {
 export const getCurrentUserController: RequestHandler = async (req, res) => {
   const user = await usersService.getCurrentUser(req.user?.userId ?? '');
   sendResponse(res, 200, true, 'User profile retrieved successfully', user);
+};
+
+/**
+ * Updates the authenticated user's profile.
+ * Requires authentication.
+ *
+ * Updates name and/or email. If companyName is provided and the user is
+ * ADMIN or SUPER_ADMIN, also updates the linked Organization's name.
+ *
+ * @param req.body.fullName - Optional new display name.
+ * @param req.body.email - Optional new email address.
+ * @param req.body.companyName - Optional new organization name (ADMIN/SUPER_ADMIN only).
+ * @returns HTTP 200 with envelope `{ success, message, data }` containing the updated user.
+ * @throws {AppError} 401 ERR_AUTH_INVALID — when JWT auth fails.
+ * @throws {AppError} 403 FORBIDDEN — when a non-admin tries to update companyName.
+ * @throws {AppError} 404 USER_NOT_FOUND — when the user no longer exists.
+ * @throws {AppError} 409 EMAIL_TAKEN — when the new email is already in use.
+ */
+export const updateCurrentUserController: RequestHandler = async (req, res) => {
+  const body = req.body as UpdateCurrentUserBody;
+  const user = await usersService.updateCurrentUser(req.user?.userId ?? '', {
+    fullName: body.fullName,
+    email: body.email,
+    companyName: body.companyName,
+  });
+  sendResponse(res, 200, true, 'User profile updated successfully', user);
+};
+
+/**
+ * Soft-deletes the authenticated user and invalidates their JWT.
+ * Requires authentication.
+ *
+ * Sets deletedAt on the user and blocklists the current token's jti so
+ * subsequent requests with the same token are rejected.
+ *
+ * @returns HTTP 200 with envelope `{ success, message, data }` containing the deleted user.
+ * @throws {AppError} 401 ERR_AUTH_INVALID — when JWT auth fails.
+ * @throws {AppError} 404 USER_NOT_FOUND — when the user no longer exists.
+ */
+export const deleteCurrentUserController: RequestHandler = async (req, res) => {
+  const authHeader = req.headers.authorization ?? '';
+  const token = authHeader.startsWith('Bearer ') ? authHeader.substring(7) : '';
+  const user = await usersService.deleteCurrentUser(req.user?.userId ?? '', token);
+  sendResponse(res, 200, true, 'User deleted successfully', user);
 };

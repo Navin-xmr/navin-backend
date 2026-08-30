@@ -249,117 +249,145 @@ paths:
                         type: string
                         format: date-time
                         description: Current UTC timestamp
-
-  /api/addresses:
-    get:
-      tags: [Addresses]
-      summary: List address book entries
-      description: |
-        **NOT IMPLEMENTED** — stub for frontend discovery.
-
-        Planned Address Book CRUD + default-address toggle.
-        Implementing issue: https://github.com/Navin-xmr/navin-backend/issues/355
-      x-implemented: false
-      security:
-        - bearerAuth: []
-      responses:
-        '501':
-          description: Not implemented
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-    post:
-      tags: [Addresses]
-      summary: Create address book entry
-      description: |
-        **NOT IMPLEMENTED** — stub for frontend discovery.
-        Implementing issue: https://github.com/Navin-xmr/navin-backend/issues/355
-      x-implemented: false
-      security:
-        - bearerAuth: []
-      responses:
-        '501':
-          description: Not implemented
-  /api/addresses/{id}:
-    get:
-      tags: [Addresses]
-      summary: Get address by id
-      description: |
-        **NOT IMPLEMENTED** — stub for frontend discovery.
-        Implementing issue: https://github.com/Navin-xmr/navin-backend/issues/355
-      x-implemented: false
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
-      responses:
-        '501':
-          description: Not implemented
-    patch:
-      tags: [Addresses]
-      summary: Update address / set default
-      description: |
-        **NOT IMPLEMENTED** — stub for frontend discovery.
-        Implementing issue: https://github.com/Navin-xmr/navin-backend/issues/355
-      x-implemented: false
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
-      responses:
-        '501':
-          description: Not implemented
-    delete:
-      tags: [Addresses]
-      summary: Delete address
-      description: |
-        **NOT IMPLEMENTED** — stub for frontend discovery.
-        Implementing issue: https://github.com/Navin-xmr/navin-backend/issues/355
-      x-implemented: false
-      security:
-        - bearerAuth: []
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: string
-      responses:
-        '501':
-          description: Not implemented
-
   /api/notifications:
     get:
       tags: [Notifications]
       summary: List notifications
-      description: |
-        **NOT IMPLEMENTED** — stub for frontend discovery.
-
-        Planned Notifications module (model + CRUD).
-        Implementing issue: https://github.com/Navin-xmr/navin-backend/issues/362
-      x-implemented: false
+      description: >
+        Returns the authenticated user's notifications, newest first, with
+        offset pagination. Optionally filtered by type and full-text search.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+          description: Page number (1-based).
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+          description: Notifications per page.
+        - in: query
+          name: type
+          schema:
+            type: string
+            enum: [shipments, settlements, system]
+          description: Filter by notification category.
+        - in: query
+          name: q
+          schema:
+            type: string
+          description: Search title/description text (case-insensitive substring).
+      responses:
+        '200':
+          description: Notifications retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Notifications retrieved successfully
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Notification'
+                  meta:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                      limit:
+                        type: integer
+                      total:
+                        type: integer
+        '401':
+          description: Missing or invalid authorization token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/notifications/unread-count:
+    get:
+      tags: [Notifications]
+      summary: Get unread notifications count
+      description: Returns the number of unread notifications for the authenticated user.
       security:
         - bearerAuth: []
       responses:
-        '501':
-          description: Not implemented
-  /api/notifications/{id}:
+        '200':
+          description: Unread count retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Unread count retrieved successfully
+                  data:
+                    type: object
+                    properties:
+                      count:
+                        type: integer
+        '401':
+          description: Missing or invalid authorization token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/notifications/read-all:
+    post:
+      tags: [Notifications]
+      summary: Mark all notifications as read
+      description: Marks every unread notification of the authenticated user as read.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Notifications marked as read
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: 3 notifications marked as read
+                  data:
+                    type: object
+                    properties:
+                      count:
+                        type: integer
+                        description: Number of notifications updated.
+        '401':
+          description: Missing or invalid authorization token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/notifications/{id}/read:
     patch:
       tags: [Notifications]
-      summary: Mark notification read / update
-      description: |
-        **NOT IMPLEMENTED** — stub for frontend discovery.
-        Implementing issue: https://github.com/Navin-xmr/navin-backend/issues/362
-      x-implemented: false
+      summary: Mark a notification as read
+      description: Marks the specified notification as read. Only the owning user can update it.
       security:
         - bearerAuth: []
       parameters:
@@ -368,16 +396,40 @@ paths:
           required: true
           schema:
             type: string
+          description: Notification ObjectId.
       responses:
-        '501':
-          description: Not implemented
+        '200':
+          description: Notification marked as read
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Notification marked as read
+                  data:
+                    $ref: '#/components/schemas/Notification'
+        '401':
+          description: Missing or invalid authorization token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Notification not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/notifications/{id}:
     delete:
       tags: [Notifications]
-      summary: Delete notification
-      description: |
-        **NOT IMPLEMENTED** — stub for frontend discovery.
-        Implementing issue: https://github.com/Navin-xmr/navin-backend/issues/362
-      x-implemented: false
+      summary: Delete a notification
+      description: Soft-deletes the specified notification. Only the owning user can delete it.
       security:
         - bearerAuth: []
       parameters:
@@ -386,62 +438,283 @@ paths:
           required: true
           schema:
             type: string
+          description: Notification ObjectId.
       responses:
-        '501':
-          description: Not implemented
+        '200':
+          description: Notification deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Notification deleted successfully
+                  data:
+                    $ref: '#/components/schemas/Notification'
+        '401':
+          description: Missing or invalid authorization token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Notification not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/notifications/preferences:
     get:
       tags: [Notifications]
       summary: Get notification channel preferences
-      description: |
-        **NOT IMPLEMENTED** — stub for frontend discovery.
-
-        Planned preference + channel plumbing.
-        Implementing issue: https://github.com/Navin-xmr/navin-backend/issues/363
-      x-implemented: false
+      description: Returns all notification preferences for the authenticated user.
       security:
         - bearerAuth: []
       responses:
-        '501':
-          description: Not implemented
-    put:
+        '200':
+          description: Notification preferences retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Notification preferences retrieved successfully
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/NotificationPreference'
+        '401':
+          description: Missing or invalid authorization token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    patch:
       tags: [Notifications]
-      summary: Update notification preferences
-      description: |
-        **NOT IMPLEMENTED** — stub for frontend discovery.
-        Implementing issue: https://github.com/Navin-xmr/navin-backend/issues/363
-      x-implemented: false
+      summary: Update a notification preference
+      description: >
+        Creates or updates the preference for the given event/channel pair
+        (upsert). Only the enabled flag can be toggled per pair.
       security:
         - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [event, channel, enabled]
+              properties:
+                event:
+                  type: string
+                  enum: [shipment_created, status_changed, delivery_confirmed, payment_received, dispute_opened, dispute_resolved]
+                channel:
+                  type: string
+                  enum: [email, sms]
+                enabled:
+                  type: boolean
       responses:
-        '501':
-          description: Not implemented
-  /api/notifications/otp:
+        '200':
+          description: Notification preference updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Notification preference updated successfully
+                  data:
+                    $ref: '#/components/schemas/NotificationPreference'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Missing or invalid authorization token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/notifications/phone/send-otp:
     post:
       tags: [Notifications]
-      summary: Send SMS OTP
-      description: |
-        **NOT IMPLEMENTED** — stub for frontend discovery.
-
-        Planned SMS OTP verification endpoints (Twilio).
-        Implementing issue: https://github.com/Navin-xmr/navin-backend/issues/364
-      x-implemented: false
-      security: []
+      summary: Send an SMS OTP to a phone number
+      description: >
+        Generates a 6-digit OTP, stores its hash in Redis (5-minute TTL) and
+        delivers it via Twilio (production) or logs it (dev/test). Rate limited
+        to 5 requests per 15 minutes per IP.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone]
+              properties:
+                phone:
+                  type: string
+                  pattern: '^\+?[1-9]\d{9,14}$'
+                  minLength: 10
+                  maxLength: 15
+                  description: Phone number in E.164-ish format (e.g. +15551234567).
       responses:
-        '501':
-          description: Not implemented
-  /api/notifications/otp/verify:
+        '200':
+          description: OTP sent successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: OTP sent successfully
+                  data:
+                    type: string
+                    nullable: true
+                    example: null
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Missing or invalid authorization token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Too many OTP requests, please try again later.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  retryAfter:
+                    type: integer
+                  data:
+                    type: string
+                    nullable: true
+  /api/notifications/phone/verify-otp:
     post:
       tags: [Notifications]
-      summary: Verify SMS OTP
-      description: |
-        **NOT IMPLEMENTED** — stub for frontend discovery.
-        Implementing issue: https://github.com/Navin-xmr/navin-backend/issues/364
-      x-implemented: false
-      security: []
+      summary: Verify an SMS OTP
+      description: >
+        Checks the submitted OTP against the stored hash, then marks the user's
+        phone as verified. Rate limited to 5 requests per 15 minutes per IP.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone, otp]
+              properties:
+                phone:
+                  type: string
+                  pattern: '^\+?[1-9]\d{9,14}$'
+                  minLength: 10
+                  maxLength: 15
+                otp:
+                  type: string
+                  pattern: '^\d{6}$'
+                  minLength: 6
+                  maxLength: 6
+                  description: The 6-digit code received via SMS.
       responses:
-        '501':
-          description: Not implemented
+        '200':
+          description: Phone verified successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Phone verified successfully
+                  data:
+                    type: object
+                    properties:
+                      _id:
+                        type: string
+                      email:
+                        type: string
+                      name:
+                        type: string
+                      role:
+                        type: string
+                      phone:
+                        type: string
+                        nullable: true
+                      phoneVerified:
+                        type: boolean
+                      organizationId:
+                        type: string
+                        nullable: true
+                      createdAt:
+                        type: string
+                        format: date-time
+                      updatedAt:
+                        type: string
+                        format: date-time
+        '400':
+          description: Invalid or expired OTP
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Missing or invalid authorization token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Too many OTP requests, please try again later.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  retryAfter:
+                    type: integer
+                  data:
+                    type: string
+                    nullable: true
 
   /api/public/tracking/{trackingNumber}:
     get:
@@ -833,6 +1106,198 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
         '409':
           description: Conflict - email already in use or company name already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/company/api-keys:
+    post:
+      summary: Create a new API key
+      description: |
+        Generates a new API key for machine-to-machine authentication.
+        The API key is derived from the caller's organization (taken from JWT claims).
+        The raw API key secret is returned exactly once and should be stored securely.
+        
+        This endpoint replaces the deprecated `/api/auth/api-keys` route.
+      tags:
+        - API Keys
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 200
+                  description: Descriptive name for this API key
+      responses:
+        '201':
+          description: API key created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: API key created successfully
+                  data:
+                    type: object
+                    properties:
+                      _id:
+                        type: string
+                        description: API Key document ID
+                      key:
+                        type: string
+                        description: Base64-encoded API key (shown only once)
+                      secret:
+                        type: string
+                        description: Raw secret key (shown only once)
+                      name:
+                        type: string
+                      organizationId:
+                        type: string
+                      isActive:
+                        type: boolean
+                      createdAt:
+                        type: string
+                        format: date-time
+        '400':
+          description: Validation error - missing or invalid name
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Missing or invalid authorization token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Insufficient permissions - only ADMIN or SUPER_ADMIN can create API keys
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    get:
+      summary: List all active API keys
+      description: |
+        Returns all active API keys for the caller's organization.
+        organizationId is derived from the JWT — no query parameter needed.
+        
+        This endpoint replaces the deprecated `/api/auth/api-keys/{organizationId}` route.
+      tags:
+        - API Keys
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: API keys list retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: API keys retrieved
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        _id:
+                          type: string
+                        name:
+                          type: string
+                        organizationId:
+                          type: string
+                        isActive:
+                          type: boolean
+                        createdAt:
+                          type: string
+                          format: date-time
+                        lastUsedAt:
+                          type: string
+                          format: date-time
+                          nullable: true
+        '401':
+          description: Missing or invalid authorization token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Insufficient permissions - only ADMIN or SUPER_ADMIN can list API keys
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/company/api-keys/{apiKeyId}:
+    delete:
+      summary: Revoke an API key
+      description: |
+        Soft-revokes an API key by setting `isActive = false`.
+        The key cannot be used after revocation, but the record is retained for audit purposes.
+        Only API keys belonging to the caller's organization can be revoked.
+        
+        This endpoint replaces the deprecated `/api/auth/api-keys/{apiKeyId}` route.
+      tags:
+        - API Keys
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: apiKeyId
+          required: true
+          schema:
+            type: string
+          description: MongoDB ObjectId of the API key to revoke
+      responses:
+        '200':
+          description: API key revoked successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: API key revoked
+                  data:
+                    type: string
+                    nullable: true
+        '401':
+          description: Missing or invalid authorization token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Insufficient permissions or API key belongs to a different organization
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: API key not found
           content:
             application/json:
               schema:
@@ -1552,6 +2017,7 @@ paths:
               properties:
                 email:
                   type: string
+                  format: email
                 password:
                   type: string
       responses:
@@ -1576,6 +2042,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                message: Invalid email or password
+                data: null
+                error:
+                  code: ERR_AUTH_INVALID
         '429':
           description: Too many login attempts
           content:
@@ -1592,6 +2064,81 @@ paths:
                   data:
                     type: string
                     nullable: true
+  /api/auth/refresh:
+    post:
+      summary: Refresh authentication token
+      description: |
+        Refreshes an expired or expiring JWT by providing the old token.
+        The old token's `jti` is blocklisted, preventing reuse.
+        
+        Returns a new JWT valid for 7 days with fresh claims (userId, organizationId, role).
+        Useful for maintaining user sessions without requiring re-login.
+      tags:
+        - Auth
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - token
+              properties:
+                token:
+                  type: string
+                  description: Expired or expiring JWT token to refresh
+      responses:
+        '200':
+          description: Token refreshed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Token refreshed
+                  data:
+                    type: object
+                    properties:
+                      userId:
+                        type: string
+                        description: User ID
+                      email:
+                        type: string
+                        description: User email
+                      token:
+                        type: string
+                        description: New JWT token (valid 7 days from now)
+                      organizationId:
+                        type: string
+                        description: Organization ID from token claims
+                      role:
+                        type: string
+                        enum: [SUPER_ADMIN, ADMIN, MANAGER, VIEWER, DRIVER, CUSTOMER]
+                        description: User role from token claims
+        '400':
+          description: Validation error - missing or invalid token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Token invalid, expired, or already revoked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                message: Token has expired or is invalid
+                data: null
+                error:
+                  code: ERR_AUTH_INVALID
   /api/auth/logout:
     post:
       summary: Logout current user
@@ -1992,6 +2539,136 @@ paths:
                       organizationId:
                         type: string
                       createdAt:
+                        type: string
+                        format: date-time
+        '401':
+          description: Missing or invalid authorization token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    patch:
+      summary: Update current authenticated user's profile
+      description: >-
+        Updates the authenticated user's profile. Supports updating name, email,
+        and (for ADMIN/SUPER_ADMIN users) the linked organization's name.
+        All fields are optional — only provided fields are updated.
+      security:
+        - bearerAuth: []
+      tags:
+        - Users
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                fullName:
+                  type: string
+                  description: New display name (optional).
+                  example: John Doe
+                email:
+                  type: string
+                  format: email
+                  description: New email address (optional).
+                  example: john@example.com
+                companyName:
+                  type: string
+                  description: >-
+                    New organization name (optional). Only allowed for ADMIN
+                    and SUPER_ADMIN users.
+                  example: Acme Corp
+      responses:
+        '200':
+          description: User profile updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: User profile updated successfully
+                  data:
+                    type: object
+                    properties:
+                      _id:
+                        type: string
+                      email:
+                        type: string
+                      name:
+                        type: string
+                      role:
+                        type: string
+                      organizationId:
+                        type: string
+        '401':
+          description: Missing or invalid authorization token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden — non-admin attempting to update companyName
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Email already in use
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      summary: Delete current authenticated user
+      description: >-
+        Soft-deletes the authenticated user by setting deletedAt and blocklists
+        the current JWT so subsequent requests with the same token are rejected.
+      security:
+        - bearerAuth: []
+      tags:
+        - Users
+      responses:
+        '200':
+          description: User deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: User deleted successfully
+                  data:
+                    type: object
+                    properties:
+                      _id:
+                        type: string
+                      email:
+                        type: string
+                      name:
+                        type: string
+                      deletedAt:
                         type: string
                         format: date-time
         '401':
@@ -2587,6 +3264,30 @@ paths:
             enum: [Pending, Escrowed, Released, Failed, Disputed]
           description: Filter payments by status.
         - in: query
+          name: organizationId
+          schema:
+            type: string
+          description: Optional organization filter (validated by GetPaymentsQuerySchema).
+        - in: query
+          name: shipmentId
+          schema:
+            type: string
+          description: Filter payments by shipment ID.
+        - in: query
+          name: sortBy
+          schema:
+            type: string
+            enum: [amount, status, createdAt]
+            default: createdAt
+          description: Field to sort payments by.
+        - in: query
+          name: sortOrder
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: desc
+          description: Sort direction.
+        - in: query
           name: cursor
           schema:
             type: string
@@ -2600,10 +3301,11 @@ paths:
             default: 20
           description: Maximum number of records to return.
         - in: query
-          name: organizationId
+          name: page
           schema:
-            type: string
-          description: Optional organization filter (validated by GetPaymentsQuerySchema).
+            type: integer
+            minimum: 1
+          description: Page number for offset-based pagination.
       responses:
         '200':
           description: Payments retrieved successfully
@@ -2856,6 +3558,30 @@ paths:
             enum: [Pending, Escrowed, Released, Failed, Disputed]
           description: Filter by status.
         - in: query
+          name: organizationId
+          schema:
+            type: string
+          description: Optional organization filter.
+        - in: query
+          name: shipmentId
+          schema:
+            type: string
+          description: Filter settlements by shipment ID.
+        - in: query
+          name: sortBy
+          schema:
+            type: string
+            enum: [amount, status, createdAt]
+            default: createdAt
+          description: Field to sort settlements by.
+        - in: query
+          name: sortOrder
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: desc
+          description: Sort direction.
+        - in: query
           name: cursor
           schema:
             type: string
@@ -2867,6 +3593,12 @@ paths:
             minimum: 1
             maximum: 100
             default: 20
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+          description: Page number for offset-based pagination.
       responses:
         '200':
           description: Settlements retrieved successfully
@@ -3333,8 +4065,16 @@ paths:
                        $ref: '#/components/schemas/Organization'
          '401':
            description: Unauthorized
+           content:
+             application/json:
+               schema:
+                 $ref: '#/components/schemas/ErrorResponse'
          '403':
            description: Forbidden - not SUPER_ADMIN
+           content:
+             application/json:
+               schema:
+                 $ref: '#/components/schemas/ErrorResponse'
   /api/organizations/{id}:
      get:
        summary: Get organization by ID
@@ -3356,10 +4096,22 @@ paths:
                  $ref: '#/components/schemas/Organization'
          '401':
            description: Unauthorized
+           content:
+             application/json:
+               schema:
+                 $ref: '#/components/schemas/ErrorResponse'
          '403':
            description: Forbidden - insufficient role or cross-org access
+           content:
+             application/json:
+               schema:
+                 $ref: '#/components/schemas/ErrorResponse'
          '404':
            description: Organization not found
+           content:
+             application/json:
+               schema:
+                 $ref: '#/components/schemas/ErrorResponse'
      patch:
        summary: Update organization
        description: Update organization details. ADMIN can update own; SUPER_ADMIN can update any. ADMIN cannot modify type.
@@ -3389,12 +4141,30 @@ paths:
              application/json:
                schema:
                  $ref: '#/components/schemas/Organization'
+         '400':
+           description: Validation error
+           content:
+             application/json:
+               schema:
+                 $ref: '#/components/schemas/ErrorResponse'
          '401':
            description: Unauthorized
+           content:
+             application/json:
+               schema:
+                 $ref: '#/components/schemas/ErrorResponse'
          '403':
            description: Forbidden - insufficient role or cross-org access
+           content:
+             application/json:
+               schema:
+                 $ref: '#/components/schemas/ErrorResponse'
          '404':
            description: Organization not found
+           content:
+             application/json:
+               schema:
+                 $ref: '#/components/schemas/ErrorResponse'
      delete:
        summary: Delete an organization
        description: Soft-delete an organization. Requires SUPER_ADMIN role.
@@ -3422,10 +4192,22 @@ paths:
                      $ref: '#/components/schemas/Organization'
          '401':
            description: Unauthorized
+           content:
+             application/json:
+               schema:
+                 $ref: '#/components/schemas/ErrorResponse'
          '403':
            description: Forbidden - not SUPER_ADMIN
+           content:
+             application/json:
+               schema:
+                 $ref: '#/components/schemas/ErrorResponse'
          '404':
            description: Organization not found
+           content:
+             application/json:
+               schema:
+                 $ref: '#/components/schemas/ErrorResponse'
   /api/shipments/export:
     get:
       summary: Export shipments as CSV or JSON
@@ -3691,6 +4473,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                message: Validation failed - limit must be between 1 and 100
+                data: null
+                error:
+                  code: ERR_VALIDATION_FAILED
+                details:
+                  - path: limit
+                    message: limit must be between 1 and 100
+                    code: too_big
     post:
       summary: Create a shipment
       security:
@@ -3704,6 +4496,19 @@ paths:
       responses:
         '201':
           description: Shipment created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Shipment created
+                  data:
+                    $ref: '#/components/schemas/Shipment'
   /api/shipments/{id}:
     get:
       summary: Get a single shipment by ID
@@ -4222,6 +5027,19 @@ paths:
       responses:
         '200':
           description: Shipment status updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Shipment status updated
+                  data:
+                    $ref: '#/components/schemas/Shipment'
         '400':
           description: Invalid request
         '401':
@@ -4405,6 +5223,96 @@ paths:
           description: Forbidden — admin role required
         '422':
           description: Validation error
+  /api/anomalies/stats:
+    get:
+      summary: Get anomaly statistics
+      description: |
+        Returns aggregated anomaly statistics for the organization, including:
+        - Total active (unresolved) anomalies
+        - Total anomalies (all time)
+        - Total resolved anomalies
+        - Breakdown by severity (LOW, MEDIUM, HIGH)
+        - Breakdown by type (TEMPERATURE_EXCEEDED, HUMIDITY_EXCEEDED, etc.)
+        
+        Results are cached for 5 minutes. Requires ADMIN or MANAGER role.
+      tags:
+        - Anomalies
+      security:
+        - bearerAuth: []
+      x-required-role: [ADMIN, MANAGER]
+      responses:
+        '200':
+          description: Anomaly statistics retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Anomaly stats retrieved
+                  data:
+                    type: object
+                    properties:
+                      totalActive:
+                        type: integer
+                        description: Count of unresolved anomalies
+                        example: 12
+                      totalAll:
+                        type: integer
+                        description: Total count of all anomalies (resolved + unresolved)
+                        example: 156
+                      resolved:
+                        type: integer
+                        description: Count of resolved anomalies
+                        example: 144
+                      bySeverity:
+                        type: object
+                        description: Count of active anomalies grouped by severity
+                        properties:
+                          LOW:
+                            type: integer
+                            example: 5
+                          MEDIUM:
+                            type: integer
+                            example: 4
+                          HIGH:
+                            type: integer
+                            example: 3
+                      byType:
+                        type: object
+                        description: Count of active anomalies grouped by type
+                        properties:
+                          TEMPERATURE_EXCEEDED:
+                            type: integer
+                            example: 3
+                          TEMPERATURE_BELOW_MIN:
+                            type: integer
+                            example: 1
+                          HUMIDITY_EXCEEDED:
+                            type: integer
+                            example: 2
+                          HUMIDITY_BELOW_MIN:
+                            type: integer
+                            example: 1
+                          BATTERY_LOW:
+                            type: integer
+                            example: 5
+        '401':
+          description: Missing or invalid authorization token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Insufficient permissions - only ADMIN or MANAGER can view stats
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/anomalies:
     get:
       summary: Get anomalies with pagination and filtering
@@ -4558,7 +5466,7 @@ paths:
           schema:
             type: string
           description: Filter by shipment ObjectId
-        - name: eventType
+        - name: milestoneEvent
           in: query
           schema:
             $ref: '#/components/schemas/MilestoneEvent'
@@ -4603,8 +5511,28 @@ paths:
                         type: string
         '401':
           description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                message: Missing or invalid token
+                data: null
+                error:
+                  code: ERR_AUTH_INVALID
         '403':
           description: Forbidden - insufficient role
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                message: Insufficient permissions
+                data: null
+                error:
+                  code: ERR_PERMISSION_DENIED
   /api/ledger/blocks/{id}:
     get:
       summary: Get a ledger block by ID
@@ -5264,17 +6192,64 @@ components:
         - success
         - message
         - data
+        - error
       properties:
         success:
           type: boolean
           example: false
+          description: Always false for error responses
         message:
           type: string
-          description: Error message describing why the request failed.
+          example: Validation failed
+          description: Human-readable error message describing why the request failed.
         data:
           type: object
           nullable: true
+          example: null
           description: Null payload for error responses.
+        error:
+          type: object
+          required:
+            - code
+          properties:
+            code:
+              type: string
+              example: ERR_VALIDATION_FAILED
+              description: |
+                Machine-readable error code for programmatic handling.
+                See docs/ERROR_CODES.md for the complete registry.
+                Common codes: ERR_AUTH_INVALID, ERR_PERMISSION_DENIED, ERR_NOT_FOUND,
+                ERR_VALIDATION_FAILED, ERR_DUPLICATE_KEY, ERR_INTERNAL_SERVER_ERROR
+          description: Error details container with machine-readable code
+        details:
+          type: array
+          nullable: true
+          description: Optional field-level validation details (present for 400/422 validation errors)
+          items:
+            type: object
+            properties:
+              path:
+                type: string
+                example: email
+                description: JSON path to the field that failed validation
+              message:
+                type: string
+                example: Invalid email format
+                description: Human-readable validation error message
+              code:
+                type: string
+                example: invalid_string
+                description: Zod validation error code (see Zod documentation)
+      example:
+        success: false
+        message: Validation failed - email must be a valid email address
+        data: null
+        error:
+          code: ERR_VALIDATION_FAILED
+        details:
+          - path: email
+            message: Invalid email format
+            code: invalid_string
     CreateShipmentRequest:
       type: object
       required:
@@ -5685,6 +6660,82 @@ components:
         metadata:
           type: object
           description: Additional event-specific metadata
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    Notification:
+      type: object
+      description: A notification entry for a user.
+      properties:
+        _id:
+          type: string
+          description: Notification MongoDB ObjectId.
+        userId:
+          type: string
+          description: Owner user ObjectId.
+        type:
+          type: string
+          enum: [shipments, settlements, system]
+          description: Notification category.
+        icon:
+          type: string
+          nullable: true
+        title:
+          type: string
+        badge:
+          type: string
+          nullable: true
+        badgeColor:
+          type: string
+          nullable: true
+        description:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        shipmentId:
+          type: string
+          nullable: true
+          description: Associated shipment ObjectId, if any.
+        trackingNumber:
+          type: string
+          nullable: true
+        actionLabel:
+          type: string
+          nullable: true
+        isRead:
+          type: boolean
+          description: Whether the notification has been read.
+        link:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    NotificationPreference:
+      type: object
+      description: Channel preference for a notification event.
+      properties:
+        _id:
+          type: string
+          description: Preference MongoDB ObjectId.
+        userId:
+          type: string
+          description: Owner user ObjectId.
+        event:
+          type: string
+          enum: [shipment_created, status_changed, delivery_confirmed, payment_received, dispute_opened, dispute_resolved]
+        channel:
+          type: string
+          enum: [email, sms]
+        enabled:
+          type: boolean
         createdAt:
           type: string
           format: date-time
