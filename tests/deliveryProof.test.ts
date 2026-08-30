@@ -98,7 +98,7 @@ describe('POST /api/shipments/:id/proof', () => {
       .attach('file', imagePath);
 
     expect(res.status).toBe(200);
-    expect(res.body.data.deliveryProof.url).toMatch(/^https:\/\/mock-storage\.com\/proof/);
+    expect(res.body.data.deliveryProof.url).toMatch(/^https:\/\/mock-storage\.local\//);
     expect(res.body.data.deliveryProof.recipientSignatureName).toBe('John Doe');
     expect(res.body.data.deliveryProof.uploadedAt).toBeDefined();
   });
@@ -144,5 +144,45 @@ describe('POST /api/shipments/:id/proof', () => {
 
     expect(res.status).toBe(400);
     expect(res.body.message).toBe('No file uploaded');
+  });
+
+  it('should return 401 when token is missing', async () => {
+    const shipmentModel = await import('../src/modules/shipments/shipments.model.js');
+    const shipment = await shipmentModel.Shipment.create({
+      trackingNumber: 'TN-401',
+      origin: 'A',
+      destination: 'B',
+      enterpriseId: 'ent1',
+      logisticsId: 'log1',
+      status: 'CREATED',
+    });
+
+    const res = await request(app)
+      .post(`/api/shipments/${shipment._id}/proof`);
+
+    expect(res.status).toBe(401);
+  });
+
+  it('should return 403 when user is VIEWER', async () => {
+    const shipmentModel = await import('../src/modules/shipments/shipments.model.js');
+    const shipment = await shipmentModel.Shipment.create({
+      trackingNumber: 'TN-403',
+      origin: 'A',
+      destination: 'B',
+      enterpriseId: 'ent1',
+      logisticsId: 'log1',
+      status: 'CREATED',
+    });
+
+    const viewerToken = jwt.sign(
+      { userId: 'user-viewer', role: 'VIEWER', organizationId: 'org-1' },
+      process.env.JWT_SECRET || 'secret'
+    );
+
+    const res = await request(app)
+      .post(`/api/shipments/${shipment._id}/proof`)
+      .set('Authorization', `Bearer ${viewerToken}`);
+
+    expect(res.status).toBe(403);
   });
 });
