@@ -252,25 +252,141 @@ paths:
     get:
       tags: [Notifications]
       summary: List notifications
-      description: |
-        **NOT IMPLEMENTED** — stub for frontend discovery.
-
-        Planned Notifications module (model + CRUD).
-        Implementing issue: https://github.com/Navin-xmr/navin-backend/issues/362
-      x-implemented: false
+      description: >
+        Returns the authenticated user's notifications, newest first, with
+        offset pagination. Optionally filtered by type and full-text search.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+          description: Page number (1-based).
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+          description: Notifications per page.
+        - in: query
+          name: type
+          schema:
+            type: string
+            enum: [shipments, settlements, system]
+          description: Filter by notification category.
+        - in: query
+          name: q
+          schema:
+            type: string
+          description: Search title/description text (case-insensitive substring).
+      responses:
+        '200':
+          description: Notifications retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Notifications retrieved successfully
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Notification'
+                  meta:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                      limit:
+                        type: integer
+                      total:
+                        type: integer
+        '401':
+          description: Missing or invalid authorization token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/notifications/unread-count:
+    get:
+      tags: [Notifications]
+      summary: Get unread notifications count
+      description: Returns the number of unread notifications for the authenticated user.
       security:
         - bearerAuth: []
       responses:
-        '501':
-          description: Not implemented
-  /api/notifications/{id}:
+        '200':
+          description: Unread count retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Unread count retrieved successfully
+                  data:
+                    type: object
+                    properties:
+                      count:
+                        type: integer
+        '401':
+          description: Missing or invalid authorization token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/notifications/read-all:
+    post:
+      tags: [Notifications]
+      summary: Mark all notifications as read
+      description: Marks every unread notification of the authenticated user as read.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Notifications marked as read
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: 3 notifications marked as read
+                  data:
+                    type: object
+                    properties:
+                      count:
+                        type: integer
+                        description: Number of notifications updated.
+        '401':
+          description: Missing or invalid authorization token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/notifications/{id}/read:
     patch:
       tags: [Notifications]
-      summary: Mark notification read / update
-      description: |
-        **NOT IMPLEMENTED** — stub for frontend discovery.
-        Implementing issue: https://github.com/Navin-xmr/navin-backend/issues/362
-      x-implemented: false
+      summary: Mark a notification as read
+      description: Marks the specified notification as read. Only the owning user can update it.
       security:
         - bearerAuth: []
       parameters:
@@ -279,16 +395,40 @@ paths:
           required: true
           schema:
             type: string
+          description: Notification ObjectId.
       responses:
-        '501':
-          description: Not implemented
+        '200':
+          description: Notification marked as read
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Notification marked as read
+                  data:
+                    $ref: '#/components/schemas/Notification'
+        '401':
+          description: Missing or invalid authorization token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Notification not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/notifications/{id}:
     delete:
       tags: [Notifications]
-      summary: Delete notification
-      description: |
-        **NOT IMPLEMENTED** — stub for frontend discovery.
-        Implementing issue: https://github.com/Navin-xmr/navin-backend/issues/362
-      x-implemented: false
+      summary: Delete a notification
+      description: Soft-deletes the specified notification. Only the owning user can delete it.
       security:
         - bearerAuth: []
       parameters:
@@ -297,60 +437,280 @@ paths:
           required: true
           schema:
             type: string
+          description: Notification ObjectId.
       responses:
-        '501':
-          description: Not implemented
+        '200':
+          description: Notification deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Notification deleted successfully
+                  data:
+                    $ref: '#/components/schemas/Notification'
+        '401':
+          description: Missing or invalid authorization token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Notification not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/notifications/preferences:
     get:
       tags: [Notifications]
       summary: Get notification channel preferences
-      description: |
-        **NOT IMPLEMENTED** — stub for frontend discovery.
-
-        Planned preference + channel plumbing.
-        Implementing issue: https://github.com/Navin-xmr/navin-backend/issues/363
-      x-implemented: false
+      description: Returns all notification preferences for the authenticated user.
       security:
         - bearerAuth: []
       responses:
-        '501':
-          description: Not implemented
-    put:
+        '200':
+          description: Notification preferences retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Notification preferences retrieved successfully
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/NotificationPreference'
+        '401':
+          description: Missing or invalid authorization token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    patch:
       tags: [Notifications]
-      summary: Update notification preferences
-      description: |
-        **NOT IMPLEMENTED** — stub for frontend discovery.
-        Implementing issue: https://github.com/Navin-xmr/navin-backend/issues/363
-      x-implemented: false
+      summary: Update a notification preference
+      description: >
+        Creates or updates the preference for the given event/channel pair
+        (upsert). Only the enabled flag can be toggled per pair.
       security:
         - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [event, channel, enabled]
+              properties:
+                event:
+                  type: string
+                  enum: [shipment_created, status_changed, delivery_confirmed, payment_received, dispute_opened, dispute_resolved]
+                channel:
+                  type: string
+                  enum: [email, sms]
+                enabled:
+                  type: boolean
       responses:
-        '501':
-          description: Not implemented
-  /api/notifications/otp:
+        '200':
+          description: Notification preference updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Notification preference updated successfully
+                  data:
+                    $ref: '#/components/schemas/NotificationPreference'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Missing or invalid authorization token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/notifications/phone/send-otp:
     post:
       tags: [Notifications]
-      summary: Send SMS OTP
-      description: |
-        **NOT IMPLEMENTED** — stub for frontend discovery.
-
-        Planned SMS OTP verification endpoints (Twilio).
-        Implementing issue: https://github.com/Navin-xmr/navin-backend/issues/364
-      x-implemented: false
+      summary: Send an SMS OTP to a phone number
+      description: >
+        Generates a 6-digit OTP, stores its hash in Redis (5-minute TTL) and
+        delivers it via Twilio (production) or logs it (dev/test). Rate limited
+        to 5 requests per 15 minutes per IP.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone]
+              properties:
+                phone:
+                  type: string
+                  pattern: '^\+?[1-9]\d{9,14}$'
+                  minLength: 10
+                  maxLength: 15
+                  description: Phone number in E.164-ish format (e.g. +15551234567).
       responses:
-        '501':
-          description: Not implemented
-  /api/notifications/otp/verify:
+        '200':
+          description: OTP sent successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: OTP sent successfully
+                  data:
+                    nullable: true
+                    example: null
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Missing or invalid authorization token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Too many OTP requests, please try again later.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  retryAfter:
+                    type: integer
+                  data:
+                    nullable: true
+  /api/notifications/phone/verify-otp:
     post:
       tags: [Notifications]
-      summary: Verify SMS OTP
-      description: |
-        **NOT IMPLEMENTED** — stub for frontend discovery.
-        Implementing issue: https://github.com/Navin-xmr/navin-backend/issues/364
-      x-implemented: false
+      summary: Verify an SMS OTP
+      description: >
+        Checks the submitted OTP against the stored hash, then marks the user's
+        phone as verified. Rate limited to 5 requests per 15 minutes per IP.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone, otp]
+              properties:
+                phone:
+                  type: string
+                  pattern: '^\+?[1-9]\d{9,14}$'
+                  minLength: 10
+                  maxLength: 15
+                otp:
+                  type: string
+                  pattern: '^\d{6}$'
+                  minLength: 6
+                  maxLength: 6
+                  description: The 6-digit code received via SMS.
       responses:
-        '501':
-          description: Not implemented
+        '200':
+          description: Phone verified successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Phone verified successfully
+                  data:
+                    type: object
+                    properties:
+                      _id:
+                        type: string
+                      email:
+                        type: string
+                      name:
+                        type: string
+                      role:
+                        type: string
+                      phone:
+                        type: string
+                        nullable: true
+                      phoneVerified:
+                        type: boolean
+                      organizationId:
+                        type: string
+                        nullable: true
+                      createdAt:
+                        type: string
+                        format: date-time
+                      updatedAt:
+                        type: string
+                        format: date-time
+        '400':
+          description: Invalid or expired OTP
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Missing or invalid authorization token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Too many OTP requests, please try again later.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  retryAfter:
+                    type: integer
+                  data:
+                    nullable: true
 
   /api/public/tracking/{trackingNumber}:
     get:
@@ -6199,6 +6559,82 @@ components:
         metadata:
           type: object
           description: Additional event-specific metadata
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    Notification:
+      type: object
+      description: A notification entry for a user.
+      properties:
+        _id:
+          type: string
+          description: Notification MongoDB ObjectId.
+        userId:
+          type: string
+          description: Owner user ObjectId.
+        type:
+          type: string
+          enum: [shipments, settlements, system]
+          description: Notification category.
+        icon:
+          type: string
+          nullable: true
+        title:
+          type: string
+        badge:
+          type: string
+          nullable: true
+        badgeColor:
+          type: string
+          nullable: true
+        description:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        shipmentId:
+          type: string
+          nullable: true
+          description: Associated shipment ObjectId, if any.
+        trackingNumber:
+          type: string
+          nullable: true
+        actionLabel:
+          type: string
+          nullable: true
+        isRead:
+          type: boolean
+          description: Whether the notification has been read.
+        link:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    NotificationPreference:
+      type: object
+      description: Channel preference for a notification event.
+      properties:
+        _id:
+          type: string
+          description: Preference MongoDB ObjectId.
+        userId:
+          type: string
+          description: Owner user ObjectId.
+        event:
+          type: string
+          enum: [shipment_created, status_changed, delivery_confirmed, payment_received, dispute_opened, dispute_resolved]
+        channel:
+          type: string
+          enum: [email, sms]
+        enabled:
+          type: boolean
         createdAt:
           type: string
           format: date-time
