@@ -43,6 +43,8 @@ describe('processIotWebhook', () => {
       emitTelemetryUpdate,
       emitAnomalyDetected,
       emitStatusUpdate: jest.fn(),
+     emitPaymentStatusChange: jest.fn(),
+      emitPaymentStatusChange: jest.fn(),
       getIO: jest.fn(),
       initSocketIO: jest.fn(),
     }));
@@ -105,6 +107,8 @@ describe('processIotWebhook', () => {
       emitTelemetryUpdate,
       emitAnomalyDetected,
       emitStatusUpdate: jest.fn(),
+     emitPaymentStatusChange: jest.fn(),
+      emitPaymentStatusChange: jest.fn(),
       getIO: jest.fn(),
       initSocketIO: jest.fn(),
     }));
@@ -138,8 +142,11 @@ describe('processIotWebhook', () => {
     }));
     await jest.unstable_mockModule('../src/infra/socket/io.js', () => ({
       emitTelemetryUpdate: jest.fn(),
+      emitPaymentStatusChange: jest.fn(),
       emitAnomalyDetected: jest.fn(),
       emitStatusUpdate: jest.fn(),
+     emitPaymentStatusChange: jest.fn(),
+      emitPaymentStatusChange: jest.fn(),
       getIO: jest.fn(),
       initSocketIO: jest.fn(),
     }));

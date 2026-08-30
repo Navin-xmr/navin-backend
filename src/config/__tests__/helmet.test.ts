@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
+import { describe, it, expect, afterEach } from '@jest/globals';
 import request from 'supertest';
 import express from 'express';
 import { buildHelmetMiddleware } from '../helmet.js';
@@ -44,7 +44,9 @@ describe('Helmet configuration', () => {
     const etag = first.headers.etag;
     expect(etag).toBeDefined();
 
-    const second = await request(app).get('/health').set('If-None-Match', etag as string);
+    const second = await request(app)
+      .get('/health')
+      .set('If-None-Match', etag as string);
     expect(second.status).toBe(304);
   });
 });

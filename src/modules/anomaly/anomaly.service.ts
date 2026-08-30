@@ -1,6 +1,10 @@
 import { Anomaly } from './anomaly.model.js';
 import type { FilterQuery } from 'mongoose';
+import { AppError, ErrorCodes } from '../../shared/http/errors.js';
 import { evaluateTelemetry } from '../../services/anomaly.service.js';
+import { paginateCursor } from '../../shared/utils/pagination.js';
+import { resolveTelemetryThresholdsForShipment } from '../telemetry/telemetryThreshold.service.js';
+import { auditLog } from '../../shared/utils/auditLog.js';
 
 interface TelemetryData {
   _id: string;
@@ -24,13 +28,14 @@ interface AnomalyResult {
   }>;
 }
 
+/**
+ * Detects anomalies from telemetry data and persists any findings.
+ * @param {TelemetryData} data - Telemetry values used for anomaly evaluation.
+ * @returns {Promise<AnomalyResult>} Detection result and created anomaly records.
+ */
 export async function detectAnomaly(data: TelemetryData): Promise<AnomalyResult> {
   const timestamp = data.timestamp ?? new Date();
-  const thresholds = {
-    maxTemp: 25,
-    maxHumidity: 80,
-    minBatteryLevel: 20,
-  };
+  const thresholds = await resolveTelemetryThresholdsForShipment(data.shipmentId);
 
   const evaluated = evaluateTelemetry(
     {
@@ -70,20 +75,48 @@ export async function detectAnomaly(data: TelemetryData): Promise<AnomalyResult>
     };
   });
 
+  for (const anomaly of anomalies) {
+    auditLog({
+      userId: 'system',
+      action: 'ANOMALY_DETECTED',
+      resourceId: anomaly._id,
+      timestamp: new Date(anomaly.timestamp),
+      metadata: {
+        shipmentId: anomaly.shipmentId,
+        type: anomaly.type,
+        severity: anomaly.severity,
+        message: anomaly.message,
+      },
+    });
+  }
+
   return { detected: true, anomalies };
 }
 
+/**
+ * Retrieves anomalies with cursor-based pagination and optional filters.
+ * @param {object} params - Query options for anomalies.
+ * @param {string=} params.cursor - Optional cursor for pagination.
+ * @param {number} params.limit - Maximum number of records to return.
+ * @param {string=} params.shipmentId - Optional shipment filter.
+ * @param {string=} params.severity - Optional severity filter.
+ * @returns {Promise<{data: unknown[]; nextCursor: string | null; hasMore: boolean}>} Paginated anomalies.
+ */
 export async function getAnomaliesService(params: {
   cursor?: string;
   limit: number;
   shipmentId?: string;
   severity?: string;
+  type?: string;
+  resolved?: boolean;
 }) {
-  const { cursor, limit, shipmentId, severity } = params;
+  const { cursor, limit, shipmentId, severity, type, resolved } = params;
   const query: FilterQuery<unknown> = {};
 
   if (shipmentId) query.shipmentId = shipmentId;
   if (severity) query.severity = severity;
+  if (type) query.type = type;
+  if (resolved !== undefined) query.resolved = resolved;
   if (cursor) query._id = { $lt: cursor };
 
   const anomalies = await Anomaly.find(query)
@@ -92,23 +125,97 @@ export async function getAnomaliesService(params: {
     .limit(limit + 1)
     .lean();
 
-  const hasMore = anomalies.length > limit;
-  const data = hasMore ? anomalies.slice(0, limit) : anomalies;
-  const nextCursor = hasMore && data.length > 0 ? data[data.length - 1]._id.toString() : null;
-
-  return { data, nextCursor, hasMore };
+  return paginateCursor(anomalies, limit);
 }
 
-export async function resolveAnomalyService(id: string) {
-  const anomaly = await Anomaly.findByIdAndUpdate(
-    id,
-    { resolved: true },
-    { new: true, runValidators: true }
-  ).lean();
+export async function resolveAnomalyService(id: string, resolvedBy: string, note?: string) {
+  const update: Record<string, unknown> = {
+    resolved: true,
+    resolvedAt: new Date(),
+    resolvedBy,
+  };
+  if (note !== undefined) {
+    update.resolutionNote = note;
+  }
+
+  const anomaly = await Anomaly.findByIdAndUpdate(id, update, {
+    new: true,
+    runValidators: true,
+  }).lean();
 
   if (!anomaly) {
-    throw new Error('Anomaly not found');
+    throw new AppError(404, 'Anomaly not found', ErrorCodes.NOT_FOUND);
   }
 
   return anomaly;
+}
+
+/**
+ * Returns aggregated anomaly statistics for dashboard widgets.
+ * Results are cached in Redis for 5 minutes.
+ */
+export async function getAnomalyStatsService(organizationId?: string) {
+  const { getRedisClient } = await import('../../infra/redis/connection.js');
+  const STATS_CACHE_KEY = `anomaly:stats:${organizationId ?? 'global'}`;
+  const STATS_CACHE_TTL = 300;
+
+  let client: import('ioredis').Redis | null = null;
+  try {
+    client = getRedisClient() as import('ioredis').Redis;
+    const cached = await client.get(STATS_CACHE_KEY);
+    if (cached) {
+      return JSON.parse(cached);
+    }
+  } catch {
+    // cache read failure is non-fatal; proceed without cache
+  }
+
+  const matchStage: Record<string, unknown> = { deletedAt: null };
+  if (organizationId) {
+    matchStage.organizationId = organizationId;
+  }
+
+  const [result] = await Anomaly.aggregate([
+    { $match: matchStage },
+    {
+      $facet: {
+        totalActive: [{ $match: { resolved: false } }, { $count: 'count' }],
+        totalAll: [{ $count: 'count' }],
+        resolved: [{ $match: { resolved: true } }, { $count: 'count' }],
+        bySeverity: [
+          { $match: { resolved: false } },
+          { $group: { _id: '$severity', count: { $sum: 1 } } },
+        ],
+        byType: [{ $match: { resolved: false } }, { $group: { _id: '$type', count: { $sum: 1 } } }],
+      },
+    },
+  ]);
+
+  const totalActive: number = result.totalActive[0]?.count ?? 0;
+  const totalAll: number = result.totalAll[0]?.count ?? 0;
+  const resolvedCount: number = result.resolved[0]?.count ?? 0;
+
+  const bySeverity: Record<string, number> = { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0 };
+  for (const entry of result.bySeverity) {
+    bySeverity[entry._id] = entry.count;
+  }
+
+  const byType: Record<string, number> = {};
+  for (const entry of result.byType) {
+    byType[entry._id] = entry.count;
+  }
+
+  const resolutionRate = totalAll > 0 ? Math.round((resolvedCount / totalAll) * 100) / 100 : 0;
+
+  const stats = { totalActive, bySeverity, byType, resolutionRate };
+
+  try {
+    if (client) {
+      await client.set(STATS_CACHE_KEY, JSON.stringify(stats), 'EX', STATS_CACHE_TTL);
+    }
+  } catch {
+    // cache write failure is non-fatal
+  }
+
+  return stats;
 }

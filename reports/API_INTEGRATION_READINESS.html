@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Navin Backend — API Integration Readiness</title>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --panel: #1a2332;
+      --text: #e7ecf3;
+      --muted: #8b9bb4;
+      --ok: #3d9a6a;
+      --warn: #c9a227;
+      --bad: #d64545;
+      --border: #2a3548;
+      --accent: #7eb6ff;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+      background: radial-gradient(1200px 600px at 10% -10%, #1e3a5f 0%, transparent 55%),
+                  linear-gradient(160deg, #0f1419, #121a24 40%, #0d1218);
+      color: var(--text);
+      line-height: 1.5;
+      padding: 2rem;
+    }
+    h1 { font-size: 1.8rem; margin: 0 0 0.5rem; }
+    .sub { color: var(--muted); margin-bottom: 2rem; }
+    .meta { color: var(--muted); font-size: 0.9rem; margin-bottom: 1.5rem; }
+    .meta strong { color: var(--text); }
+
+    .summary {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem;
+      margin-bottom: 2rem;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 1rem;
+    }
+    .summary-item {
+      background: #0f1419;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1rem;
+      text-align: center;
+    }
+    .summary-item .label { font-size: 0.8rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+    .summary-item .value { font-size: 1.6rem; font-weight: 700; margin-top: 0.3rem; }
+    .summary-item.met .value { color: var(--ok); }
+    .summary-item.partial .value { color: var(--warn); }
+    .summary-item.not-met .value { color: var(--bad); }
+    .summary-item.coverage .value { color: var(--accent); }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+    th, td { text-align: left; padding: 0.65rem 0.75rem; border-bottom: 1px solid var(--border); vertical-align: top; }
+    th { background: #152033; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(125,182,255,0.04); }
+
+    .badge {
+      display: inline-block;
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .badge.met { background: rgba(61,154,106,0.2); color: #7ddeb0; }
+    .badge.partial { background: rgba(201,162,39,0.2); color: #f0d56a; }
+    .badge.not-met { background: rgba(214,69,69,0.2); color: #f0a0a0; }
+
+    .issue-link {
+      display: inline-block;
+      margin-right: 0.4rem;
+      color: var(--accent);
+      text-decoration: none;
+      font-size: 0.9rem;
+    }
+    .issue-link:hover { text-decoration: underline; }
+    .muted { color: var(--muted); }
+
+    .footer { color: var(--muted); font-size: 0.85rem; text-align: center; margin-top: 1.5rem; }
+  </style>
+</head>
+<body>
+  <h1>Navin Backend — API Integration Readiness</h1>
+  <p class="sub">Section-level status derived from <code>backend-integration-requirements.md</code> vs current Express implementation.</p>
+  <p class="meta">
+    <strong>Generated:</strong> <time datetime="2026-07-29T20:44:43.287Z">2026-07-29T20:44:43.287Z</time> &nbsp;|&nbsp;
+    <strong>Source:</strong> <code>reports/integration-readiness-data.json</code> &nbsp;|&nbsp;
+    <strong>Regenerate:</strong> <code>node reports/generate-integration-readiness.js</code>
+  </p>
+
+  <div class="summary">
+    <div class="summary-item">
+      <div class="label">Sections</div>
+      <div class="value">16</div>
+    </div>
+    <div class="summary-item met">
+      <div class="label">Met</div>
+      <div class="value">8</div>
+    </div>
+    <div class="summary-item partial">
+      <div class="label">Partial</div>
+      <div class="value">6</div>
+    </div>
+    <div class="summary-item not-met">
+      <div class="label">Not Met</div>
+      <div class="value">2</div>
+    </div>
+    <div class="summary-item coverage">
+      <div class="label">Endpoint Coverage</div>
+      <div class="value">77%</div>
+    </div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Section</th>
+        <th>Status</th>
+        <th>Endpoints</th>
+        <th>Coverage</th>
+        <th>Issues</th>
+        <th>Notes</th>
+      </tr>
+    </thead>
+    <tbody>
+<tr>
+          <td>Authentication & Authorization</td>
+          <td><span class="badge met">🟢 MET</span></td>
+          <td>12 / 12</td>
+          <td>100%</td>
+          <td><a class="issue-link" href="https://github.com/mathstickz/navin-backend/issues/350" target="_blank" rel="noopener">#350</a> <a class="issue-link" href="https://github.com/mathstickz/navin-backend/issues/357" target="_blank" rel="noopener">#357</a> <a class="issue-link" href="https://github.com/mathstickz/navin-backend/issues/380" target="_blank" rel="noopener">#380</a> <a class="issue-link" href="https://github.com/mathstickz/navin-backend/issues/389" target="_blank" rel="noopener">#389</a></td>
+          <td>Login, signup, logout, refresh, password reset, 2FA, sessions, and role-based access fully implemented.</td>
+        </tr>
+<tr>
+          <td>Users & Team Management</td>
+          <td><span class="badge met">🟢 MET</span></td>
+          <td>8 / 8</td>
+          <td>100%</td>
+          <td><a class="issue-link" href="https://github.com/mathstickz/navin-backend/issues/326" target="_blank" rel="noopener">#326</a> <a class="issue-link" href="https://github.com/mathstickz/navin-backend/issues/340" target="_blank" rel="noopener">#340</a> <a class="issue-link" href="https://github.com/mathstickz/navin-backend/issues/353" target="_blank" rel="noopener">#353</a> <a class="issue-link" href="https://github.com/mathstickz/navin-backend/issues/361" target="_blank" rel="noopener">#361</a> <a class="issue-link" href="https://github.com/mathstickz/navin-backend/issues/369" target="_blank" rel="noopener">#369</a> <a class="issue-link" href="https://github.com/mathstickz/navin-backend/issues/376" target="_blank" rel="noopener">#376</a> <a class="issue-link" href="https://github.com/mathstickz/navin-backend/issues/388" target="_blank" rel="noopener">#388</a></td>
+          <td>User CRUD, invitations, roles, API keys, profile updates, and team management endpoints implemented.</td>
+        </tr>
+<tr>
+          <td>Shipments</td>
+          <td><span class="badge met">🟢 MET</span></td>
+          <td>18 / 18</td>
+          <td>100%</td>
+          <td><a class="issue-link" href="https://github.com/mathstickz/navin-backend/issues/325" target="_blank" rel="noopener">#325</a> <a class="issue-link" href="https://github.com/mathstickz/navin-backend/issues/329" target="_blank" rel="noopener">#329</a> <a class="issue-link" href="https://github.com/mathstickz/navin-backend/issues/336" target="_blank" rel="noopener">#336</a> <a class="issue-link" href="https://github.com/mathstickz/navin-backend/issues/343" target="_blank" rel="noopener">#343</a> <a class="issue-link" href="https://github.com/mathstickz/navin-backend/issues/348" target="_blank" rel="noopener">#348</a> <a class="issue-link" href="https://github.com/mathstickz/navin-backend/issues/360" target="_blank" rel="noopener">#360</a> <a class="issue-link" href="https://github.com/mathstickz/navin-backend/issues/366" target="_blank" rel="noopener">#366</a> <a class="issue-link" href="https://github.com/mathstickz/navin-backend/issues/372" target="_blank" rel="noopener">#372</a> <a class="issue-link" href="https://github.com/mathstickz/navin-backend/issues/377" target="_blank" rel="noopener">#377</a> <a class="issue-link" href="https://github.com/mathstickz/navin-backend/issues/382" target="_blank" rel="noopener">#382</a> <a class="issue-link" href="https://github.com/mathstickz/navin-backend/issues/387" target="_blank" rel="noopener">#387</a></td>
+          <td>Full shipment lifecycle: CRUD, status updates, proof upload, documents, photos, disputes, timeline, ETA, export.</td>
+        </tr>
+<tr>
+          <td>Addresses (Address Book)</td>
+          <td><span class="badge not-met">🔴 NOT MET</span></td>
+          <td>0 / 6</td>
+          <td>0%</td>
+          <td><span class="muted">—</span></td>
+          <td>No address module or routes found in codebase. Address book CRUD endpoints not implemented.</td>
+        </tr>
+<tr>
+          <td>Analytics</td>
+          <td><span class="badge partial">🟡 PARTIAL</span></td>
+          <td>1 / 2</td>
+          <td>50%</td>
+          <td><a class="issue-link" href="https://github.com/mathstickz/navin-backend/issues/375" target="_blank" rel="noopener">#375</a> <a class="issue-link" href="https://github.com/mathstickz/navin-backend/issues/332" target="_blank" rel="noopener">#332</a> <a class="issue-link" href="https://github.com/mathstickz/navin-backend/issues/345" target="_blank" rel="noopener">#345</a></td>
+          <td>Performance endpoint implemented. Summary endpoint with sparklines not yet implemented.</td>
+        </tr>
+<tr>
+          <td>Settlements / Escrow</td>
+          <td><span class="badge partial">🟡 PARTIAL</span></td>
+          <td>2 / 3</td>
+          <td>67%</td>
+          <td><a class="issue-link" href="https://github.com/mathstickz/navin-backend/issues/378" target="_blank" rel="noopener">#378</a> <a class="issue-link" href="https://github.com/mathstickz/navin-backend/issues/341" target="_blank" rel="noopener">#341</a> <a class="issue-link" href="https://github.com/mathstickz/navin-backend/issues/354" target="_blank" rel="noopener">#354</a> <a class="issue-link" href="https://github.com/mathstickz/navin-backend/issues/363" target="_blank" rel="noopener">#363</a> <a class="issue-link" href="https://github.com/mathstickz/navin-backend/issues/370" target="_blank" rel="noopener">#370</a></td>
+          <td>Settlements list and detail endpoints implemented. Escrow contract integration and payment orchestration incomplete.</td>
+        </tr>
+<tr>
+          <td>Blockchain Ledger</td>
+          <td><span class="badge partial">🟡 PARTIAL</span></td>
+          <td>1 / 1</td>
+          <td>100%</td>
+          <td><span class="muted">—</span></td>
+          <td>Ledger blocks endpoint exists but router not mounted in app.ts. On-chain milestone indexing partial.</td>
+        </tr>
+<tr>
+          <td>Anomalies</td>
+          <td><span class="badge met">🟢 MET</span></td>
+          <td>3 / 3</td>
+          <td>100%</td>
+          <td><a class="issue-link" href="https://github.com/mathstickz/navin-backend/issues/358" target="_blank" rel="noopener">#358</a> <a class="issue-link" href="https://github.com/mathstickz/navin-backend/issues/368" target="_blank" rel="noopener">#368</a> <a class="issue-link" href="https://github.com/mathstickz/navin-backend/issues/384" target="_blank" rel="noopener">#384</a></td>
+          <td>Anomaly listing, stats, and resolution endpoints fully implemented with cursor pagination.</td>
+        </tr>
+<tr>
+          <td>Notifications</td>
+          <td><span class="badge partial">🟡 PARTIAL</span></td>
+          <td>4 / 7</td>
+          <td>57%</td>
+          <td><a class="issue-link" href="https://github.com/mathstickz/navin-backend/issues/346" target="_blank" rel="noopener">#346</a></td>
+          <td>Basic notification CRUD implemented. Preferences, OTP, and read-all endpoints not yet implemented.</td>
+        </tr>
+<tr>
+          <td>Activity Feed</td>
+          <td><span class="badge met">🟢 MET</span></td>
+          <td>1 / 1</td>
+          <td>100%</td>
+          <td><a class="issue-link" href="https://github.com/mathstickz/navin-backend/issues/369" target="_blank" rel="noopener">#369</a></td>
+          <td>Activity feed endpoint implemented with pagination.</td>
+        </tr>
+<tr>
+          <td>Shipment Templates</td>
+          <td><span class="badge met">🟢 MET</span></td>
+          <td>4 / 4</td>
+          <td>100%</td>
+          <td><span class="muted">—</span></td>
+          <td>Template CRUD endpoints fully implemented.</td>
+        </tr>
+<tr>
+          <td>Public Tracking</td>
+          <td><span class="badge not-met">🔴 NOT MET</span></td>
+          <td>0 / 1</td>
+          <td>0%</td>
+          <td><span class="muted">—</span></td>
+          <td>No public tracking endpoint found. Unauthenticated shipment lookup not implemented.</td>
+        </tr>
+<tr>
+          <td>Real-Time Events (SSE + Polling)</td>
+          <td><span class="badge partial">🟡 PARTIAL</span></td>
+          <td>1 / 2</td>
+          <td>50%</td>
+          <td><a class="issue-link" href="https://github.com/mathstickz/navin-backend/issues/383" target="_blank" rel="noopener">#383</a> <a class="issue-link" href="https://github.com/mathstickz/navin-backend/issues/362" target="_blank" rel="noopener">#362</a> <a class="issue-link" href="https://github.com/mathstickz/navin-backend/issues/371" target="_blank" rel="noopener">#371</a> <a class="issue-link" href="https://github.com/mathstickz/navin-backend/issues/331" target="_blank" rel="noopener">#331</a></td>
+          <td>SSE endpoint implemented. Polling fallback endpoint not yet implemented.</td>
+        </tr>
+<tr>
+          <td>Stellar / Soroban Blockchain</td>
+          <td><span class="badge partial">🟡 PARTIAL</span></td>
+          <td>0 / 0</td>
+          <td>50%</td>
+          <td><a class="issue-link" href="https://github.com/mathstickz/navin-backend/issues/378" target="_blank" rel="noopener">#378</a> <a class="issue-link" href="https://github.com/mathstickz/navin-backend/issues/341" target="_blank" rel="noopener">#341</a></td>
+          <td>Shipment tokenization and telemetry anchoring implemented. Escrow contract deployment and Soroban integration incomplete.</td>
+        </tr>
+<tr>
+          <td>File Upload Requirements</td>
+          <td><span class="badge met">🟢 MET</span></td>
+          <td>4 / 4</td>
+          <td>100%</td>
+          <td><a class="issue-link" href="https://github.com/mathstickz/navin-backend/issues/360" target="_blank" rel="noopener">#360</a></td>
+          <td>Proof, documents, photos, and dispute evidence upload endpoints implemented with MIME type and size validation.</td>
+        </tr>
+<tr>
+          <td>CORS, Cookies & Security</td>
+          <td><span class="badge met">🟢 MET</span></td>
+          <td>0 / 0</td>
+          <td>100%</td>
+          <td><a class="issue-link" href="https://github.com/mathstickz/navin-backend/issues/344" target="_blank" rel="noopener">#344</a> <a class="issue-link" href="https://github.com/mathstickz/navin-backend/issues/337" target="_blank" rel="noopener">#337</a> <a class="issue-link" href="https://github.com/mathstickz/navin-backend/issues/357" target="_blank" rel="noopener">#357</a></td>
+          <td>CORS with credentials enabled, rate limiting on auth endpoints, Helmet security headers, JWT authentication implemented.</td>
+        </tr>
+    </tbody>
+  </table>
+
+  <div class="footer">
+    Generated: 2026-07-29T20:44:43.287Z &nbsp;|&nbsp; Refresh by re-running <code>node reports/generate-integration-readiness.js</code>
+  </div>
+</body>
+</html>

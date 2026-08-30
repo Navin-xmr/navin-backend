@@ -6,7 +6,9 @@ import { config } from './config/index.js';
 import { connectMongo, disconnectMongo } from './infra/mongo/connection.js';
 import { disconnectRedis } from './infra/redis/connection.js';
 import { initSocketIO, closeSocketIO } from './infra/socket/io.js';
+import { initSseHub, closeSseHub } from './infra/sse/sseHub.js';
 import { startAlertWorker } from './workers/alert.worker.js';
+import { startMaintenanceWorker, scheduleMaintenanceJobs } from './workers/maintenance.worker.js';
 import { logger } from './shared/logger/logger.js';
 
 async function main() {
@@ -15,7 +17,12 @@ async function main() {
   const app = buildApp();
   const httpServer = createServer(app);
   initSocketIO(httpServer);
-  const worker = startAlertWorker();
+  await initSseHub();
+  const alertWorker = startAlertWorker();
+  const maintenanceWorker = startMaintenanceWorker();
+
+  // Schedule recurring maintenance jobs
+  await scheduleMaintenanceJobs();
 
   httpServer.listen(config.port, () => {
     logger.info({ port: config.port }, 'HTTP server listening');
@@ -32,8 +39,10 @@ async function main() {
 
     httpServer.close(async () => {
       try {
-        await worker.close();
+        await alertWorker.close();
+        await maintenanceWorker.close();
         await closeSocketIO();
+        await closeSseHub();
         await disconnectRedis();
         await disconnectMongo();
         logger.info('Graceful shutdown complete');

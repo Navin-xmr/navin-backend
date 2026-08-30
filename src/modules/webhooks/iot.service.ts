@@ -1,10 +1,11 @@
 import { generateDataHash } from '../../shared/utils/crypto.js';
 import * as telemetryService from '../telemetry/telemetry.service.js';
 import { TelemetryAnchorStatus } from '../telemetry/telemetry.model.js';
-import { AppError } from '../../shared/http/errors.js';
-import { detectAnomaly } from '../anomaly/anomaly.service.js';
+import { AppError, ErrorCodes } from '../../shared/http/errors.js';
+import { detectTelemetryAnomalies } from '../../services/telemetryAnomalyDetection.js';
 import { emitAnomalyDetected, emitTelemetryUpdate } from '../../infra/socket/io.js';
 import { pushAlertJob, pushStellarAnchorJob } from '../../infra/redis/queue.js';
+import logger from '../../shared/logger/logger.js';
 import type { IotWebhookBody } from './iot.validation.js';
 import type {
   AnomalyAlertPayload,
@@ -20,6 +21,8 @@ type NormalizedBody = {
   longitude: number;
   batteryLevel: number;
   timestamp: Date;
+  shockMagnitude?: number;
+  gpsLost?: boolean;
   rawPayload: IotWebhookBody;
 };
 
@@ -33,6 +36,8 @@ function normalizeIotWebhookBody(body: IotWebhookBody): NormalizedBody {
       longitude: body.longitude,
       batteryLevel: body.batteryLevel ?? 100,
       timestamp: body.timestamp,
+      shockMagnitude: body.shockMagnitude,
+      gpsLost: body.gpsLost,
       rawPayload: body,
     };
   }
@@ -45,10 +50,20 @@ function normalizeIotWebhookBody(body: IotWebhookBody): NormalizedBody {
     longitude: body.location.lng,
     batteryLevel: body.batteryLevel ?? 100,
     timestamp: body.timestamp,
+    shockMagnitude: body.shockMagnitude,
+    gpsLost: body.gpsLost,
     rawPayload: body,
   };
 }
 
+/**
+ * Processes IoT webhook payloads, normalizes the body, stores telemetry, and emits real-time events.
+ * Detects anomalies and updates telemetry record with isAnomaly and anomalyType flags.
+ *
+ * @param {IotWebhookBody} body - Raw webhook payload from the IoT device.
+ * @returns {Promise<unknown>} Persisted telemetry document.
+ * @throws {AppError} When shipment cannot be resolved for the payload.
+ */
 export async function processIotWebhook(body: IotWebhookBody) {
   const normalizedBody = normalizeIotWebhookBody(body);
 
@@ -66,7 +81,7 @@ export async function processIotWebhook(body: IotWebhookBody) {
   }
 
   if (!shipmentId) {
-    throw new AppError(400, 'shipmentId could not be resolved', 'BAD_REQUEST');
+    throw new AppError(400, 'shipmentId could not be resolved', ErrorCodes.BAD_REQUEST);
   }
 
   const dataHash = generateDataHash(normalizedBody.rawPayload);
@@ -81,6 +96,7 @@ export async function processIotWebhook(body: IotWebhookBody) {
     batteryLevel: normalizedBody.batteryLevel,
     timestamp: normalizedBody.timestamp,
     dataHash,
+    shockMagnitude: normalizedBody.shockMagnitude,
     anchorStatus: TelemetryAnchorStatus.PENDING_ANCHOR,
     rawPayload: normalizedBody.rawPayload,
   });
@@ -109,42 +125,39 @@ export async function processIotWebhook(body: IotWebhookBody) {
   emitTelemetryUpdate(shipmentId, telemetryPayload);
 
   setImmediate(async () => {
-    const result = await detectAnomaly({
-      _id: telemetry._id.toString(),
-      shipmentId: telemetry.shipmentId.toString(),
-      temperature: telemetry.temperature,
-      humidity: telemetry.humidity,
-      batteryLevel: telemetry.batteryLevel,
-      timestamp: telemetry.timestamp,
-    });
-
-    if (result.detected) {
-      await Promise.all(
-        result.anomalies.map(async anomaly => {
-          const anomalyPayload: AnomalyAlertPayload = {
-            anomalyId: anomaly._id,
-            shipmentId: anomaly.shipmentId,
-            type: anomaly.type as
-              | 'TEMPERATURE_EXCEEDED'
-              | 'TEMPERATURE_BELOW_MIN'
-              | 'HUMIDITY_EXCEEDED'
-              | 'HUMIDITY_BELOW_MIN'
-              | 'BATTERY_LOW',
-            severity: anomaly.severity as 'LOW' | 'MEDIUM' | 'HIGH',
-            message: anomaly.message,
-            timestamp: anomaly.timestamp,
-            resolved: anomaly.resolved,
-          };
-
-          emitAnomalyDetected(anomaly.shipmentId, anomalyPayload);
-          await pushAlertJob({
-            shipmentId: anomaly.shipmentId,
-            type: anomaly.type,
-            severity: anomaly.severity,
-            message: anomaly.message,
-          });
-        })
+    try {
+      const result = await detectTelemetryAnomalies(
+        telemetry._id.toString(),
+        telemetry.shipmentId.toString(),
+        telemetry.temperature,
+        telemetry.humidity,
+        telemetry.batteryLevel,
+        telemetry.shockMagnitude,
+        telemetry.latitude,
+        telemetry.longitude
       );
+
+      if (result.isAnomaly && result.anomalyType) {
+        const anomalyPayload: AnomalyAlertPayload = {
+          anomalyId: telemetry._id.toString(),
+          shipmentId: telemetry.shipmentId.toString(),
+          type: result.anomalyType as AnomalyAlertPayload['type'],
+          severity: 'HIGH',
+          message: result.details.join('; '),
+          timestamp: new Date().toISOString(),
+          resolved: false,
+        };
+
+        emitAnomalyDetected(shipmentId, anomalyPayload);
+        await pushAlertJob({
+          shipmentId: shipmentId,
+          type: result.anomalyType,
+          severity: 'HIGH',
+          message: result.details.join('; '),
+        });
+      }
+    } catch (err) {
+      logger.error({ err, shipmentId }, 'Background telemetry anomaly detection failed');
     }
   });
 

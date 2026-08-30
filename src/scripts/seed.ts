@@ -46,12 +46,38 @@ function milestoneNames(status: ShipmentStatus): string[] {
   switch (status) {
     case ShipmentStatus.CREATED:
       return ['Order Placed'];
+    case ShipmentStatus.PICKUP_CONFIRMED:
+      return ['Order Placed', 'Picked Up'];
     case ShipmentStatus.IN_TRANSIT:
       return ['Order Placed', 'Picked Up', 'In Transit'];
+    case ShipmentStatus.CUSTOMS_CLEARED:
+      return ['Order Placed', 'Picked Up', 'In Transit', 'Customs Cleared'];
+    case ShipmentStatus.OUT_FOR_DELIVERY:
+      return ['Order Placed', 'Picked Up', 'In Transit', 'Out for Delivery'];
     case ShipmentStatus.DELIVERED:
       return ['Order Placed', 'Picked Up', 'In Transit', 'Out for Delivery', 'Delivered'];
+    case ShipmentStatus.SETTLEMENT_INITIATED:
+      return [
+        'Order Placed',
+        'Picked Up',
+        'In Transit',
+        'Out for Delivery',
+        'Delivered',
+        'Settlement Initiated',
+      ];
+    case ShipmentStatus.SETTLEMENT_COMPLETED:
+      return [
+        'Order Placed',
+        'Picked Up',
+        'In Transit',
+        'Out for Delivery',
+        'Delivered',
+        'Settlement Completed',
+      ];
     case ShipmentStatus.CANCELLED:
       return ['Order Placed', 'Cancelled'];
+    default:
+      return ['Order Placed'];
   }
 }
 

@@ -18,6 +18,9 @@ export interface IAnomaly {
   message: string;
   timestamp: Date;
   resolved: boolean;
+  resolvedAt?: Date;
+  resolvedBy?: string;
+  resolutionNote?: string;
   createdAt: Date;
   updatedAt: Date;
 }

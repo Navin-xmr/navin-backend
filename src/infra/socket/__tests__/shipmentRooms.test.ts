@@ -54,11 +54,15 @@ describe('shipmentRooms', () => {
 
   it('emits unauthorized error when joining room without organization', async () => {
     const mod = await import('../shipmentRooms.js');
-    const socket = {
+    const socket: {
+      user?: { organizationId?: string };
+      emit: ReturnType<typeof jest.fn>;
+      join: ReturnType<typeof jest.fn>;
+    } = {
       user: undefined,
       emit: jest.fn(),
       join: jest.fn(),
-    } as any;
+    };
 
     await mod.joinShipmentRoom(socket, 's1');
 
@@ -75,11 +79,15 @@ describe('shipmentRooms', () => {
     mockFindById.mockReturnValue({ select: mockSelect });
 
     const mod = await import('../shipmentRooms.js');
-    const socket = {
+    const socket: {
+      user?: { organizationId?: string };
+      emit: ReturnType<typeof jest.fn>;
+      join: ReturnType<typeof jest.fn>;
+    } = {
       user: { organizationId: 'org3' },
       emit: jest.fn(),
       join: jest.fn(),
-    } as any;
+    };
 
     await mod.joinShipmentRoom(socket, 's1');
 

@@ -4,7 +4,7 @@ import type { Express } from 'express';
 const findByIdAndUpdateMock = jest.fn<(id: unknown, update: unknown, opts?: unknown) => Promise<unknown>>();
 const anomalyUpdateManyMock = jest.fn<(query: unknown, update: unknown) => Promise<unknown>>();
 const telemetryUpdateManyMock = jest.fn<(query: unknown, update: unknown) => Promise<unknown>>();
-const mockUploadToStorageMock = jest.fn<(file: unknown) => Promise<string>>();
+const uploadFileToStorageMock = jest.fn<(buffer: Buffer, mimeType: string, key: string) => Promise<string>>();
 
 await jest.unstable_mockModule('../src/modules/shipments/shipments.model.js', () => ({
   Shipment: {
@@ -31,8 +31,12 @@ await jest.unstable_mockModule('../src/modules/telemetry/telemetry.model.js', ()
   },
 }));
 
-await jest.unstable_mockModule('../src/services/mockStorageService.js', () => ({
-  mockUploadToStorage: mockUploadToStorageMock,
+await jest.unstable_mockModule('../src/services/storage/upload.js', () => ({
+  uploadFileToStorage: uploadFileToStorageMock,
+}));
+
+await jest.unstable_mockModule('../src/modules/ledger/ledger.service.js', () => ({
+  createLedgerBlockService: jest.fn(async () => ({ _id: 'lb-1' })),
 }));
 
 const { uploadShipmentProofService, deleteShipmentService } = await import('../src/modules/shipments/shipments.service.js');
@@ -42,11 +46,11 @@ describe('Shipments Service', () => {
     findByIdAndUpdateMock.mockReset();
     anomalyUpdateManyMock.mockReset();
     telemetryUpdateManyMock.mockReset();
-    mockUploadToStorageMock.mockReset();
+    uploadFileToStorageMock.mockReset();
   });
 
   it('uploads proof and persists optional notes', async () => {
-    mockUploadToStorageMock.mockResolvedValue('https://mock-storage.com/proof123.jpg');
+    uploadFileToStorageMock.mockResolvedValue('https://mock-storage.com/proof123.jpg');
     const proofResponse = {
       deliveryProof: {
         url: 'https://mock-storage.com/proof123.jpg',
@@ -72,7 +76,7 @@ describe('Shipments Service', () => {
       notes: 'Left at front desk',
     });
 
-    expect(mockUploadToStorageMock).toHaveBeenCalled();
+    expect(uploadFileToStorageMock).toHaveBeenCalled();
     expect(findByIdAndUpdateMock).toHaveBeenCalledWith(
       'shipment-1',
       expect.objectContaining({
@@ -88,7 +92,7 @@ describe('Shipments Service', () => {
   });
 
   it('returns AppError 503 when storage upload fails', async () => {
-    mockUploadToStorageMock.mockRejectedValue(new Error('timeout'));
+    uploadFileToStorageMock.mockRejectedValue(new Error('timeout'));
 
     await expect(
       uploadShipmentProofService('shipment-2', {

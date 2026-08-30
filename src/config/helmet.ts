@@ -34,5 +34,5 @@ export function buildHelmetMiddleware() {
       },
     },
     crossOriginEmbedderPolicy: false,
-  });
+  } as unknown as Parameters<typeof helmet>[0]);
 }

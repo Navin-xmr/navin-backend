@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Navin Backend — Compatibility Scorecard</title>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --panel: #1a2332;
+      --text: #e7ecf3;
+      --muted: #8b9bb4;
+      --ok: #3d9a6a;
+      --warn: #c9a227;
+      --bad: #d64545;
+      --border: #2a3548;
+      --accent: #7eb6ff;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+      background: radial-gradient(1200px 600px at 10% -10%, #1e3a5f 0%, transparent 55%),
+                  linear-gradient(160deg, #0f1419, #121a24 40%, #0d1218);
+      color: var(--text);
+      line-height: 1.5;
+      padding: 2rem;
+    }
+    h1 { font-size: 1.8rem; margin: 0 0 0.5rem; }
+    .sub { color: var(--muted); margin-bottom: 2rem; }
+    .meta { color: var(--muted); font-size: 0.9rem; margin-bottom: 1.5rem; }
+    .meta strong { color: var(--text); }
+
+    .overall {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 2rem;
+      margin-bottom: 2rem;
+      text-align: center;
+    }
+    .overall-ring {
+      width: 180px;
+      height: 180px;
+      margin: 0 auto 1rem;
+      position: relative;
+    }
+    .overall-ring svg { transform: rotate(-90deg); }
+    .overall-ring .bg { fill: none; stroke: var(--border); stroke-width: 10; }
+    .overall-ring .fg { fill: none; stroke: var(--accent); stroke-width: 10; stroke-linecap: round; }
+    .overall-score {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+    }
+    .overall-score .pct { font-size: 2.5rem; font-weight: 700; display: block; }
+    .overall-score .lbl { font-size: 0.8rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+    .overall-delta { font-size: 0.95rem; color: var(--muted); }
+    .overall-delta .up { color: var(--ok); font-weight: 600; }
+
+    .components { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+    .component {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.25rem;
+    }
+    .component-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; }
+    .component-title { font-size: 1.05rem; font-weight: 600; }
+    .component-weight { font-size: 0.8rem; color: var(--muted); background: rgba(125,182,255,0.1); padding: 0.2rem 0.5rem; border-radius: 4px; }
+    .component-scores { display: flex; gap: 1.5rem; margin-bottom: 0.75rem; }
+    .score-box { flex: 1; }
+    .score-box .label { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+    .score-box .value { font-size: 1.4rem; font-weight: 700; margin-top: 0.15rem; }
+    .score-box .value.prev { color: var(--muted); }
+    .score-box .value.curr { color: var(--accent); }
+    .score-box .value.delta { color: var(--ok); font-size: 0.9rem; margin-top: 0.2rem; }
+    .component-bar { height: 8px; background: var(--border); border-radius: 4px; overflow: hidden; margin-bottom: 0.75rem; }
+    .component-bar-fill { height: 100%; background: linear-gradient(90deg, #3d9a6a, #7ddeb0); border-radius: 4px; }
+    .component-items { list-style: none; margin: 0; padding: 0; }
+    .component-items li { display: flex; align-items: flex-start; gap: 0.5rem; font-size: 0.9rem; padding: 0.35rem 0; border-bottom: 1px solid rgba(42,53,72,0.6); }
+    .component-items li:last-child { border-bottom: none; }
+    .component-items .check { color: var(--ok); font-weight: 700; }
+    .component-items .cross { color: var(--bad); font-weight: 700; }
+    .component-items .item-text { flex: 1; }
+    .component-items .item-text.fixed { color: var(--muted); text-decoration: line-through; }
+
+    .diff-section {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.25rem;
+      margin-bottom: 2rem;
+    }
+    .diff-section h2 { font-size: 1.1rem; margin: 0 0 0.75rem; }
+    .diff-table { width: 100%; border-collapse: collapse; }
+    .diff-table th, .diff-table td { text-align: left; padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
+    .diff-table th { color: var(--muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; }
+    .diff-table .badge { display: inline-block; padding: 0.15rem 0.45rem; border-radius: 4px; font-size: 0.75rem; font-weight: 600; text-transform: uppercase; }
+    .badge.fixed { background: rgba(61,154,106,0.2); color: #7ddeb0; }
+    .badge.unchanged { background: rgba(125,182,255,0.15); color: var(--accent); }
+    .badge.regression { background: rgba(214,69,69,0.15); color: #f0a0a0; }
+
+    .formula {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.25rem;
+      margin-bottom: 2rem;
+    }
+    .formula h2 { font-size: 1.1rem; margin: 0 0 0.75rem; }
+    .formula pre {
+      background: #0f1419;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+      overflow-x: auto;
+      font-size: 0.9rem;
+      color: var(--text);
+    }
+    .formula .note { color: var(--muted); font-size: 0.85rem; margin-top: 0.5rem; }
+
+    .footer { color: var(--muted); font-size: 0.85rem; text-align: center; margin-top: 1rem; }
+    a { color: var(--accent); }
+  </style>
+</head>
+<body>
+  <h1>Navin Backend — Compatibility Scorecard</h1>
+  <p class="sub">Weighted frontend-backend integration readiness, refreshed against the current codebase.</p>
+  <p class="meta">
+    <strong>Previous report:</strong> 2026-06-28 &nbsp;|&nbsp; <strong>Current verification:</strong> 2026-07-29 &nbsp;|&nbsp;
+    <strong>Source:</strong> <code>backend-compatibility-guide-check.md</code> + live route/controller inspection
+  </p>
+
+  <div class="overall">
+    <div class="overall-ring">
+      <svg viewBox="0 0 180 180" width="180" height="180">
+        <circle class="bg" cx="90" cy="90" r="80"/>
+        <circle class="fg" cx="90" cy="90" r="80" stroke-dasharray="502.65" stroke-dashoffset="149.19"/>
+      </svg>
+      <div class="overall-score">
+        <span class="pct">70.3%</span>
+        <span class="lbl">Overall</span>
+      </div>
+    </div>
+    <div class="overall-delta">
+      Delta from 2026-06-28: <span class="up">+4.5 pp</span> (65.8% → 70.3%)
+    </div>
+  </div>
+
+  <div class="components">
+    <div class="component">
+      <div class="component-header">
+        <div class="component-title">1. API Services Layer Alignment</div>
+        <div class="component-weight">Weight 40%</div>
+      </div>
+      <div class="component-scores">
+        <div class="score-box">
+          <div class="label">Previous</div>
+          <div class="value prev">0.65</div>
+        </div>
+        <div class="score-box">
+          <div class="label">Current</div>
+          <div class="value curr">0.80</div>
+        </div>
+        <div class="score-box">
+          <div class="label">Delta</div>
+          <div class="value delta">+0.15</div>
+        </div>
+      </div>
+      <div class="component-bar"><div class="component-bar-fill" style="width: 80%"></div></div>
+      <ul class="component-items">
+        <li><span class="check">✓</span><span class="item-text fixed">CORS credentials enabled (<code>credentials: true</code>)</span></li>
+        <li><span class="check">✓</span><span class="item-text fixed"><code>GET /shipments/:id</code> implemented</span></li>
+        <li><span class="check">✓</span><span class="item-text fixed"><code>organizationId</code> optional on signup</span></li>
+        <li><span class="check">✓</span><span class="item-text fixed"><code>trackingNumber</code> optional on create</span></li>
+        <li><span class="cross">✗</span><span class="item-text">Anomalies response still wrapped in <code>{ success, message, data, meta }</code></span></li>
+      </ul>
+    </div>
+
+    <div class="component">
+      <div class="component-header">
+        <div class="component-title">2. Auth Flow & Interceptor Handling</div>
+        <div class="component-weight">Weight 20%</div>
+      </div>
+      <div class="component-scores">
+        <div class="score-box">
+          <div class="label">Previous</div>
+          <div class="value prev">1.00</div>
+        </div>
+        <div class="score-box">
+          <div class="label">Current</div>
+          <div class="value curr">1.00</div>
+        </div>
+        <div class="score-box">
+          <div class="label">Delta</div>
+          <div class="value delta">0.00</div>
+        </div>
+      </div>
+      <div class="component-bar"><div class="component-bar-fill" style="width: 100%"></div></div>
+      <ul class="component-items">
+        <li><span class="check">✓</span><span class="item-text">Bearer token validation via <code>requireAuth</code></span></li>
+        <li><span class="check">✓</span><span class="item-text">Returns <code>401 Unauthorized</code> on auth failure</span></li>
+        <li><span class="check">✓</span><span class="item-text">JWT envelope matches <code>{ data: { user, token } }</code></span></li>
+      </ul>
+    </div>
+
+    <div class="component">
+      <div class="component-header">
+        <div class="component-title">3. Data Envelope Matching</div>
+        <div class="component-weight">Weight 15%</div>
+      </div>
+      <div class="component-scores">
+        <div class="score-box">
+          <div class="label">Previous</div>
+          <div class="value prev">0.50</div>
+        </div>
+        <div class="score-box">
+          <div class="label">Current</div>
+          <div class="value curr">0.50</div>
+        </div>
+        <div class="score-box">
+          <div class="label">Delta</div>
+          <div class="value delta">0.00</div>
+        </div>
+      </div>
+      <div class="component-bar"><div class="component-bar-fill" style="width: 50%"></div></div>
+      <ul class="component-items">
+        <li><span class="cross">✗</span><span class="item-text"><code>/anomalies</code> envelope mismatch persists</span></li>
+        <li><span class="check">✓</span><span class="item-text fixed"><code>/shipments</code> list now returns offset pagination (<code>page/limit/total</code>)</span></li>
+      </ul>
+    </div>
+
+    <div class="component">
+      <div class="component-header">
+        <div class="component-title">4. Blockchain / Stellar Hash Orchestration</div>
+        <div class="component-weight">Weight 15%</div>
+      </div>
+      <div class="component-scores">
+        <div class="score-box">
+          <div class="label">Previous</div>
+          <div class="value prev">0.60</div>
+        </div>
+        <div class="score-box">
+          <div class="label">Current</div>
+          <div class="value curr">0.60</div>
+        </div>
+        <div class="score-box">
+          <div class="label">Delta</div>
+          <div class="value delta">0.00</div>
+        </div>
+      </div>
+      <div class="component-bar"><div class="component-bar-fill" style="width: 60%"></div></div>
+      <ul class="component-items">
+        <li><span class="check">✓</span><span class="item-text">Shipment tokenization & telemetry anchoring implemented</span></li>
+        <li><span class="cross">✗</span><span class="item-text">Escrow/settlement orchestration still missing</span></li>
+      </ul>
+    </div>
+
+    <div class="component">
+      <div class="component-header">
+        <div class="component-title">5. Standalone UI Page API Mock Gaps</div>
+        <div class="component-weight">Weight 10%</div>
+      </div>
+      <div class="component-scores">
+        <div class="score-box">
+          <div class="label">Previous</div>
+          <div class="value prev">0.33</div>
+        </div>
+        <div class="score-box">
+          <div class="label">Current</div>
+          <div class="value curr">0.33</div>
+        </div>
+        <div class="score-box">
+          <div class="label">Delta</div>
+          <div class="value delta">0.00</div>
+        </div>
+      </div>
+      <div class="component-bar"><div class="component-bar-fill" style="width: 33%"></div></div>
+      <ul class="component-items">
+        <li><span class="check">✓</span><span class="item-text fixed">User list endpoint implemented</span></li>
+        <li><span class="cross">✗</span><span class="item-text">Payments & Ledger pages remain mocked</span></li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="diff-section">
+    <h2>Delta from 2026-06-28 Report</h2>
+    <table class="diff-table">
+      <thead>
+        <tr>
+          <th>Item</th>
+          <th>Previous Status</th>
+          <th>Current Status</th>
+          <th>Change</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>CORS credentials</td>
+          <td>Failing</td>
+          <td>Passing</td>
+          <td><span class="badge fixed">Fixed</span></td>
+        </tr>
+        <tr>
+          <td><code>GET /shipments/:id</code></td>
+          <td>Missing</td>
+          <td>Implemented</td>
+          <td><span class="badge fixed">Fixed</span></td>
+        </tr>
+        <tr>
+          <td>Auth <code>organizationId</code></td>
+          <td>Required (blocking)</td>
+          <td>Optional</td>
+          <td><span class="badge fixed">Fixed</span></td>
+        </tr>
+        <tr>
+          <td>Create shipment <code>trackingNumber</code></td>
+          <td>Required (blocking)</td>
+          <td>Optional / auto-generated</td>
+          <td><span class="badge fixed">Fixed</span></td>
+        </tr>
+        <tr>
+          <td>Anomalies envelope</td>
+          <td>Mismatch</td>
+          <td>Mismatch</td>
+          <td><span class="badge unchanged">Unchanged</span></td>
+        </tr>
+        <tr>
+          <td>Blockchain escrow orchestration</td>
+          <td>Partial</td>
+          <td>Partial</td>
+          <td><span class="badge unchanged">Unchanged</span></td>
+        </tr>
+        <tr>
+          <td>UI mock gaps (Payments/Ledger)</td>
+          <td>Open</td>
+          <td>Open</td>
+          <td><span class="badge unchanged">Unchanged</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="formula">
+    <h2>Compatibility Calculation Formula</h2>
+    <pre><code>Total Compatibility (%) = Σ (Component Score × Weight)
+
++-----------------------------------------------------------------------------------+
+| COMPONENT                                  | WEIGHT | SCORE (0 to 1.0) | TOTAL    |
++-----------------------------------------------------------------------------------+
+| 1. API Services Layer Alignment            |  40%   |       0.80       |  32.0%   |
+| 2. Auth Flow & Interceptor Handling        |  20%   |       1.00       |  20.0%   |
+| 3. Data Envelope Envelope Matching (data)  |  15%   |       0.50       |   7.5%   |
+| 4. Blockchain/Stellar Hash Orchestration   |  15%   |       0.60       |   9.0%   |
+| 5. Standalone UI Page API Mock Gaps        |  10%   |       0.33       |   3.3%   |
++-----------------------------------------------------------------------------------+
+| OVERALL SYSTEM COMPATIBILITY               |  100%  |      0.703       |  70.3%   |
++-----------------------------------------------------------------------------------+</code></pre>
+    <p class="note">
+      <strong>Scoring notes:</strong> API Services Layer improved from 0.65 → 0.80 after fixing CORS credentials, <code>GET /shipments/:id</code>,
+      optional <code>organizationId</code>, and optional <code>trackingNumber</code>. One remaining mismatch is the anomalies envelope.
+      All other components retained their prior scores.
+    </p>
+  </div>
+
+  <div class="footer">
+    Generated: 2026-07-29 &nbsp;|&nbsp; Refresh by re-running compatibility review against <code>backend-compatibility-guide-check.md</code> and current code.
+  </div>
+</body>
+</html>

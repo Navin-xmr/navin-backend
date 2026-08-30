@@ -30,6 +30,7 @@ node dist/workers/stellar.worker.js
 ### Configuration
 
 The worker uses the following environment variables:
+
 - `MONGO_URI`: MongoDB connection string
 - `REDIS_URL`: Redis connection string
 - `STELLAR_SECRET_KEY`: Stellar account secret key
@@ -38,11 +39,12 @@ The worker uses the following environment variables:
 ### Job Processing
 
 1. **Job Data**:
+
    ```typescript
    {
-     telemetryId: string;  // MongoDB document ID
-     shipmentId: string;   // Shipment reference
-     dataHash: string;     // SHA-256 hash of telemetry data
+     telemetryId: string; // MongoDB document ID
+     shipmentId: string; // Shipment reference
+     dataHash: string; // SHA-256 hash of telemetry data
    }
    ```
 
@@ -60,6 +62,7 @@ The worker uses the following environment variables:
 ### Monitoring
 
 The worker logs all operations:
+
 ```
 [Stellar Worker] Started and listening for jobs on transaction_queue
 [Stellar Worker] Processing job 123 for telemetry abc
@@ -70,6 +73,7 @@ The worker logs all operations:
 ### Graceful Shutdown
 
 The worker handles SIGTERM and SIGINT signals gracefully:
+
 ```bash
 # Stop worker
 kill -SIGTERM <pid>
@@ -78,6 +82,7 @@ kill -SIGTERM <pid>
 ### Testing
 
 Run worker tests:
+
 ```bash
 npm test -- stellar.worker.test.ts
 ```
@@ -85,6 +90,7 @@ npm test -- stellar.worker.test.ts
 ### Production Deployment
 
 For production, consider:
+
 1. Running multiple worker instances for redundancy
 2. Using a process manager (PM2, systemd)
 3. Monitoring job queue metrics
@@ -95,14 +101,16 @@ For production, consider:
 
 ```json
 {
-  "apps": [{
-    "name": "stellar-worker",
-    "script": "dist/workers/stellar.worker.js",
-    "instances": 2,
-    "exec_mode": "cluster",
-    "env": {
-      "NODE_ENV": "production"
+  "apps": [
+    {
+      "name": "stellar-worker",
+      "script": "dist/workers/stellar.worker.js",
+      "instances": 2,
+      "exec_mode": "cluster",
+      "env": {
+        "NODE_ENV": "production"
+      }
     }
-  }]
+  ]
 }
 ```

@@ -5,14 +5,26 @@ import type { FilterQuery } from 'mongoose';
 import { generateDataHash } from '../../shared/utils/crypto.js';
 import { detectAnomaly } from '../anomaly/anomaly.service.js';
 import { emitAnomalyDetected, emitTelemetryUpdate } from '../../infra/socket/io.js';
-import type { AnomalyAlertPayload, TelemetryUpdatePayload } from '../../shared/types/socketEvents.js';
-import type { BulkTelemetryItem } from './telemetry.validation.js';
-import { AppError } from '../../shared/http/errors.js';
+import type {
+  AnomalyAlertPayload,
+  TelemetryUpdatePayload,
+} from '../../shared/types/socketEvents.js';
+import { invalidateShipmentEtaCache } from '../shipments/shipmentsEta.cache.js';
+import type { BulkTelemetryItem, TelemetryThresholds } from './telemetry.validation.js';
+import { AppError, ErrorCodes } from '../../shared/http/errors.js';
 import { pushStellarAnchorJob, pushAlertJob } from '../../infra/redis/queue.js';
+import logger from '../../shared/logger/logger.js';
+import { offsetSkip, paginateCursor } from '../../shared/utils/pagination.js';
+import { auditLog } from '../../shared/utils/auditLog.js';
 
 /**
  * Finds the active (IN_TRANSIT) shipment linked to a given sensorId.
  * The sensorId is stored in offChainMetadata.sensorId on the Shipment document.
+ */
+/**
+ * Finds the active shipment associated with a sensor ID.
+ * @param {string} sensorId - Sensor identifier from IoT telemetry.
+ * @returns {Promise<unknown>} Active shipment document or null.
  */
 export async function findActiveShipmentBySensorId(sensorId: string) {
   return Shipment.findOne({
@@ -21,6 +33,23 @@ export async function findActiveShipmentBySensorId(sensorId: string) {
   }).lean();
 }
 
+/**
+ * Persists a telemetry record to the database.
+ * @param {object} input - Telemetry record payload.
+ * @param {string=} input.sensorId - Optional sensor identifier.
+ * @param {string} input.shipmentId - Shipment associated with the telemetry.
+ * @param {number} input.temperature - Temperature reading.
+ * @param {number} input.humidity - Humidity reading.
+ * @param {number} input.latitude - GPS latitude.
+ * @param {number} input.longitude - GPS longitude.
+ * @param {number} input.batteryLevel - Battery level percentage.
+ * @param {Date} input.timestamp - Reading timestamp.
+ * @param {string} input.dataHash - Hash of the telemetry payload.
+ * @param {string=} input.stellarTxHash - Optional Stellar transaction hash.
+ * @param {string=} input.anchorStatus - Telemetry anchor status.
+ * @param {unknown} input.rawPayload - Original payload from the source.
+ * @returns {Promise<unknown>} Persisted telemetry document.
+ */
 export async function createTelemetryRecord(input: {
   sensorId?: string;
   shipmentId: string;
@@ -33,6 +62,7 @@ export async function createTelemetryRecord(input: {
   dataHash: string;
   stellarTxHash?: string;
   anchorStatus?: TelemetryAnchorStatus;
+  shockMagnitude?: number;
   rawPayload: unknown;
 }) {
   return Telemetry.create({
@@ -47,18 +77,47 @@ export async function createTelemetryRecord(input: {
     dataHash: input.dataHash,
     stellarTxHash: input.stellarTxHash,
     anchorStatus: input.anchorStatus ?? TelemetryAnchorStatus.PENDING_ANCHOR,
+    shockMagnitude: input.shockMagnitude,
     rawPayload: input.rawPayload,
   });
 }
 
+/**
+ * Marks a telemetry record as anchored on Stellar.
+ * @param {string} telemetryId - Telemetry document ObjectId.
+ * @param {string} stellarTxHash - Stellar transaction hash.
+ * @returns {Promise<unknown>} Updated telemetry document.
+ */
 export async function updateTelemetryAnchor(telemetryId: string, stellarTxHash: string) {
-  return Telemetry.findByIdAndUpdate(
+  const updated = await Telemetry.findByIdAndUpdate(
     telemetryId,
     { stellarTxHash, anchorStatus: TelemetryAnchorStatus.ANCHORED },
     { new: true }
   );
+
+  if (updated) {
+    auditLog({
+      userId: 'system',
+      action: 'TELEMETRY_ANCHORED',
+      resourceId: telemetryId,
+      timestamp: new Date(),
+      metadata: {
+        shipmentId: updated.shipmentId?.toString(),
+        stellarTxHash,
+        dataHash: updated.dataHash,
+      },
+    });
+  }
+
+  return updated;
 }
 
+/**
+ * Marks a telemetry record as failed to anchor.
+ * @param {string} telemetryId - Telemetry document ObjectId.
+ * @param {string} error - Failure reason.
+ * @returns {Promise<unknown>} Updated telemetry document.
+ */
 export async function markTelemetryAnchorFailed(telemetryId: string, error: string) {
   return Telemetry.findByIdAndUpdate(
     telemetryId,
@@ -67,30 +126,76 @@ export async function markTelemetryAnchorFailed(telemetryId: string, error: stri
   );
 }
 
+/**
+ * Retrieves telemetry records with cursor-based pagination.
+ * @param {object} params - Pagination and filter parameters.
+ * @param {string=} params.cursor - Optional cursor for paging.
+ * @param {number} params.limit - Maximum number of records to return.
+ * @param {string=} params.shipmentId - Optional shipment filter.
+ * @returns {Promise<{data: unknown[]; nextCursor: string | null; hasMore: boolean}>} Paginated telemetry results.
+ */
 export async function getTelemetryService(params: {
   cursor?: string;
+  page?: number;
   limit: number;
   shipmentId?: string;
+  organizationId?: string;
+  from?: Date;
+  to?: Date;
 }) {
-  const { cursor, limit, shipmentId } = params;
+  const { cursor, page, limit, shipmentId, organizationId, from, to } = params;
   const query: FilterQuery<unknown> = {};
 
   if (shipmentId) query.shipmentId = shipmentId;
+
+  const timestampFilter: { $gte?: Date; $lte?: Date } = {};
+  if (from) timestampFilter.$gte = from;
+  if (to) timestampFilter.$lte = to;
+  if (from || to) query.timestamp = timestampFilter;
+
   if (cursor) query._id = { $lt: cursor };
+  if (organizationId) {
+    // Find shipments belonging to the user's organization and filter telemetry by those shipment IDs
+    const shipments = await Shipment.find({ organizationId }).select('_id').lean();
+    const shipmentIds = shipments.map((s: { _id: string }) => s._id);
+    if (shipmentIds.length > 0) {
+      query.shipmentId = { $in: shipmentIds };
+    } else {
+      // No shipments for this organization, return empty result early
+      return { data: [], nextCursor: null, hasMore: false };
+    }
+  }
 
-  const telemetry = await Telemetry.find(query)
+  const telemetryQuery = Telemetry.find(query)
     .select('-__v -rawPayload')
-    .sort({ timestamp: -1, _id: -1 })
-    .limit(limit + 1)
-    .lean();
+    .sort({ timestamp: -1, _id: -1 });
 
-  const hasMore = telemetry.length > limit;
-  const data = hasMore ? telemetry.slice(0, limit) : telemetry;
-  const nextCursor = hasMore && data.length > 0 ? data[data.length - 1]._id.toString() : null;
+  // Cursor mode is preferred; page is legacy offset-only (never combined — see Zod refine).
+  if (!cursor && page) {
+    telemetryQuery.skip(offsetSkip(page, limit)).limit(limit + 1);
+  } else {
+    telemetryQuery.limit(limit + 1);
+  }
 
-  return { data, nextCursor, hasMore };
+  const telemetry = await telemetryQuery.lean();
+  return paginateCursor(telemetry, limit);
 }
 
+/**
+ * Returns the hardcoded sensor alert thresholds.
+ * @returns {TelemetryThresholds} Threshold constants for temperature, humidity, and battery level.
+ */
+export function getTelemetryThresholds(): TelemetryThresholds {
+  return { maxTemp: 85, maxHumidity: 90, minBatteryLevel: 20 };
+}
+
+/**
+ * Ingests multiple telemetry items in bulk and schedules downstream processing.
+ * @param {BulkTelemetryItem[]} items - List of telemetry payloads to ingest.
+ * @returns {Promise<{insertedCount: number; insertedIds: string[]}>} Summary of inserted telemetry documents.
+ * @throws {AppError} 400 when the shipmentId cannot be resolved.
+ * @throws {AppError} 404 when a matching active shipment cannot be resolved.
+ */
 export async function bulkIngestTelemetry(items: BulkTelemetryItem[]) {
   const createdIds: string[] = [];
 
@@ -99,13 +204,17 @@ export async function bulkIngestTelemetry(items: BulkTelemetryItem[]) {
     if (!shipmentId && item.sensorId) {
       const shipment = await findActiveShipmentBySensorId(item.sensorId);
       if (!shipment?._id) {
-        throw new AppError(404, `No active shipment found for sensor ${item.sensorId}`, 'NOT_FOUND');
+        throw new AppError(
+          404,
+          `No active shipment found for sensor ${item.sensorId}`,
+          ErrorCodes.NOT_FOUND
+        );
       }
       shipmentId = shipment._id.toString();
     }
 
     if (!shipmentId) {
-      throw new AppError(400, 'shipmentId could not be resolved', 'BAD_REQUEST');
+      throw new AppError(400, 'shipmentId could not be resolved', ErrorCodes.BAD_REQUEST);
     }
 
     const dataHash = generateDataHash(item as unknown);
@@ -125,6 +234,7 @@ export async function bulkIngestTelemetry(items: BulkTelemetryItem[]) {
     });
 
     createdIds.push(telemetry._id.toString());
+    await invalidateShipmentEtaCache(shipmentId);
 
     await pushStellarAnchorJob({
       telemetryId: telemetry._id.toString(),
@@ -150,42 +260,46 @@ export async function bulkIngestTelemetry(items: BulkTelemetryItem[]) {
     emitTelemetryUpdate(shipmentId, telemetryPayload);
 
     setImmediate(async () => {
-      const result = await detectAnomaly({
-        _id: telemetry._id.toString(),
-        shipmentId: telemetry.shipmentId.toString(),
-        temperature: telemetry.temperature,
-        humidity: telemetry.humidity,
-        batteryLevel: telemetry.batteryLevel,
-        timestamp: telemetry.timestamp,
-      });
+      try {
+        const result = await detectAnomaly({
+          _id: telemetry._id.toString(),
+          shipmentId: telemetry.shipmentId.toString(),
+          temperature: telemetry.temperature,
+          humidity: telemetry.humidity,
+          batteryLevel: telemetry.batteryLevel,
+          timestamp: telemetry.timestamp,
+        });
 
-      if (result.detected) {
-        await Promise.all(
-          result.anomalies.map(async anomaly => {
-            const anomalyPayload: AnomalyAlertPayload = {
-              anomalyId: anomaly._id,
-              shipmentId: anomaly.shipmentId,
-              type: anomaly.type as
-                | 'TEMPERATURE_EXCEEDED'
-                | 'TEMPERATURE_BELOW_MIN'
-                | 'HUMIDITY_EXCEEDED'
-                | 'HUMIDITY_BELOW_MIN'
-                | 'BATTERY_LOW',
-              severity: anomaly.severity as 'LOW' | 'MEDIUM' | 'HIGH',
-              message: anomaly.message,
-              timestamp: anomaly.timestamp,
-              resolved: anomaly.resolved,
-            };
+        if (result.detected) {
+          await Promise.all(
+            result.anomalies.map(async anomaly => {
+              const anomalyPayload: AnomalyAlertPayload = {
+                anomalyId: anomaly._id,
+                shipmentId: anomaly.shipmentId,
+                type: anomaly.type as
+                  | 'TEMPERATURE_EXCEEDED'
+                  | 'TEMPERATURE_BELOW_MIN'
+                  | 'HUMIDITY_EXCEEDED'
+                  | 'HUMIDITY_BELOW_MIN'
+                  | 'BATTERY_LOW',
+                severity: anomaly.severity as 'LOW' | 'MEDIUM' | 'HIGH',
+                message: anomaly.message,
+                timestamp: anomaly.timestamp,
+                resolved: anomaly.resolved,
+              };
 
-            emitAnomalyDetected(anomaly.shipmentId, anomalyPayload);
-            await pushAlertJob({
-              shipmentId: anomaly.shipmentId,
-              type: anomaly.type,
-              severity: anomaly.severity,
-              message: anomaly.message,
-            });
-          })
-        );
+              emitAnomalyDetected(anomaly.shipmentId, anomalyPayload);
+              await pushAlertJob({
+                shipmentId: anomaly.shipmentId,
+                type: anomaly.type,
+                severity: anomaly.severity,
+                message: anomaly.message,
+              });
+            })
+          );
+        }
+      } catch (err) {
+        logger.error({ err, shipmentId }, 'Background anomaly detection failed');
       }
     });
   }

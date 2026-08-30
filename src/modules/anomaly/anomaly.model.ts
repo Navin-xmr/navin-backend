@@ -10,6 +10,9 @@ const AnomalySchema = new Schema(
     message: { type: String, required: true },
     timestamp: { type: Date, required: true },
     resolved: { type: Boolean, default: false, required: true },
+    resolvedAt: { type: Date, default: null },
+    resolvedBy: { type: String, default: null },
+    resolutionNote: { type: String, default: null },
     deletedAt: { type: Date, default: null },
   },
   { timestamps: true, strict: true }
@@ -17,9 +20,16 @@ const AnomalySchema = new Schema(
 
 AnomalySchema.plugin(isoDatePlugin);
 
+// Optimizes retrieving anomalies for a specific shipment, sorted by timestamp descending (newest first) with deterministic pagination (_id).
 AnomalySchema.index({ shipmentId: 1, timestamp: -1, _id: -1 });
+
+// Optimizes retrieving resolved/unresolved anomalies (e.g. unresolved dashboard view), sorted by timestamp descending with deterministic pagination.
 AnomalySchema.index({ resolved: 1, timestamp: -1, _id: -1 });
+
+// Optimizes filtering anomalies by severity level, sorted by timestamp descending with deterministic pagination.
 AnomalySchema.index({ severity: 1, timestamp: -1, _id: -1 });
+
+// Optimizes filtering anomalies by severity and shipmentId combined (e.g., critical shipment anomalies), sorted by timestamp descending with deterministic pagination.
 AnomalySchema.index({ severity: 1, shipmentId: 1, timestamp: -1, _id: -1 });
 
 AnomalySchema.pre(['find', 'findOne', 'findOneAndUpdate', 'countDocuments'], function () {

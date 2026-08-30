@@ -2,12 +2,21 @@ import { AppError } from '../../shared/http/errors.js';
 import * as paymentsService from '../payments/payments.service.js';
 import { PaymentStatus } from '../payments/payments.model.js';
 import type { StellarWebhookPayload } from './stellar.webhook.validation.js';
+import { logger } from '../../shared/logger/logger.js';
+import { createLedgerBlockService } from '../ledger/ledger.service.js';
+import { MilestoneEvent } from '../../shared/types/shipment.js';
+import { PaymentModel } from '../payments/payments.model.js';
 
+/**
+ * Handles incoming Stellar proof-of-delivery webhook events.
+ * @param {StellarWebhookPayload} payload - Validated Stellar webhook payload.
+ * @returns {Promise<unknown>} The processed webhook event result.
+ * @throws {AppError} When the webhook event type is unknown or processing fails.
+ */
 export async function handleStellarWebhookEvent(payload: StellarWebhookPayload) {
   const { type, paymentId, transactionHash } = payload;
 
-  // Log webhook event
-  console.log(`[Stellar Webhook] Received ${type} event for payment ${paymentId}`);
+  logger.info({ type, paymentId }, 'Stellar webhook event received');
 
   try {
     switch (type) {
@@ -21,7 +30,7 @@ export async function handleStellarWebhookEvent(payload: StellarWebhookPayload) 
         throw new AppError(400, `Unknown webhook event type: ${type}`, 'UNKNOWN_EVENT_TYPE');
     }
   } catch (error) {
-    console.error(`[Stellar Webhook] Error processing event:`, error);
+    logger.error({ err: error, type, paymentId }, 'Stellar webhook processing failed');
     throw error;
   }
 }
@@ -32,10 +41,25 @@ async function handleReleaseEvent(paymentId: string, transactionHash: string) {
     stellarTxHash: transactionHash,
   });
 
-  console.log(
-    `[Stellar Webhook] Payment ${paymentId} marked as RELEASED ` +
-      `with tx ${transactionHash}`,
-  );
+  // Write SETTLEMENT_COMPLETED ledger block
+  try {
+    const payment = await PaymentModel.findById(paymentId).lean();
+    if (payment) {
+      await createLedgerBlockService({
+        shipmentId: payment.shipmentId.toString(),
+        eventType: MilestoneEvent.SETTLEMENT_COMPLETED,
+        transactionHash,
+        metadata: { paymentId },
+      });
+    }
+  } catch (ledgerErr) {
+    logger.warn(
+      { err: ledgerErr, paymentId },
+      'Failed to create ledger block for settlement completion'
+    );
+  }
+
+  logger.info({ paymentId, transactionHash }, 'Payment marked as RELEASED');
 
   return {
     event: 'release',
@@ -51,10 +75,7 @@ async function handleEscrowEvent(paymentId: string, transactionHash: string) {
     stellarTxHash: transactionHash,
   });
 
-  console.log(
-    `[Stellar Webhook] Payment ${paymentId} marked as ESCROWED ` +
-      `with tx ${transactionHash}`,
-  );
+  logger.info({ paymentId, transactionHash }, 'Payment marked as ESCROWED');
 
   return {
     event: 'escrow',
@@ -69,7 +90,7 @@ async function handleFailedEvent(paymentId: string) {
     status: PaymentStatus.FAILED,
   });
 
-  console.log(`[Stellar Webhook] Payment ${paymentId} marked as FAILED`);
+  logger.info({ paymentId }, 'Payment marked as FAILED');
 
   return {
     event: 'failed',

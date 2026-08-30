@@ -40,5 +40,3 @@ export function validateRequest(input: ValidationSchemas): RequestHandler {
     }
   };
 }
-
-export const validate = validateRequest;

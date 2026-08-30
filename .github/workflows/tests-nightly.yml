@@ -1,0 +1,62 @@
+# Passive drift record — NEVER runs on pull requests.
+# Purpose: weekly snapshot of suite health while tests are deliberately
+# excluded from PR CI (see TODO.md H4 decision). When the contribution-review
+# alignment pass completes Part 1 remediation, delete this workflow and add
+# `tests` as a required job in ci.yml instead.
+
+name: Tests (nightly heartbeat)
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 3 * * 1' # Mondays 03:00 UTC
+
+concurrency:
+  group: tests-nightly
+  cancel-in-progress: false
+
+jobs:
+  tests:
+    name: Full test suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    continue-on-error: true # warning, not red X — flip/remove once tests gate in ci.yml
+    services:
+      mongo:
+        image: mongo:6.0
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.runCommand({ ping: 1 }).ok'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Clean install dependencies
+        run: npm ci
+
+      - name: Run test suite
+        run: npm test
+        env:
+          NODE_ENV: test
+          MONGO_URI: mongodb://localhost:27017/navin_test
+          REDIS_URL: redis://localhost:6379
+          JWT_SECRET: nightly-ci-secret-key-at-least-32-characters!!

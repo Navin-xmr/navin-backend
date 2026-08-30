@@ -36,6 +36,12 @@ function batterySeverity(batteryLevel: number, minBatteryLevel: number): Anomaly
   return 'LOW';
 }
 
+/**
+ * Evaluates telemetry payloads against anomaly thresholds.
+ * @param {TelemetryPayload} payload - Telemetry values to evaluate.
+ * @param {TelemetryThresholds} thresholds - Threshold configuration for anomalies.
+ * @returns {EvaluatedAnomaly[]} An array of detected anomalies.
+ */
 export function evaluateTelemetry(
   payload: TelemetryPayload,
   thresholds: TelemetryThresholds

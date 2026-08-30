@@ -26,6 +26,11 @@ await jest.unstable_mockModule('../src/modules/shipments/shipments.model.js', ()
   type ShipmentQuery = { _id?: { $lt?: PrimitiveId }; status?: string };
   type FindChain = {
     sort: () => {
+      skip: (s: number) => {
+        limit: (l: number) => {
+          lean: () => Promise<ShipmentRecord[]>;
+        };
+      };
       limit: (l: number) => {
         lean: () => Promise<ShipmentRecord[]>;
       };
@@ -34,11 +39,17 @@ await jest.unstable_mockModule('../src/modules/shipments/shipments.model.js', ()
   type ShipmentCtor = {
     new (doc: ShipmentInput): ShipmentRecord;
     find: (query?: ShipmentQuery) => FindChain;
-    countDocuments: (query?: { status?: string }) => Promise<number>;
+    countDocuments: (query?: ShipmentQuery) => Promise<number>;
     deleteMany: () => Promise<void>;
     create: (doc: ShipmentInput) => Promise<ShipmentRecord>;
-    findById: (id: PrimitiveId) => Promise<(ShipmentRecord & { save: () => Promise<ShipmentRecord> }) | null>;
-    findByIdAndUpdate: (id: PrimitiveId, update: Record<string, unknown>, opts?: { new?: boolean }) => Promise<ShipmentRecord | null>;
+    findById: (
+      id: PrimitiveId
+    ) => Promise<(ShipmentRecord & { save: () => Promise<ShipmentRecord> }) | null>;
+    findByIdAndUpdate: (
+      id: PrimitiveId,
+      update: Record<string, unknown>,
+      opts?: { new?: boolean }
+    ) => Promise<ShipmentRecord | null>;
     prototype: {
       save: (this: ShipmentRecord) => Promise<ShipmentRecord>;
     };
@@ -49,16 +60,27 @@ await jest.unstable_mockModule('../src/modules/shipments/shipments.model.js', ()
     this.milestones = doc.milestones || [];
   } as unknown as ShipmentCtor;
 
+  /** Shared filter semantics for find() and countDocuments() (Issue #252). */
+  const matchesQuery = (d: ShipmentRecord, query: ShipmentQuery = {}): boolean => {
+    const cursor = query._id?.$lt;
+    const status = query.status;
+    if (status && d.status !== status) return false;
+    if (cursor !== undefined && !(Number(d._id) < Number(cursor))) return false;
+    return true;
+  };
+
   ShipmentConstructor.find = (query = {}) => {
-    const cursor = query?._id?.$lt;
-    const status = query?.status;
     const arr = shipmentsData
-      .filter(d => (status ? d.status === status : true))
-      .filter(d => (cursor ? Number(d._id) < Number(cursor) : true))
+      .filter(d => matchesQuery(d, query))
       .sort((a, b) => Number(b._id) - Number(a._id));
 
     return {
       sort: () => ({
+        skip: (s: number) => ({
+          limit: (l: number) => ({
+            lean: () => Promise.resolve(arr.slice(s, s + l)),
+          }),
+        }),
         limit: (l: number) => ({
           lean: () => Promise.resolve(arr.slice(0, l)),
         }),
@@ -66,21 +88,21 @@ await jest.unstable_mockModule('../src/modules/shipments/shipments.model.js', ()
     };
   };
 
-  ShipmentConstructor.countDocuments = (query) =>
-    Promise.resolve(shipmentsData.filter(d => !query || !query.status || d.status === query.status).length);
+  ShipmentConstructor.countDocuments = (query = {}) =>
+    Promise.resolve(shipmentsData.filter(d => matchesQuery(d, query)).length);
 
   ShipmentConstructor.deleteMany = () => {
     shipmentsData.length = 0;
     return Promise.resolve();
   };
 
-  ShipmentConstructor.create = (doc) => {
+  ShipmentConstructor.create = doc => {
     const d = { ...doc, _id: String(shipmentsData.length), milestones: doc.milestones || [] };
     shipmentsData.push(d as ShipmentRecord);
     return Promise.resolve(d);
   };
 
-  ShipmentConstructor.findById = (id) => {
+  ShipmentConstructor.findById = id => {
     const found = shipmentsData.find(d => String(d._id) === String(id));
     if (!found) return Promise.resolve(null);
     return Promise.resolve({
@@ -113,7 +135,12 @@ await jest.unstable_mockModule('../src/modules/shipments/shipments.model.js', ()
     return this;
   };
 
-  const ShipmentStatus = { CREATED: 'CREATED', IN_TRANSIT: 'IN_TRANSIT', DELIVERED: 'DELIVERED', CANCELLED: 'CANCELLED' };
+  const ShipmentStatus = {
+    CREATED: 'CREATED',
+    IN_TRANSIT: 'IN_TRANSIT',
+    DELIVERED: 'DELIVERED',
+    CANCELLED: 'CANCELLED',
+  };
   return { Shipment: ShipmentConstructor, ShipmentStatus };
 });
 
@@ -124,8 +151,10 @@ await jest.unstable_mockModule('../src/modules/users/users.model.js', () => {
       usersData.push(user as UserRecord);
       return Promise.resolve(user);
     },
-    findById: (id: PrimitiveId) => Promise.resolve(usersData.find(u => String(u._id) === String(id)) || null),
-    findOne: (query: Record<string, any>) => Promise.resolve(usersData.find(u => u.email === query.email) || null),
+    findById: (id: PrimitiveId) =>
+      Promise.resolve(usersData.find(u => String(u._id) === String(id)) || null),
+    findOne: (query: Record<string, any>) =>
+      Promise.resolve(usersData.find(u => u.email === query.email) || null),
   };
   const UserRole = {
     SUPER_ADMIN: 'SUPER_ADMIN',
@@ -144,13 +173,23 @@ await jest.unstable_mockModule('../src/modules/users/users.model.js', () => {
   return { UserModel, UserRole, OrganizationType, OrganizationModel };
 });
 
+await jest.unstable_mockModule('../src/services/stellar.service.js', () => ({
+  tokenizeShipment: jest.fn(),
+  anchorTelemetryHash: jest.fn(),
+  releaseEscrow: jest.fn(),
+  getStellarExplorerUrl: jest.fn(() => 'https://stellar.expert/explorer/testnet/tx/mock'),
+}));
+
 await jest.unstable_mockModule('../src/infra/socket/io.js', () => {
   return {
     initSocketIO: jest.fn(),
     getIO: jest.fn(),
     emitAnomalyDetected: jest.fn(),
     emitTelemetryUpdate: jest.fn(),
+      emitPaymentStatusChange: jest.fn(),
     emitStatusUpdate: jest.fn(),
+ emitPaymentStatusChange: jest.fn(),
+  emitPaymentStatusChange: jest.fn(),
   };
 });
 
@@ -163,10 +202,7 @@ describe('Shipments API (mocked DB)', () => {
     const appModule = await import('../src/app.js');
     buildApp = appModule.buildApp as () => Application;
     app = buildApp();
-    authToken = jwt.sign(
-      { userId: 'test-user-id', role: 'MANAGER' },
-      process.env.JWT_SECRET!
-    );
+    authToken = jwt.sign({ userId: 'test-user-id', role: 'MANAGER' }, process.env.JWT_SECRET!);
   });
 
   beforeEach(async () => {
@@ -176,7 +212,9 @@ describe('Shipments API (mocked DB)', () => {
 
   it('should paginate shipments', async () => {
     for (let i = 0; i < 15; i++) {
-      await (await import('../src/modules/shipments/shipments.model.js')).Shipment.create({
+      await (
+        await import('../src/modules/shipments/shipments.model.js')
+      ).Shipment.create({
         trackingNumber: `TN${i}`,
         origin: 'A',
         destination: 'B',
@@ -186,18 +224,22 @@ describe('Shipments API (mocked DB)', () => {
       });
     }
     const first = await request(app)
-      .get('/api/shipments?limit=5')
+      .get('/api/shipments?limit=5&page=1')
       .set('Authorization', `Bearer ${authToken}`);
     expect(first.status).toBe(200);
     expect(first.body.data).toHaveLength(5);
-    expect(first.body.meta.hasMore).toBe(true);
-    expect(first.body.meta.nextCursor).toBeTruthy();
+    expect(first.body.meta.page).toBe(1);
+    expect(first.body.meta.limit).toBe(5);
+    expect(first.body.meta.total).toBe(15);
 
     const second = await request(app)
-      .get(`/api/shipments?limit=5&cursor=${first.body.meta.nextCursor}`)
+      .get('/api/shipments?limit=5&page=2')
       .set('Authorization', `Bearer ${authToken}`);
     expect(second.status).toBe(200);
     expect(second.body.data).toHaveLength(5);
+    expect(second.body.meta.page).toBe(2);
+    expect(second.body.meta.limit).toBe(5);
+    expect(second.body.meta.total).toBe(15);
     const firstIds = first.body.data.map((s: { _id: string }) => s._id);
     const secondIds = second.body.data.map((s: { _id: string }) => s._id);
     expect(firstIds.filter((id: string) => secondIds.includes(id))).toHaveLength(0);
@@ -205,14 +247,31 @@ describe('Shipments API (mocked DB)', () => {
 
   it('should filter shipments by status', async () => {
     const mod = await import('../src/modules/shipments/shipments.model.js');
-    await mod.Shipment.create({ trackingNumber: 'TN1', origin: 'A', destination: 'B', enterpriseId: 'ent1', logisticsId: 'log1', status: 'IN_TRANSIT' });
-    await mod.Shipment.create({ trackingNumber: 'TN2', origin: 'A', destination: 'B', enterpriseId: 'ent2', logisticsId: 'log2', status: 'DELIVERED' });
+    await mod.Shipment.create({
+      trackingNumber: 'TN1',
+      origin: 'A',
+      destination: 'B',
+      enterpriseId: 'ent1',
+      logisticsId: 'log1',
+      status: 'IN_TRANSIT',
+    });
+    await mod.Shipment.create({
+      trackingNumber: 'TN2',
+      origin: 'A',
+      destination: 'B',
+      enterpriseId: 'ent2',
+      logisticsId: 'log2',
+      status: 'DELIVERED',
+    });
     const res = await request(app)
       .get('/api/shipments?status=IN_TRANSIT&limit=20')
       .set('Authorization', `Bearer ${authToken}`);
     expect(res.status).toBe(200);
     expect(res.body.data.length).toBe(1);
     expect(res.body.data[0].status).toBe('IN_TRANSIT');
+    expect(res.body.meta.total).toBe(1);
+    expect(res.body.meta.page).toBe(1);
+    expect(res.body.meta.limit).toBe(20);
   });
 
   it('should append milestone on status change and record user/wallet', async () => {
@@ -241,7 +300,9 @@ describe('Shipments API (mocked DB)', () => {
 
     // generate token matching auth.service.verifyToken expectations
     const tokenPayload = { userId: String(user._id), role: user.role };
-    const { default: { sign } } = await import('jsonwebtoken');
+    const {
+      default: { sign },
+    } = await import('jsonwebtoken');
     const token = sign(tokenPayload, process.env.JWT_SECRET!);
 
     const res = await request(app)
@@ -276,7 +337,9 @@ describe('Shipments API (mocked DB)', () => {
     });
 
     const tokenPayload = { userId: String(user._id), role: user.role };
-    const { default: { sign } } = await import('jsonwebtoken');
+    const {
+      default: { sign },
+    } = await import('jsonwebtoken');
     const token = sign(tokenPayload, process.env.JWT_SECRET!);
 
     const res = await request(app)
@@ -298,7 +361,9 @@ describe('Shipments API (mocked DB)', () => {
     });
 
     const tokenPayload = { userId: String(user._id), role: user.role };
-    const { default: { sign } } = await import('jsonwebtoken');
+    const {
+      default: { sign },
+    } = await import('jsonwebtoken');
     const token = sign(tokenPayload, process.env.JWT_SECRET!);
 
     const res = await request(app)
@@ -310,7 +375,7 @@ describe('Shipments API (mocked DB)', () => {
         destination: 'B',
         enterpriseId: 'ent1',
         logisticsId: 'log1',
-        status: 'CREATED'
+        status: 'CREATED',
       });
     expect(res.status).toBe(201);
     expect(res.body.data.trackingNumber).toBe('TN-NEW-1');
@@ -318,9 +383,7 @@ describe('Shipments API (mocked DB)', () => {
   // --- New Tests for Unauthorized Route Access---
 
   it('should return 401 when trying to update a shipment (PATCH /:id) without a token', async () => {
-    const res = await request(app)
-      .patch('/api/shipments/123')
-      .send({ destination: 'New City' });
+    const res = await request(app).patch('/api/shipments/123').send({ destination: 'New City' });
     expect(res.status).toBe(401);
   });
 
@@ -336,21 +399,93 @@ describe('Shipments API (mocked DB)', () => {
     });
 
     const tokenPayload = { userId: String(user._id), role: user.role };
-    const { default: { sign } } = await import('jsonwebtoken');
+    const {
+      default: { sign },
+    } = await import('jsonwebtoken');
     const token = sign(tokenPayload, process.env.JWT_SECRET!);
 
     const res = await request(app)
       .patch('/api/shipments/123')
       .set('Authorization', `Bearer ${token}`)
       .send({ destination: 'New City' });
-    
+
     expect(res.status).toBe(403);
+  });
+
+  it('should reject invalid document MIME types with a standard 400 AppError envelope', async () => {
+    const users = await import('../src/modules/users/users.model.js');
+    const user = await users.UserModel.create({
+      email: 'invalid-doc@example.com',
+      name: 'Invalid Doc',
+      passwordHash: 'password',
+      role: 'MANAGER',
+      organizationId: 'org1',
+      walletAddress: '0xABC123',
+    });
+
+    const tokenPayload = { userId: String(user._id), role: user.role };
+    const { default: { sign } } = await import('jsonwebtoken');
+    const token = sign(tokenPayload, process.env.JWT_SECRET!);
+
+    const res = await request(app)
+      .post('/api/shipments/123/documents')
+      .set('Authorization', `Bearer ${token}`)
+      .field('type', 'INVOICE')
+      .attach('file', Buffer.from('bad-data'), {
+        filename: 'invalid.txt',
+        contentType: 'text/plain',
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body).toMatchObject({
+      success: false,
+      message: 'Invalid MIME type',
+      data: null,
+      error: { code: 'ERR_INVALID_MIME_TYPE' },
+    });
+  });
+
+  it('should reject invalid photo MIME types with a standard 400 AppError envelope', async () => {
+    const users = await import('../src/modules/users/users.model.js');
+    const user = await users.UserModel.create({
+      email: 'invalid-photo@example.com',
+      name: 'Invalid Photo',
+      passwordHash: 'password',
+      role: 'MANAGER',
+      organizationId: 'org1',
+      walletAddress: '0xABC123',
+    });
+
+    const tokenPayload = { userId: String(user._id), role: user.role };
+    const { default: { sign } } = await import('jsonwebtoken');
+    const token = sign(tokenPayload, process.env.JWT_SECRET!);
+
+    const res = await request(app)
+      .post('/api/shipments/123/photos')
+      .set('Authorization', `Bearer ${token}`)
+      .attach('file', Buffer.from('bad-data'), {
+        filename: 'invalid.txt',
+        contentType: 'text/plain',
+      });
+
+    expect(res.status).toBe(400);
+    expect(res.body).toMatchObject({
+      success: false,
+      message: 'Invalid MIME type',
+      data: null,
+      error: { code: 'ERR_INVALID_MIME_TYPE' },
+    });
   });
 
   it('should return 401 when trying to upload proof (POST /:id/proof) without a token', async () => {
     const res = await request(app)
       .post('/api/shipments/123/proof')
       .send({ proofData: 'some_base64_string' });
+    expect(res.status).toBe(401);
+  });
+
+  it('should return 401 when trying to access shipment ETA without a token', async () => {
+    const res = await request(app).get('/api/shipments/123/eta');
     expect(res.status).toBe(401);
   });
 
@@ -366,14 +501,16 @@ describe('Shipments API (mocked DB)', () => {
     });
 
     const tokenPayload = { userId: String(user._id), role: user.role };
-    const { default: { sign } } = await import('jsonwebtoken');
+    const {
+      default: { sign },
+    } = await import('jsonwebtoken');
     const token = sign(tokenPayload, process.env.JWT_SECRET!);
 
     const res = await request(app)
       .post('/api/shipments/123/proof')
       .set('Authorization', `Bearer ${token}`)
       .send({ proofData: 'some_base64_string' });
-    
+
     expect(res.status).toBe(403);
   });
 });

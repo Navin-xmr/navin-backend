@@ -9,6 +9,7 @@ import { UserRole } from '../src/shared/constants/index.js';
 // Mock user roles
 const adminUser = { userId: '1', role: UserRole.ADMIN, jti: 'mock-jti' };
 const managerUser = { userId: '2', role: UserRole.MANAGER, jti: 'mock-jti' };
+const driverUser = { userId: '4', role: UserRole.DRIVER, jti: 'mock-jti' };
 const viewerUser = { userId: '3', role: UserRole.VIEWER, jti: 'mock-jti' };
 
 // Mock requireAuth to inject user
@@ -55,6 +56,13 @@ describe('requireRole middleware', () => {
 
   it('allows Manager when Manager is required', async () => {
     const app = makeApp(managerUser, [UserRole.MANAGER]);
+    const res = await request(app).get('/test');
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+  });
+
+  it('allows Driver when Driver is required', async () => {
+    const app = makeApp(driverUser, [UserRole.DRIVER]);
     const res = await request(app).get('/test');
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);

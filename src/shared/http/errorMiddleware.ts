@@ -1,6 +1,7 @@
 // src/shared/http/errorMiddleware.ts
 import type { ErrorRequestHandler } from 'express';
 import mongoose from 'mongoose';
+import multer from 'multer';
 import { AppError, ErrorCodes } from './errors.js';
 
 export function errorMiddleware(): ErrorRequestHandler {
@@ -17,6 +18,7 @@ export function errorMiddleware(): ErrorRequestHandler {
       return res.status(status).json({
         success: false,
         message,
+        data: null,
         error: { code }, // Standardized envelope for frontend
         ...(details && { details }),
         ...(isDev && { stack: err.stack }),
@@ -30,6 +32,44 @@ export function errorMiddleware(): ErrorRequestHandler {
       (err as { status?: number }).status === 400
     ) {
       return respond(400, 'Invalid JSON payload', ErrorCodes.BAD_REQUEST);
+    }
+
+    // Multer file size limit exceeded
+    if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
+      return respond(413, 'File too large', ErrorCodes.FILE_TOO_LARGE);
+    }
+
+    // App-level operational errors should keep their typed status and code.
+    if (err instanceof AppError) {
+      if (err.code === ErrorCodes.VALIDATION_ERROR) {
+        try {
+          const parsed = JSON.parse(err.message) as {
+            message?: string;
+            details?: Array<{ path: string; message: string; code: string }>;
+          };
+          return respond(
+            err.statusCode,
+            parsed.message ?? 'Validation error',
+            err.code,
+            parsed.details ?? []
+          );
+        } catch {
+          return respond(err.statusCode, err.message, err.code);
+        }
+      }
+      return res.status(err.statusCode).json({
+        success: false,
+        message: err.message,
+        data: null,
+        error: { code: err.code },
+        ...(err.details !== undefined && { details: err.details }),
+        ...(isDev && { stack: err.stack }),
+      });
+    }
+
+    // Multer MIME type rejection from fileFilter
+    if (err instanceof Error && err.message === 'Invalid MIME type') {
+      return respond(400, 'Unsupported file type', ErrorCodes.INVALID_MIME_TYPE);
     }
 
     if (
@@ -53,27 +93,6 @@ export function errorMiddleware(): ErrorRequestHandler {
         .map((e: mongoose.Error.ValidatorError | mongoose.Error.CastError) => e.message)
         .join(', ');
       return respond(422, message, ErrorCodes.VALIDATION_ERROR);
-    }
-
-    // App-level operational errors
-    if (err instanceof AppError) {
-      if (err.code === ErrorCodes.VALIDATION_ERROR) {
-        try {
-          const parsed = JSON.parse(err.message) as {
-            message?: string;
-            details?: Array<{ path: string; message: string; code: string }>;
-          };
-          return respond(
-            err.statusCode,
-            parsed.message ?? 'Validation error',
-            err.code,
-            parsed.details ?? []
-          );
-        } catch {
-          return respond(err.statusCode, err.message, err.code);
-        }
-      }
-      return respond(err.statusCode, err.message, err.code);
     }
 
     // CORS origin rejection

@@ -17,6 +17,12 @@ pnpm-debug.log*
 logs/
 *.log
 
+# agent / temporary search output
+grep_out.txt
+
+# local wave-issue pipeline (never commit; issues are created via gh CLI)
+/wave issues/
+
 # coverage
 coverage/
 
@@ -35,5 +41,16 @@ coverage/
 *.tsbuildinfo
 
 .agent/
-.agents/
 issue.md
+
+# Agent Skills & Prompts
+.agents/*
+!.agents/skills/
+!.agents/prompts/
+.agents/skills/*
+!.agents/skills/cleanup/
+!.agents/skills/cleanup/**
+!.agents/skills/cross-check/
+!.agents/skills/cross-check/**
+!.agents/skills/document/
+!.agents/skills/document/**

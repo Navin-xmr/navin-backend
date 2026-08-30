@@ -8,10 +8,15 @@ describe('Health Check Endpoint', () => {
     const response = await request(app).get('/api/health');
 
     expect(response.status).toBe(200);
-    expect(response.body).toEqual({
+    // Partial match: required envelope + status, allowing dynamic uptime/timestamp (Issue #249)
+    expect(response.body).toMatchObject({
       success: true,
       message: 'OK',
-      data: { status: 'active' },
+      data: {
+        status: 'active',
+        uptime: expect.any(Number),
+        timestamp: expect.any(String),
+      },
     });
   });
 });

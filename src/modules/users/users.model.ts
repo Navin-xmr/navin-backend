@@ -1,17 +1,11 @@
-import mongoose from 'mongoose';
-import bcrypt from 'bcrypt';
+import { UserRole } from '../../shared/constants/index.js';
 import { isoDatePlugin } from '../../shared/plugins/isoDatePlugin.js';
-import { IOrganization, OrganizationType, IUser, UserRole } from '../../shared/types/user.js';
+import mongoose from 'mongoose';
+import { IUser } from '../../shared/types/user.js';
 
-const OrganizationSchema = new mongoose.Schema(
-  {
-    name: { type: String, required: true, unique: true },
-    type: { type: String, enum: Object.values(OrganizationType), required: true },
-  },
-  { timestamps: true }
-);
-
-OrganizationSchema.plugin(isoDatePlugin);
+// Re-export OrganizationModel and OrganizationType from organizations module for backward compatibility
+export { OrganizationType } from '../../shared/types/user.js';
+export { OrganizationModel } from '../organizations/organizations.model.js';
 
 const UserSchema = new mongoose.Schema(
   {
@@ -19,15 +13,23 @@ const UserSchema = new mongoose.Schema(
     name: { type: String, required: true },
     passwordHash: { type: String, required: true },
     role: { type: String, enum: Object.values(UserRole), required: true },
-    organizationId: { type: mongoose.Schema.Types.ObjectId, ref: 'Organization', required: true },
+    organizationId: { type: mongoose.Schema.Types.ObjectId, ref: 'Organization', required: false },
     walletAddress: { type: String, required: false },
+    phone: { type: String, required: false },
+    phoneVerified: { type: Boolean, default: false },
+    twoFactorSecret: { type: String, required: false },
+    twoFactorEnabled: { type: Boolean, default: false },
     deletedAt: { type: Date, default: null },
+    // 2FA / TOTP fields
+    totpSecret: { type: String, required: false, default: null },
+    totpEnabled: { type: Boolean, default: false },
+    totpBackupCodes: { type: [String], default: [] },
   },
   {
     timestamps: true,
     toJSON: {
       transform: (_doc, ret) => {
-        const result = ret as any;
+        const result = ret as Record<string, unknown>;
         delete result.passwordHash;
         return result;
       },
@@ -37,14 +39,9 @@ const UserSchema = new mongoose.Schema(
 
 UserSchema.plugin(isoDatePlugin);
 
-// Pre-save hook to hash password
-UserSchema.pre('save', async function (next) {
-  if (this.isModified('passwordHash')) {
-    const salt = await bcrypt.genSalt(10);
-    this.passwordHash = await bcrypt.hash(this.passwordHash, salt);
-  }
-  next();
-});
+// NOTE: Password hashing is performed exclusively in the service layer (auth.service.ts,
+// users.service.ts) before calling UserModel.create(). There is intentionally no pre-save
+// hook here to avoid double-hashing.
 
 // Override toJSON to hide passwordHash
 UserSchema.methods.toJSON = function () {
@@ -61,9 +58,6 @@ UserSchema.pre(['find', 'findOne', 'findOneAndUpdate', 'countDocuments'], functi
 UserSchema.pre('aggregate', function () {
   this.pipeline().unshift({ $match: { deletedAt: null } });
 });
-
-export const OrganizationModel = mongoose.model<IOrganization>('Organization', OrganizationSchema);
-export { OrganizationType };
 
 export const UserModel = mongoose.model<IUser>('User', UserSchema);
 export { UserRole };

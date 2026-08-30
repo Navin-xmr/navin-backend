@@ -25,7 +25,7 @@ By creating a zero-trust interface between logistics providers and their clients
 The backend service powers the off-chain layer of the platform, handling API logic, data aggregation, and integration with Soroban smart contracts.
 
 - **Blockchain**: Stellar (Soroban smart contracts)
-- **Language**: Rust
+- **Language**: TypeScript (Node.js 20, ESM) · Express · MongoDB/Mongoose
 - **Related Repos**:
   - Smart Contracts: [navin-contracts](https://github.com/Navin-xmr/navin-contracts)
 
@@ -35,8 +35,8 @@ The backend service powers the off-chain layer of the platform, handling API log
 
 ### Prerequisites
 
-- [Rust](https://www.rust-lang.org/tools/install) (latest stable)
-- Cargo (included with Rust)
+- [Node.js 20](https://nodejs.org/en/download) (LTS)
+- npm (included with Node.js)
 
 ### Fork & Clone
 
@@ -58,8 +58,8 @@ The backend service powers the off-chain layer of the platform, handling API log
 ### Verify Your Environment
 
 ```bash
-rustc --version
-cargo --version
+node --version   # expect v20.x
+npm --version
 ```
 
 ---
@@ -185,6 +185,28 @@ PRs with unresolved or carelessly merged conflicts **will not be merged**.
 We want high quality code so our contributors can work on their issues not fix other's mistakes. 
 
 
+## Pre-commit Hooks
+
+This project uses [husky](https://typicode.github.io/husky/) + [lint-staged](https://github.com/lint-staged/lint-staged) to auto-format and lint staged files on commit. The hook runs automatically when you commit — no manual steps needed after `npm install`.
+
+If the hook doesn't fire, ensure `.husky/pre-commit` exists and is executable:
+
+```bash
+chmod +x .husky/pre-commit
+```
+
+## Branch Protection
+
+`main` requires the following status checks to pass before merge:
+
+- Deps audit · Typecheck · Build (`verify`)
+- Lint (`lint`)
+- Docker image build (`docker`) — when applicable
+
+Admin enforcement is enabled. PRs cannot be merged until all required checks are green.
+
+---
+
 ## Getting Help
 
 If you're stuck, have questions, or want to discuss ideas before starting:
@@ -197,3 +219,36 @@ If you're stuck, have questions, or want to discuss ideas before starting:
 
 Thank you for contributing to Navin-backend!
 Together, we're building a transparent and secure delivery tracking platform on Stellar.
+
+---
+
+## Build & Test Requirements
+
+All PRs must pass the following CI checks before they can be merged:
+
+| Check | Command | Description |
+|-------|---------|-------------|
+| Dependency audit | `npm run check:deps` | Scans `src/` imports against `package.json` `dependencies` |
+| Type check | `npm run typecheck` | Runs `tsc --noEmit` with strict mode — zero errors required |
+| Build | `npm run build` | Compiles TypeScript to `dist/` — must succeed cleanly |
+| Lint | `npm run lint` | ESLint over `src/` — zero errors |
+| Tests | `npm test` | Full test suite |
+
+> [!NOTE]
+> CI currently enforces dependency audit + typecheck + build. The lint and full-suite
+> gates are being stabilized — see `TODO.md` Part 1 before assuming a red suite is your fault.
+> Run `npm run lint && npm test` locally for changes touching `src/`.
+
+### Clean-Install Build Triage
+
+**All build and type-check work must be reproducible in a clean `npm ci` environment.** This means:
+
+- Base your triage strictly on `package.json`, `package-lock.json`, and source files in `src/`.
+- **Never** assume a package is available because it exists in your local `node_modules/`. Local installs may include packages that are not in `package.json` (transitive deps, global installs, or manually added packages).
+- If a build fails in CI but passes locally, reproduce the clean-install environment before debugging:
+  ```bash
+  rm -rf node_modules && npm ci && npm run build
+  ```
+- If you add a new runtime import, add the package to `package.json` `dependencies` (**not** `devDependencies`) and commit the updated `package-lock.json`.
+- Run `npm run check:deps` locally before opening a PR to catch undeclared imports early.
+- CI pins Node.js 20 and uses `npm ci` — never `npm install` — to guarantee a reproducible dependency tree.

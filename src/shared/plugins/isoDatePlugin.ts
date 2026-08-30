@@ -1,7 +1,7 @@
 import type { Schema } from 'mongoose';
 
 /**
- * Mongoose plugin that enforces ISO 8601 date serialization on every document.
+ * Mongoose plugin that converts dates to ISO 8601 UTC strings in JSON output.
  *
  * When a document (or lean-object result) is converted to JSON – e.g. by
  * `res.json()` calling `JSON.stringify()` – this plugin's `toJSON` transform

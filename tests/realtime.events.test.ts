@@ -42,7 +42,8 @@ describe('Real-time Socket.io Events', () => {
   const mockEmitStatusUpdate = jest.fn();
   const mockEmitAnomalyDetected = jest.fn();
   const mockShipmentFindByIdAndUpdate = jest.fn<() => Promise<ShipmentUpdateResult>>();
-  const mockUserModelFindById = jest.fn<() => Promise<{ _id: string; walletAddress: string } | null>>();
+  const mockUserModelFindById =
+    jest.fn<() => Promise<{ _id: string; walletAddress: string } | null>>();
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -117,6 +118,7 @@ describe('Real-time Socket.io Events', () => {
       tokenizeShipment: jest.fn(),
       anchorTelemetryHash: mockAnchorTelemetryHash,
       releaseEscrow: jest.fn(),
+      getStellarExplorerUrl: jest.fn(() => 'https://stellar.expert/explorer/testnet/tx/mock'),
     }));
 
     await jest.unstable_mockModule('../src/modules/auth/apiKey.service.js', () => ({
@@ -139,6 +141,8 @@ describe('Real-time Socket.io Events', () => {
       emitAnomalyDetected: mockEmitAnomalyDetected,
       emitTelemetryUpdate: mockEmitTelemetryUpdate,
       emitStatusUpdate: mockEmitStatusUpdate,
+   emitPaymentStatusChange: jest.fn(),
+    emitPaymentStatusChange: jest.fn(),
     }));
 
     await jest.unstable_mockModule('../src/modules/shipments/shipments.model.js', () => ({
@@ -167,8 +171,8 @@ describe('Real-time Socket.io Events', () => {
     app = appModule.buildApp();
   });
 
-  describe('POST /api/webhooks/iot - telemetry_update event', () => {
-    it('emits telemetry_update to the correct shipment room', async () => {
+  describe('POST /api/webhooks/iot - location:update event', () => {
+    it('emits location:update to the correct shipment room', async () => {
       const body = {
         sensorId: 'sensor-abc-001',
         shipmentId: '671000000000000000000001',
@@ -212,17 +216,14 @@ describe('Real-time Socket.io Events', () => {
         timestamp: '2026-01-15T12:30:00.000Z',
       };
 
-      await request(app)
-        .post('/api/webhooks/iot')
-        .set('x-api-key', 'valid-api-key')
-        .send(body);
+      await request(app).post('/api/webhooks/iot').set('x-api-key', 'valid-api-key').send(body);
 
       // Verify the shipmentId passed matches the expected format
       const [shipmentId] = mockEmitTelemetryUpdate.mock.calls[0];
       expect(shipmentId).toBe('671000000000000000000001');
     });
 
-    it('does not emit telemetry_update when API key is invalid', async () => {
+    it('does not emit location:update when API key is invalid', async () => {
       mockValidateApiKey.mockResolvedValue({ isValid: false });
 
       const body = {
@@ -246,7 +247,7 @@ describe('Real-time Socket.io Events', () => {
     });
   });
 
-  describe('PATCH /api/shipments/:id/status - status_update event', () => {
+  describe('PATCH /api/shipments/:id/status - shipment:status event', () => {
     it('controller calls emitStatusUpdate with correct parameters', async () => {
       // This test verifies the integration at the controller level
       // The actual Socket.io emission is tested separately
@@ -260,7 +261,7 @@ describe('Real-time Socket.io Events', () => {
   });
 
   describe('Event isolation - no global namespace broadcasts', () => {
-    it('telemetry_update is sent only to specific room, not globally', async () => {
+    it('location:update is sent only to specific room, not globally', async () => {
       const body = {
         sensorId: 'sensor-abc-001',
         shipmentId: '671000000000000000000001',
@@ -272,16 +273,10 @@ describe('Real-time Socket.io Events', () => {
         timestamp: '2026-01-15T12:30:00.000Z',
       };
 
-      await request(app)
-        .post('/api/webhooks/iot')
-        .set('x-api-key', 'valid-api-key')
-        .send(body);
+      await request(app).post('/api/webhooks/iot').set('x-api-key', 'valid-api-key').send(body);
 
       // Verify emitTelemetryUpdate was called with specific shipmentId
-      expect(mockEmitTelemetryUpdate).toHaveBeenCalledWith(
-        body.shipmentId,
-        expect.any(Object)
-      );
+      expect(mockEmitTelemetryUpdate).toHaveBeenCalledWith(body.shipmentId, expect.any(Object));
     });
 
     it('emitStatusUpdate function is properly exported', async () => {

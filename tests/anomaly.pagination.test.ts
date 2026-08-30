@@ -173,4 +173,14 @@ describe('GET /api/anomalies - Cursor Pagination', () => {
     const updated = await Anomaly.findById(anomaly._id);
     expect(updated?.resolved).toBe(true);
   });
+
+  it('should return 404 for a non-existent anomaly', async () => {
+    const res = await request(app)
+      .patch('/api/anomalies/507f1f77bcf86cd799439099/resolve')
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(res.status).toBe(404);
+    expect(res.body.success).toBe(false);
+    expect(res.body.error.code).toBe('ERR_NOT_FOUND');
+  });
 });

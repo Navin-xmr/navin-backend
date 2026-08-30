@@ -12,9 +12,21 @@ export const PerformanceQuerySchema = z
   .object({
     startDate: utcDateString,
     endDate: utcDateString,
+    granularity: z.enum(['daily', 'weekly', 'monthly']).optional(),
   })
   .refine(({ startDate, endDate }) => startDate <= endDate, {
     message: 'startDate must be <= endDate',
   });
 
+/**
+ * Query schema for `GET /api/analytics/summary`.
+ * Optional organizationId query param for org-scoped analytics.
+ */
+export const SummaryQuerySchema = z
+  .object({
+    organizationId: z.string().optional(),
+  })
+  .strict();
+
 export type PerformanceQuery = z.infer<typeof PerformanceQuerySchema>;
+export type SummaryQuery = z.infer<typeof SummaryQuerySchema>;

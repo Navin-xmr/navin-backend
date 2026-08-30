@@ -13,12 +13,12 @@ describe('Soft Delete Functionality', () => {
     it('should filter out soft-deleted users in queries', async () => {
       // Mock the find method to test middleware
       const findSpy = jest.spyOn(UserModel, 'find');
-      findSpy.mockImplementation(() => ({
+      findSpy.mockImplementation((() => ({
         where: jest.fn().mockReturnThis(),
-      }) as any);
+      })) as unknown as typeof UserModel.find);
 
       UserModel.find({});
-      
+
       expect(findSpy).toHaveBeenCalled();
       findSpy.mockRestore();
     });
@@ -34,12 +34,12 @@ describe('Soft Delete Functionality', () => {
     it('should filter out soft-deleted shipments in queries', async () => {
       // Mock the find method to test middleware
       const findSpy = jest.spyOn(Shipment, 'find');
-      findSpy.mockImplementation(() => ({
+      findSpy.mockImplementation((() => ({
         where: jest.fn().mockReturnThis(),
-      }) as any);
+      })) as unknown as typeof Shipment.find);
 
       Shipment.find({});
-      
+
       expect(findSpy).toHaveBeenCalled();
       findSpy.mockRestore();
     });

@@ -5,3 +5,22 @@ dist
 .git
 coverage
 *.log
+
+# Tests — not needed in production image
+tests/
+
+# CI/tooling
+.github/
+.husky/
+
+# Docs — keep only swagger.yaml for runtime /api-docs
+docs/**
+!docs/swagger.yaml
+
+# Markdown at root (not needed at runtime)
+*.md
+
+# Dev artifacts
+reports/
+examples/
+.agents/

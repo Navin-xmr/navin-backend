@@ -1,13 +1,26 @@
 import request from 'supertest';
+import jwt from 'jsonwebtoken';
 import { buildApp } from '../src/app.js';
 import { connectMongo } from '../src/infra/mongo/connection.js';
 import { Telemetry } from '../src/modules/telemetry/telemetry.model.js';
 import { Shipment } from '../src/modules/shipments/shipments.model.js';
+import { UserModel } from '../src/modules/users/users.model.js';
+import { env } from '../src/env.js';
 
 const app = buildApp();
 
+let adminToken: string;
+
 beforeAll(async () => {
   await connectMongo(process.env.MONGO_URI!);
+  const adminUser = await UserModel.create({
+    email: 'telemetry-pagination-admin@test.com',
+    name: 'Telemetry Pagination Admin',
+    passwordHash: 'hashed',
+    role: 'ADMIN',
+    organizationId: '507f1f77bcf86cd799439011',
+  });
+  adminToken = jwt.sign({ userId: adminUser._id.toString(), role: 'ADMIN' }, env.JWT_SECRET);
 });
 
 afterEach(async () => {
@@ -39,7 +52,9 @@ describe('GET /api/telemetry - Cursor Pagination', () => {
       rawPayload: {},
     });
 
-    const res = await request(app).get('/api/telemetry?limit=10');
+    const res = await request(app)
+      .get('/api/telemetry?limit=10')
+      .set('Authorization', `Bearer ${adminToken}`);
 
     expect(res.status).toBe(200);
     expect(res.body.data).toHaveLength(1);
@@ -72,13 +87,17 @@ describe('GET /api/telemetry - Cursor Pagination', () => {
       });
     }
 
-    const firstPage = await request(app).get('/api/telemetry?limit=2');
+    const firstPage = await request(app)
+      .get('/api/telemetry?limit=2')
+      .set('Authorization', `Bearer ${adminToken}`);
     expect(firstPage.status).toBe(200);
     expect(firstPage.body.data).toHaveLength(2);
     expect(firstPage.body.meta.hasMore).toBe(true);
     expect(firstPage.body.meta.nextCursor).toBeTruthy();
 
-    const secondPage = await request(app).get(`/api/telemetry?limit=2&cursor=${firstPage.body.meta.nextCursor}`);
+    const secondPage = await request(app)
+      .get(`/api/telemetry?limit=2&cursor=${firstPage.body.meta.nextCursor}`)
+      .set('Authorization', `Bearer ${adminToken}`);
     expect(secondPage.status).toBe(200);
     expect(secondPage.body.data).toHaveLength(2);
 

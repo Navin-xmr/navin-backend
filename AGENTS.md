@@ -1,77 +1,129 @@
 # Navin Backend — AI Agent Instructions
 
-## 1. Project Overview
-You are an expert backend engineer working on the **Navin Backend**. This is a logistics and supply chain management API built to track shipments, manage organizational roles, process telemetry data, and integrate with the Stellar blockchain for proof of delivery and asset tokenization.
+## 1. Overview
+This is a logistics/supply-chain API: shipments, org roles, telemetry, and Stellar blockchain (proof-of-delivery, escrow).
 
-Your primary directive is to write modular, testable, and strictly typed code that adheres to the established Domain-Driven Design (DDD).
+Stack: TypeScript Strict · Express · MongoDB/Mongoose · Zod · JWT+Redis · Jest+Supertest.
 
-## 2. Tech Stack
-* **Language:** TypeScript (Strict Mode)
-* **Framework:** Express.js
-* **Database:** MongoDB via Mongoose
-* **Testing:** Jest + Supertest
-* **Validation:** Zod (Required for all request payloads)
-* **Blockchain:** Stellar SDK
-* **Formatting/Linting:** Prettier + ESLint
+### Program state — read before working
 
-## 3. Architecture & Folder Structure
-Follow the strict flow: `Route -> Validation Middleware -> Controller -> Service -> Model/Repository`
+- **`TODO.md` is the canonical work tracker** (Parts 1–4). Check it before inventing tasks; several known-failing tests are tracked there with owners/plans.
+- **Tests deliberately do NOT gate CI yet** (TODO H4 decision): `ci.yml` enforces deps-audit/typecheck/build/lint/docker; the test suite has a known red baseline being remediated. Your duty: do not *increase* failures (see §4).
+- **Auth policy (decided 2026-08-25):** signup always assigns `VIEWER` — never implement email-domain-based role elevation (#147 resolved Option A). Elevation is invitations-only.
+- **Chain direction:** Stellar integration moves behind a `ChainAdapter` port (simulated vs Soroban); current `stellar.service.ts` manage-data ops are placeholders, escrow moves no funds. See TODO Part 3 before touching chain code.
+- **Realtime event names** come from `src/shared/types/socketEvents.ts` constants — never string literals (`telemetry_update`/`payment_status_changed` are dead names; live: `location:update`, `shipment:status`, `anomaly:detected`, `settlement:status`).
 
-* `/src/modules/`: Business domains. Each module MUST be self-contained (routes, controller, service, model, validation).
-* `/src/infra/`: Infrastructure (DB, Redis, Queues).
-* `/src/services/`: External integrations (Stellar, Storage).
-* `/src/shared/`: Global errors, middlewares, types, constants.
-* `/tests/`: Integration and API-level tests.
+## 2. Architecture
+Request flow:
 
-## 4. Coding Standards & Conventions
+`Route → validateRequest(Zod) → requireAuth → requireRole → asyncHandler(Controller) → Service → Model/Repo`
 
-### TypeScript & Types
-* **NO `any`:** Use `unknown` if truly dynamic. Use strict interfaces for all data structures.
-* **Service Interfaces:** Decouple Mongoose from business logic. Services should return plain objects/interfaces, not Mongoose Documents.
-* **Request Typing:** Explicitly type `req.body`, `req.query`, and `req.params`.
+| Directory | Purpose |
+|-----------|---------|
+| `src/modules/<domain>/` | Self-contained domain: routes, controller, service, model, validation |
+| `src/infra/` | DB, Redis, queues, Socket.IO |
+| `src/services/` | External integrations (Stellar, storage) |
+| `src/shared/` | Errors, middleware, types, constants, plugins |
+| `tests/` | Integration and API tests |
 
-### API Response Format
-All API responses MUST follow this structure:
-```json
-{
-  "success": true,
-  "message": "Human readable message",
-  "data": {},
-  "meta": {}
-}
+## 3. Conventions (Hard Rules)
+
+**Response envelope** — Always return `{ success, message, data, meta? }` via `sendResponse()`. Dates as ISO 8601 UTC. Put pagination in `meta`, not the body.
+
+**Errors** — Controllers never catch; wrap them in `asyncHandler`. Services throw `AppError(status, msg, code)`, never bare `Error`. Codes look like `ERR_<DOMAIN>_<DESC>` and live in `src/shared/http/errors.ts`.
+
+**Types** — No `any` (prefer `unknown`). Services return plain objects, not Mongoose documents. One declaration per name per file. Use `import type` for types only. Relative imports end in `.js`.
+
+**Security** — Protect every route with `requireAuth` + `requireRole`, or mark it `// PUBLIC: <reason>`. Never log secrets. Strip `passwordHash` in `toJSON`. Don't spread `req.query` into DB queries. Use `logger`, not `console.*`.
+
+**Database** — Soft-delete with `deletedAt`. Models use `isoDatePlugin` and soft-delete pre-hooks. Zod owns request shape; Mongoose owns data integrity.
+
+**Testing (ESM)** — Register mocks in this order: `jest.resetModules()` → `jest.unstable_mockModule(...)` → dynamic `await import()`. Build mock factories from `tests/helpers/mocks.ts`; test data from `tests/fixtures/factories.ts` (real ObjectIds — `'ship-1'` style ids bypass guards and make tests vacuous). Never hand-roll module factories that omit exports the source imports.
+
+**Realtime** — Emit and assert socket/SSE events using the exported name constants from `src/shared/types/socketEvents.ts`, never string literals.
+
+## 4. Testing & Documentation
+Cover every endpoint for **200**, **401**, **403**, and **400/422**. Mock externals via `tests/helpers/mocks.ts` (Stellar, storage, sockets, queues). Keep `docs/swagger.yaml` in sync with every endpoint change.
+
+Test battery before done:
+
+```bash
+npm run lint && npm run typecheck && npm run build   # must be fully green
+npm test -- <suites for files you touched>           # must be green
+npm test                                             # full suite — see note
 ```
-* **Dates:** All dates MUST be returned as **ISO 8601** strings (UTC).
-* **Pagination:** Metadata (cursors, total count) MUST live in the `meta` object.
 
-### Error Handling Pattern
-* **Global Error Middleware:** Never return raw errors or stack traces in production.
-* **No Manual `try/catch` in Controllers:** All controllers must be wrapped in `asyncHandler`. Throw `AppError` and let the global middleware handle formatting.
-* **Error Codes:** Use standard error string codes (e.g., `ERR_AUTH_INVALID`) for frontend consistency.
+> The full suite currently has a **known red baseline** (tracked in `TODO.md` Part 1). Do not fix unrelated failing suites inside an unrelated PR — but your PR must not add new failures. If a suite you touched fails for a pre-existing reason, cite the TODO item instead of scope-creeping.
 
-### Security & Authentication
-* **Default Private:** Every new route MUST use `requireAuth` and `requireRole` unless there is an explicit requirement for public access.
-* **Sensitive Data:** Ensure sensitive fields (passwords, internal secret IDs) are stripped in the Model's `toJSON` or via Service-layer mapping.
-* **Stellar Security:** Never log or expose secret keys. Route all blockchain logic through `stellar.service.ts`.
+## 5. Agent Skills Pipeline
+After writing code, run these in order and fix issues before moving on:
 
-### Database (Mongoose)
-* **Soft Deletes:** Use `deletedAt` timestamps instead of removing records for Shipments and Users.
-* **Validation:** Rely on Zod for request validation and Mongoose schema validation for data integrity.
+1. **Cross-Check** — `.agents/skills/cross-check/SKILL.md` (route ↔ controller ↔ service ↔ model ↔ Zod ↔ Swagger)
+2. **Cleanup** — `.agents/skills/cleanup/SKILL.md` (duplicates, conventions, security, `any`)
+3. **Document** — `.agents/skills/document/SKILL.md` (Swagger, JSDoc, error codes)
 
-## 5. Testing Protocol
-* **Integration Tests:** Required for every new endpoint. Test:
-    1. Happy Path (200/201)
-    2. Unauthorized Access (401)
-    3. Forbidden Access (403 - Role mismatch)
-    4. Validation Failure (400/422)
-* **Mocks:** Always mock external services (Stellar, Storage, IoT Webhooks) in tests.
+## 6. Quality Gates
+Treat these as hard stops:
 
-## 6. API Documentation
-* Update `docs/swagger.yaml` for EVERY endpoint change or addition. Ensure the Swagger UI at `/api-docs` matches your implementation.
+| Gate | Rule |
+|------|------|
+| Verify-first | Don't assume a symbol exists — open the file |
+| One-declaration | Each identifier once per file; search before adding |
+| Compile-first | Mentally check types after edits; run `npm run build` at the end |
+| Single-concern | One edit = one concern; 4+ files → outline first |
+| No floating promises | Async work in `setImmediate` needs `.catch()` or try/catch |
 
-## 7. Execution Steps for the Agent
-1. **Audit:** Check for existing patterns in `src/shared` and the target module.
-2. **Schema First:** Define/Update Zod validation and Mongoose models.
-3. **Logic:** Implement Service logic with clear error handling (`AppError`).
-4. **Wiring:** Create Controller (lean) and Routes (protected).
-5. **Verify:** Write Integration tests covering auth, roles, and validation.
-6. **Document:** Finalize `swagger.yaml`.
+## 7. Architecture Boundaries
+Modules stay self-contained. Cross-module imports only along these lines:
+
+| Consumer | Allowed Dependencies |
+|----------|---------------------|
+| `auth` | `users` |
+| `invitations` | `users` |
+| `ledger` | `shipments` (shared types) |
+| `payments` | `shipments` (model refs) |
+| `shipments` | `payments` (dispute/settlement hooks) |
+| `telemetry` | `shipments` (model refs) |
+| `users` | `organizations` |
+| `webhooks` | `shipments`, `telemetry` |
+| `analytics` | `shipments`, `payments` |
+| `events` | `infra/redis` |
+| `notifications` | `users` (preferences) |
+| `telemetry`/`payments`/`shipments`/`webhooks` | `src/services/chain` (**port types only** — planned per TODO Part 3; never import Stellar implementations directly) |
+
+Prefer domain events over direct service calls. Never import a sibling controller. Avoid circular deps — pull shared logic into `src/shared/` or emit events. When you add a new dependency, note it here and in the consumer module's `AGENTS.md`.
+
+## 8. Pre-Commit Checklist
+- [ ] No `any` · no `console.*` · no `try/catch` in controllers
+- [ ] No `res.json()` (use `sendResponse`) · no `new Error()` (use `AppError`)
+- [ ] `requireAuth` on all routes (or `// PUBLIC: <reason>`)
+- [ ] No `...rest` into DB queries · no duplicate imports/declarations
+- [ ] Zod schemas export inferred types · models use `isoDatePlugin` + soft-delete
+- [ ] Swagger updated · `npm run build` passes · touched-module tests pass (see §4 baseline note)
+- [ ] **AGENTS.md reviewed if conventions, boundaries, or module structure changed**
+
+### Clean-Install Build Triage (hard rule)
+
+Build triage must be based strictly on `package.json`, `package-lock.json`, and source files.
+
+- **Never** assume a package is available because it exists locally — CI runs `npm ci` from scratch.
+- If a new runtime import is added, it **must** go in `dependencies` (not `devDependencies`).
+- Run `npm run check:deps` before committing to catch undeclared imports.
+- Dev-only imports under `src/` (seed scripts, test infra) need an allowlist entry in `scripts/check-undeclared-deps.js` — follow the documented `mongodb-memory-server`/`@faker-js/faker` precedent.
+- To reproduce CI locally: `rm -rf node_modules && npm ci && npm run build`
+- CI pins Node.js 20 via `.github/workflows/ci.yml` and always uses `npm ci`.
+
+## 9. Token Efficiency
+Read before you write. Batch parallel reads. Cite `file:line`. Prefer small diffs. Skip filler prose.
+
+## 10. Reviewing & Updating Agent Documentation
+This file is guidance, not scripture. Update it by hand when conventions actually change so the next person (or agent) isn't working from stale advice.
+
+| Change | Review these files |
+|--------|------------------|
+| New module | Root §7; add module `AGENTS.md` from `__template__` |
+| Convention change | Root §3; affected module `AGENTS.md` files |
+| Structural rename in a module | That module's `AGENTS.md` (only if the pattern changed) |
+| New cross-module dependency | Root §7; consumer module's `AGENTS.md` |
+| New shared utility | Root §2; `src/shared/` docs if any |
+| Stale prompt | `.agents/prompts/*.md` |

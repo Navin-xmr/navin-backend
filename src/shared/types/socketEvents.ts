@@ -6,8 +6,8 @@
  */
 
 /**
- * Telemetry Update Payload
- * Emitted when new telemetry data is received from IoT sensors
+ * Telemetry / Location Update Payload
+ * Emitted as `location:update` when new telemetry data is received from IoT sensors.
  */
 export interface TelemetryUpdatePayload {
   telemetryId: string;
@@ -26,7 +26,7 @@ export interface TelemetryUpdatePayload {
 
 /**
  * Anomaly Alert Payload
- * Emitted when an anomaly is detected in shipment telemetry
+ * Emitted as `anomaly:detected` when an anomaly is detected in shipment telemetry.
  */
 export interface AnomalyAlertPayload {
   anomalyId: string;
@@ -44,12 +44,21 @@ export interface AnomalyAlertPayload {
 }
 
 /**
- * Status Update Payload
- * Emitted when a shipment status changes
+ * Shipment Status Payload
+ * Emitted as `shipment:status` when a shipment status changes.
  */
 export interface StatusUpdatePayload {
   shipmentId: string;
-  status: 'CREATED' | 'IN_TRANSIT' | 'DELIVERED' | 'CANCELLED';
+  status:
+    | 'CREATED'
+    | 'PICKUP_CONFIRMED'
+    | 'IN_TRANSIT'
+    | 'CUSTOMS_CLEARED'
+    | 'OUT_FOR_DELIVERY'
+    | 'DELIVERED'
+    | 'SETTLEMENT_INITIATED'
+    | 'SETTLEMENT_COMPLETED'
+    | 'CANCELLED';
   milestones?: Array<{
     name: string;
     timestamp: string | Date;
@@ -61,18 +70,55 @@ export interface StatusUpdatePayload {
 }
 
 /**
- * Socket Event Map
- * Defines all available socket events and their corresponding payload types
+ * Settlement Status Payload
+ * Emitted as `settlement:status` when a payment / escrow status changes for a shipment.
+ * `txHash` carries the Stellar transaction hash when the status transition is on-chain.
  */
-export interface SocketEventMap {
-  telemetry_update: TelemetryUpdatePayload;
-  anomaly_detected: AnomalyAlertPayload;
-  status_update: StatusUpdatePayload;
+export interface SettlementStatusPayload {
+  paymentId: string;
+  shipmentId: string;
+  oldStatus: string;
+  newStatus: string;
+  amount: number;
+  txHash?: string; // Stellar tx hash – present when status transition is on-chain
+  timestamp: string; // ISO 8601 UTC
 }
 
 /**
- * Type-safe socket event emitter helper
- * Use this to ensure type-checking when emitting events
+ * Notification Payload
+ * Emitted as `notification:new` for user-scoped notifications (anomaly alerts, system
+ * messages, milestone updates, etc.).
+ */
+export interface NotificationPayload {
+  notificationId: string;
+  recipientId: string; // userId or organizationId
+  type: string; // e.g. 'ANOMALY_ALERT' | 'MILESTONE' | 'SYSTEM'
+  title: string;
+  body: string;
+  referenceId?: string; // shipmentId, paymentId, etc.
+  referenceType?: string; // e.g. 'SHIPMENT' | 'PAYMENT'
+  timestamp: string; // ISO 8601 UTC
+  read: boolean;
+}
+
+/**
+ * Socket Event Map
+ * Defines all available socket events and their corresponding payload types.
+ * Keys must match the string literals emitted in `src/infra/socket/io.ts`.
+ */
+export interface SocketEventMap {
+  'location:update': TelemetryUpdatePayload;
+  'anomaly:detected': AnomalyAlertPayload;
+  'shipment:status': StatusUpdatePayload;
+  'settlement:status': SettlementStatusPayload;
+  'notification:new': NotificationPayload;
+}
+
+/**
+ * Type-safe socket event emitter helpers.
  */
 export type SocketEventName = keyof SocketEventMap;
 export type SocketEventPayload<T extends SocketEventName> = SocketEventMap[T];
+
+/** @deprecated Use `SettlementStatusPayload` */
+export type PaymentStatusPayload = SettlementStatusPayload;

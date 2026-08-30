@@ -11,7 +11,8 @@ export const StellarWebhookPayloadSchema = z.object({
 });
 
 export const StellarWebhookHeadersSchema = z.object({
-  'x-stellar-signature': z.string().optional(),
+  'x-stellar-signature': z.string().min(1, 'x-stellar-signature header is required'),
 });
 
 export type StellarWebhookPayload = z.infer<typeof StellarWebhookPayloadSchema>;
+export type StellarWebhookHeaders = z.infer<typeof StellarWebhookHeadersSchema>;

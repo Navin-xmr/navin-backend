@@ -12,8 +12,9 @@ async function processAlert(job: Job<AlertPayload>): Promise<void> {
 }
 
 export function startAlertWorker(): Worker<AlertPayload> {
+  const connection = getRedisConnection() as unknown as Record<string, unknown>;
   const worker = new Worker<AlertPayload>('alert_queue', processAlert, {
-    connection: getRedisConnection() as any,
+    connection,
   });
 
   worker.on('failed', (job, err) => {

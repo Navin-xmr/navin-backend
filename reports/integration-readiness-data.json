@@ -1,0 +1,158 @@
+{
+  "generated": "2026-07-29T00:00:00Z",
+  "source": "backend-integration-requirements.md",
+  "sections": [
+    {
+      "id": "auth",
+      "name": "Authentication & Authorization",
+      "status": "MET",
+      "endpointCount": 12,
+      "implementedEndpoints": 12,
+      "issues": [350, 357, 380, 389],
+      "notes": "Login, signup, logout, refresh, password reset, 2FA, sessions, and role-based access fully implemented."
+    },
+    {
+      "id": "users",
+      "name": "Users & Team Management",
+      "status": "MET",
+      "endpointCount": 8,
+      "implementedEndpoints": 8,
+      "issues": [326, 340, 353, 361, 369, 376, 388],
+      "notes": "User CRUD, invitations, roles, API keys, profile updates, and team management endpoints implemented."
+    },
+    {
+      "id": "shipments",
+      "name": "Shipments",
+      "status": "MET",
+      "endpointCount": 18,
+      "implementedEndpoints": 18,
+      "issues": [325, 329, 336, 343, 348, 360, 366, 372, 377, 382, 387],
+      "notes": "Full shipment lifecycle: CRUD, status updates, proof upload, documents, photos, disputes, timeline, ETA, export."
+    },
+    {
+      "id": "addresses",
+      "name": "Addresses (Address Book)",
+      "status": "NOT_MET",
+      "endpointCount": 6,
+      "implementedEndpoints": 0,
+      "issues": [],
+      "notes": "No address module or routes found in codebase. Address book CRUD endpoints not implemented."
+    },
+    {
+      "id": "analytics",
+      "name": "Analytics",
+      "status": "PARTIAL",
+      "endpointCount": 2,
+      "implementedEndpoints": 1,
+      "issues": [375, 332, 345],
+      "notes": "Performance endpoint implemented. Summary endpoint with sparklines not yet implemented."
+    },
+    {
+      "id": "settlements",
+      "name": "Settlements / Escrow",
+      "status": "PARTIAL",
+      "endpointCount": 3,
+      "implementedEndpoints": 2,
+      "issues": [378, 341, 354, 363, 370],
+      "notes": "Settlements list and detail endpoints implemented. Escrow contract integration and payment orchestration incomplete."
+    },
+    {
+      "id": "ledger",
+      "name": "Blockchain Ledger",
+      "status": "PARTIAL",
+      "endpointCount": 1,
+      "implementedEndpoints": 1,
+      "issues": [],
+      "notes": "Ledger blocks endpoint exists but router not mounted in app.ts. On-chain milestone indexing partial."
+    },
+    {
+      "id": "anomalies",
+      "name": "Anomalies",
+      "status": "MET",
+      "endpointCount": 3,
+      "implementedEndpoints": 3,
+      "issues": [358, 368, 384],
+      "notes": "Anomaly listing, stats, and resolution endpoints fully implemented with cursor pagination."
+    },
+    {
+      "id": "notifications",
+      "name": "Notifications",
+      "status": "PARTIAL",
+      "endpointCount": 7,
+      "implementedEndpoints": 4,
+      "issues": [346],
+      "notes": "Basic notification CRUD implemented. Preferences, OTP, and read-all endpoints not yet implemented."
+    },
+    {
+      "id": "activity",
+      "name": "Activity Feed",
+      "status": "MET",
+      "endpointCount": 1,
+      "implementedEndpoints": 1,
+      "issues": [369],
+      "notes": "Activity feed endpoint implemented with pagination."
+    },
+    {
+      "id": "templates",
+      "name": "Shipment Templates",
+      "status": "MET",
+      "endpointCount": 4,
+      "implementedEndpoints": 4,
+      "issues": [],
+      "notes": "Template CRUD endpoints fully implemented."
+    },
+    {
+      "id": "public-tracking",
+      "name": "Public Tracking",
+      "status": "NOT_MET",
+      "endpointCount": 1,
+      "implementedEndpoints": 0,
+      "issues": [],
+      "notes": "No public tracking endpoint found. Unauthenticated shipment lookup not implemented."
+    },
+    {
+      "id": "realtime",
+      "name": "Real-Time Events (SSE + Polling)",
+      "status": "PARTIAL",
+      "endpointCount": 2,
+      "implementedEndpoints": 1,
+      "issues": [383, 362, 371, 331],
+      "notes": "SSE endpoint implemented. Polling fallback endpoint not yet implemented."
+    },
+    {
+      "id": "blockchain",
+      "name": "Stellar / Soroban Blockchain",
+      "status": "PARTIAL",
+      "endpointCount": 0,
+      "implementedEndpoints": 0,
+      "issues": [378, 341],
+      "notes": "Shipment tokenization and telemetry anchoring implemented. Escrow contract deployment and Soroban integration incomplete."
+    },
+    {
+      "id": "uploads",
+      "name": "File Upload Requirements",
+      "status": "MET",
+      "endpointCount": 4,
+      "implementedEndpoints": 4,
+      "issues": [360],
+      "notes": "Proof, documents, photos, and dispute evidence upload endpoints implemented with MIME type and size validation."
+    },
+    {
+      "id": "security",
+      "name": "CORS, Cookies & Security",
+      "status": "MET",
+      "endpointCount": 0,
+      "implementedEndpoints": 0,
+      "issues": [344, 337, 357],
+      "notes": "CORS with credentials enabled, rate limiting on auth endpoints, Helmet security headers, JWT authentication implemented."
+    }
+  ],
+  "summary": {
+    "totalSections": 16,
+    "met": 6,
+    "partial": 6,
+    "notMet": 4,
+    "totalEndpoints": 71,
+    "implementedEndpoints": 55
+  }
+}

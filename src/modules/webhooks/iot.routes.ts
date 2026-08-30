@@ -3,6 +3,7 @@ import express, { Router } from 'express';
 import { validateRequest } from '../../shared/validation/validate.js';
 import { asyncHandler } from '../../shared/http/asyncHandler.js';
 import { requireApiKey } from '../../shared/middleware/requireApiKey.js';
+import { verifyStellarSignature } from '../../shared/middleware/verifyStellarSignature.js';
 import { IotWebhookBodySchema } from './iot.validation.js';
 import { iotWebhookController } from './iot.controller.js';
 import { StellarWebhookPayloadSchema } from './stellar.webhook.validation.js';
@@ -12,6 +13,7 @@ export const webhooksRouter = Router();
 
 webhooksRouter.post(
   '/iot',
+  // PUBLIC: IoT device callbacks — authenticated via x-api-key, not JWT
   express.json({ limit: '1mb' }),
   asyncHandler(requireApiKey),
   validateRequest({ body: IotWebhookBodySchema }),
@@ -20,7 +22,8 @@ webhooksRouter.post(
 
 webhooksRouter.post(
   '/stellar',
-  express.json({ limit: '1mb' }),
+  // PUBLIC: Stellar settlement callbacks — authenticated via HMAC signature, not JWT
+  asyncHandler(verifyStellarSignature),
   validateRequest({ body: StellarWebhookPayloadSchema }),
-  asyncHandler(handleStellarWebhookController),
+  asyncHandler(handleStellarWebhookController)
 );

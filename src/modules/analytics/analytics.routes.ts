@@ -5,8 +5,8 @@ import { requireAuth } from '../../shared/middleware/requireAuth.js';
 import { requireRole } from '../../shared/middleware/requireRole.js';
 import { asyncHandler } from '../../shared/http/asyncHandler.js';
 
-import { PerformanceQuerySchema } from './analytics.validation.js';
-import { getPerformanceController } from './analytics.controller.js';
+import { PerformanceQuerySchema, SummaryQuerySchema } from './analytics.validation.js';
+import { getPerformanceController, getSummaryController } from './analytics.controller.js';
 
 import { UserRole } from '../../shared/constants/index.js';
 
@@ -18,4 +18,12 @@ analyticsRouter.get(
   requireRole(UserRole.ADMIN, UserRole.MANAGER),
   validateRequest({ query: PerformanceQuerySchema }),
   asyncHandler(getPerformanceController)
+);
+
+analyticsRouter.get(
+  '/summary',
+  requireAuth,
+  requireRole(UserRole.ADMIN, UserRole.MANAGER),
+  validateRequest({ query: SummaryQuerySchema }),
+  asyncHandler(getSummaryController)
 );

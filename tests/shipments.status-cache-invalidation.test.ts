@@ -10,7 +10,7 @@ describe('shipment status cache invalidation', () => {
     const save = jest.fn(async () => undefined);
     const shipmentDoc = {
       _id: 'shipment-1',
-      status: 'CREATED',
+      status: 'IN_TRANSIT',
       milestones: [] as Array<Record<string, unknown>>,
       updatedAt: new Date(),
       save,
@@ -40,6 +40,9 @@ describe('shipment status cache invalidation', () => {
 
     await jest.unstable_mockModule('../src/infra/socket/io.js', () => ({
       emitStatusUpdate,
+      emitPaymentStatusChange: jest.fn(),
+      emitTelemetryUpdate: jest.fn(),
+      emitAnomalyDetected: jest.fn(),
     }));
 
     await jest.unstable_mockModule('../src/modules/analytics/analytics.cache.js', () => ({
@@ -48,6 +51,10 @@ describe('shipment status cache invalidation', () => {
 
     await jest.unstable_mockModule('../src/shared/utils/auditLog.js', () => ({
       auditLog: jest.fn(),
+    }));
+
+    await jest.unstable_mockModule('../src/modules/ledger/ledger.service.js', () => ({
+      createLedgerBlockService: jest.fn(async () => ({ _id: 'lb-1' })),
     }));
 
     const { updateShipmentStatusService } = await import('../src/modules/shipments/shipments.service.js');

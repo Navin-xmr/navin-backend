@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express';
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { AppError } from '../src/shared/http/errors.js';
+import { mockModule } from './helpers/mockFactory.js';
 
 describe('Auth and User Controllers', () => {
   beforeEach(() => {
@@ -24,12 +25,12 @@ describe('Auth and User Controllers', () => {
       createdAt: new Date(),
     }));
 
-    await jest.unstable_mockModule('../src/modules/auth/apiKey.service.js', () => ({
+    await mockModule('../src/modules/auth/apiKey.service.js', {
       generateApiKey,
       listApiKeys: jest.fn(),
       revokeApiKey: jest.fn(),
       validateApiKey: jest.fn(),
-    }));
+    });
 
     const { createApiKeyController } = await import('../src/modules/auth/apiKey.controller.js');
     const req = {
@@ -46,12 +47,12 @@ describe('Auth and User Controllers', () => {
   });
 
   it('createApiKeyController throws when required fields are missing', async () => {
-    await jest.unstable_mockModule('../src/modules/auth/apiKey.service.js', () => ({
+    await mockModule('../src/modules/auth/apiKey.service.js', {
       generateApiKey: jest.fn(),
       listApiKeys: jest.fn(),
       revokeApiKey: jest.fn(),
       validateApiKey: jest.fn(),
-    }));
+    });
 
     const { createApiKeyController } = await import('../src/modules/auth/apiKey.controller.js');
     const req = { body: { name: 'Key' } } as Request;
@@ -66,12 +67,12 @@ describe('Auth and User Controllers', () => {
     const listApiKeys = jest.fn(async () => [{ _id: 'k1', name: 'Key 1', isActive: true }]);
     const revokeApiKey = jest.fn(async () => undefined);
 
-    await jest.unstable_mockModule('../src/modules/auth/apiKey.service.js', () => ({
+    await mockModule('../src/modules/auth/apiKey.service.js', {
       generateApiKey: jest.fn(),
       listApiKeys,
       revokeApiKey,
       validateApiKey: jest.fn(),
-    }));
+    });
 
     const { listApiKeysController, revokeApiKeyController } = await import(
       '../src/modules/auth/apiKey.controller.js'
@@ -102,16 +103,21 @@ describe('Auth and User Controllers', () => {
       token: 'token-login',
     }));
 
-    await jest.unstable_mockModule('../src/modules/auth/auth.service.js', () => ({
+    await mockModule('../src/modules/auth/auth.service.js', {
       signup,
       login,
       logout: jest.fn(),
       verifyToken: jest.fn(),
-    }));
+      forgotPassword: jest.fn(),
+      resetPassword: jest.fn(),
+    });
 
     const { signupController, loginController } = await import('../src/modules/auth/auth.controller.js');
 
-    const signupReq = { body: { email: 'u@example.com', name: 'User', password: 'Password123!' } } as Request;
+    const signupReq = {
+      body: { email: 'u@example.com', name: 'User', password: 'Password123!' },
+      headers: {},
+    } as unknown as Request;
     const signupRes = makeRes();
     await signupController(signupReq, signupRes, jest.fn());
     expect(signupRes.status).toHaveBeenCalledWith(201);
@@ -119,7 +125,10 @@ describe('Auth and User Controllers', () => {
       expect.objectContaining({ data: expect.objectContaining({ token: 'token-signup' }) })
     );
 
-    const loginReq = { body: { email: 'u@example.com', password: 'Password123!' } } as Request;
+    const loginReq = {
+      body: { email: 'u@example.com', password: 'Password123!' },
+      headers: {},
+    } as unknown as Request;
     const loginRes = makeRes();
     await loginController(loginReq, loginRes, jest.fn());
     expect(loginRes.status).toHaveBeenCalledWith(200);
@@ -131,9 +140,9 @@ describe('Auth and User Controllers', () => {
   it('createUserController returns 201 with user payload', async () => {
     const registerUser = jest.fn(async () => ({ _id: 'u1', email: 'u@example.com', name: 'User' }));
 
-    await jest.unstable_mockModule('../src/modules/users/users.service.js', () => ({
+    await mockModule('../src/modules/users/users.service.js', {
       registerUser,
-    }));
+    });
 
     const { createUserController } = await import('../src/modules/users/users.controller.js');
 
