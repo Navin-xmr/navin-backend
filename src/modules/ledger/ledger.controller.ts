@@ -8,7 +8,7 @@ import { sendResponse } from '../../shared/http/sendResponse.js';
  * Requires auth and ADMIN / MANAGER / VIEWER.
  *
  * @param req.query.shipmentId - Optional shipment filter.
- * @param req.query.eventType - Optional milestone event type filter.
+ * @param req.query.milestoneEvent - Optional milestone event type filter.
  * @param req.query.limit - Page size (default 20, max 100).
  * @param req.query.cursor - Optional cursor for the next page.
  * @returns HTTP 200 with envelope `{ success, message, data, meta }` (`total`, `hasMore`, `nextCursor`).
