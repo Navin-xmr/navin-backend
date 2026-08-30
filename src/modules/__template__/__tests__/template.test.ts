@@ -9,9 +9,9 @@ import request from 'supertest';
 import mongoose from 'mongoose';
 import jwt from 'jsonwebtoken';
 import express from 'express';
-import { TemplateModel } from '../../template.model.js';
-import { templateRouter } from '../../template.routes.js';
-import { errorMiddleware } from '../../../../shared/http/errorMiddleware.js';
+import { TemplateModel } from '../template.model.js';
+import { templateRouter } from '../template.routes.js';
+import { errorMiddleware } from '../../../shared/http/errorMiddleware.js';
 
 // Build a minimal app that mounts only this module's router.
 // This avoids depending on app.ts registering the template routes.
