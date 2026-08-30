@@ -79,6 +79,26 @@ jobs:
       - name: Run ESLint
         run: npm run lint
 
+  openapi-lint:
+    name: OpenAPI Lint
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Clean install dependencies
+        run: npm ci
+
+      - name: Run OpenAPI Lint
+        run: npm run lint:openapi
+
   docker:
     name: Docker image build
     runs-on: ubuntu-latest
