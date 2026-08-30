@@ -56,7 +56,24 @@ npm run dev
 
 The API is now available at `http://localhost:3000/api`.
 
-> Prefer containers? See `docker-compose.yml` (mongo + redis + app). Note the compose stack is under repair — track progress in `TODO.md` Part 2 before relying on it.
+### Docker Compose (mongo + redis + app)
+
+The compose stack boots the API in **production mode** (see `ENV NODE_ENV=production` in the `Dockerfile` runner stage). For hot-reload local development, use `npm run dev` with `.env` instead.
+
+```bash
+# Optional: override secrets from a local env file (recommended)
+cp .env.example .env
+# JWT_SECRET in .env.example is already ≥32 characters (required by src/env.ts)
+
+docker compose up -d --build
+docker compose logs -f app   # expect: HTTP server listening
+curl http://localhost:3000/api/health
+docker compose exec app whoami   # node (non-root runner)
+```
+
+- **JWT_SECRET:** must be at least 32 characters. Compose provides a dev default; override via `.env` or `JWT_SECRET=... docker compose up`.
+- **Startup order:** `app` waits for healthy `mongo` and `redis` before starting.
+- **Clean reset:** `docker compose down -v && docker compose up -d --build`
 
 ### Verify Installation
 
@@ -484,7 +501,8 @@ Configuration is validated at boot with Zod (`src/env.ts`) — the process **exi
 | `PORT` | No | `3000` | HTTP listen port |
 | `NODE_ENV` | No | `development` | `development` \| `test` \| `production` |
 | `REDIS_URL` | No | `redis://127.0.0.1:6379` | Redis (BullMQ queues, SSE, caches) |
-| `STELLAR_NETWORK` | No | `testnet` | `testnet` \| `public` |
+| `STELLAR_NETWORK` | No | `testnet` | `testnet` \| `public`; selects the default Horizon/Soroban URLs |
+| `HORIZON_URL` | Optional | *(derived from `STELLAR_NETWORK`)* | Overrides the Horizon URL |
 | `STELLAR_SECRET_KEY` | Optional | — | Horizon signing key (required for anchoring jobs) |
 | `STELLAR_WEBHOOK_SECRET` | Optional | — | HMAC secret for `/api/webhooks/stellar` (min 16 chars) |
 | `FRONTEND_URL` | No | `http://localhost:3000` | Invite / password-reset link base |
@@ -492,7 +510,7 @@ Configuration is validated at boot with Zod (`src/env.ts`) — the process **exi
 | `TOTP_ENCRYPTION_KEY` | Optional* | — | 64-hex AES-256 key for 2FA secrets (*required in production*) |
 | `STORAGE_PROVIDER` | No | `mock` | `mock` \| `s3` \| `r2` \| `cloudinary` |
 
-The full matrix — SMTP, SendGrid, Twilio, S3/Cloudinary keys, Soroban placeholders, Sentry — lives in [`docs/environment-variables.md`](docs/environment-variables.md) and [`.env.example`](.env.example). There are **no** `JWT_EXPIRY`, `STELLAR_HORIZON_URL`, `STELLAR_NETWORK_PASSPHRASE`, or `API_KEY_PREFIX` variables; token TTL is fixed in code and the Horizon URL/network passphrase derive from `STELLAR_NETWORK`.
+The full matrix — SMTP, SendGrid, Twilio, S3/Cloudinary keys, Soroban placeholders, Sentry — lives in [`docs/environment-variables.md`](docs/environment-variables.md) and [`.env.example`](.env.example). There are **no** `JWT_EXPIRY`, `STELLAR_NETWORK_PASSPHRASE`, or `API_KEY_PREFIX` variables; token TTL is fixed in code and the network passphrase derives from `STELLAR_NETWORK`. The Horizon URL also derives from `STELLAR_NETWORK` by default, but can be overridden with `HORIZON_URL` (see `src/config/stellarNetwork.ts`); an unrecognized `STELLAR_NETWORK` value fails fast at startup.
 
 ---
 

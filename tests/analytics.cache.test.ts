@@ -45,6 +45,9 @@ describe('analytics redis cache', () => {
       ]);
     });
     const shipmentModel = fakeModel({ aggregate: mockAggregate });
+    const anomalyModel = fakeModel({
+      aggregate: jest.fn(async () => []),
+    });
 
     await jest.unstable_mockModule('../src/modules/shipments/shipments.model.js', () => ({
       Shipment: shipmentModel,
@@ -54,6 +57,10 @@ describe('analytics redis cache', () => {
         DELIVERED: 'DELIVERED',
         CANCELLED: 'CANCELLED',
       },
+    }));
+
+    await jest.unstable_mockModule('../src/modules/anomaly/anomaly.model.js', () => ({
+      Anomaly: anomalyModel,
     }));
 
     const appModule = await import('../src/app.js');

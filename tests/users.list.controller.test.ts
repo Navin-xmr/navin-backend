@@ -66,6 +66,7 @@ describe('GET /api/users', () => {
     await jest.unstable_mockModule('../src/modules/users/users.repo.js', () => ({
       createUser: jest.fn(),
       findUserByEmail: jest.fn(),
+      findUserById: jest.fn(),
       findUsersByOrganizationId,
     }));
 
@@ -86,7 +87,6 @@ describe('GET /api/users', () => {
     expect(Array.isArray(res.body.data)).toBe(true);
     expect(res.body.data).toHaveLength(5);
     expect(res.body.meta).toEqual({
-      total: 5,
       hasMore: false,
       nextCursor: null,
     });

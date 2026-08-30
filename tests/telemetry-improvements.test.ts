@@ -37,6 +37,7 @@ describe('getTelemetryThresholds', () => {
   });
 });
 
+import { DEFAULT_SHIPMENT_TYPE, DEFAULT_TELEMETRY_THRESHOLDS } from '../src/modules/telemetry/telemetryThreshold.constants.js';
 import request from 'supertest';
 import jwt from 'jsonwebtoken';
 import type { Application } from 'express';
@@ -310,6 +311,17 @@ describe('GET /api/telemetry/thresholds', () => {
       detectAnomaly: jest.fn(),
     }));
 
+    await jest.unstable_mockModule('../src/modules/telemetry/telemetryThreshold.model.js', () => ({
+      TelemetryThreshold: {
+        findOne: () => ({
+          lean: () => Promise.resolve(null),
+        }),
+        findOneAndUpdate: () => ({
+          lean: () => Promise.resolve(null),
+        }),
+      },
+    }));
+
     const appModule = await import('../src/app.js');
     app = appModule.buildApp();
   });
@@ -321,7 +333,14 @@ describe('GET /api/telemetry/thresholds', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
-    expect(res.body.data).toEqual({ maxTemp: 85, maxHumidity: 90, minBatteryLevel: 20 });
+    expect(res.body.data.shipmentType).toBe(DEFAULT_SHIPMENT_TYPE);
+    expect(res.body.data.thresholds).toEqual({
+      maxTemp: DEFAULT_TELEMETRY_THRESHOLDS.maxTemp,
+      minTemp: null,
+      maxHumidity: DEFAULT_TELEMETRY_THRESHOLDS.maxHumidity,
+      minHumidity: null,
+      minBatteryLevel: DEFAULT_TELEMETRY_THRESHOLDS.minBatteryLevel,
+    });
   });
 
   it('returns 401 for unauthenticated request (Requirement 2.2)', async () => {

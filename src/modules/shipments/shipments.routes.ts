@@ -9,6 +9,7 @@ import {
   createShipment,
   patchShipment,
   patchShipmentStatus,
+  bulkUpdateShipmentStatus,
   uploadShipmentProof,
   createDispute,
   deleteShipment,
@@ -28,6 +29,7 @@ import {
   ShipmentPatchBodySchema,
   ShipmentProofBodySchema,
   ShipmentStatusBodySchema,
+  BulkStatusUpdateBodySchema,
   ShipmentTimelineQuerySchema,
   CreateDisputeBodySchema,
   UploadDocumentBodySchema,
@@ -79,6 +81,16 @@ shipmentsRouter.get(
   requireRole(UserRole.ADMIN, UserRole.MANAGER, UserRole.VIEWER),
   validateRequest({ query: getShipmentsQuerySchema }),
   asyncHandler(getShipments)
+);
+
+// Registered before the `/:id` routes below so the literal `/bulk/status` segment
+// isn't swallowed by the `/:id/status` param route (Express matches in registration order).
+shipmentsRouter.patch(
+  '/bulk/status',
+  requireAuth,
+  requireRole(UserRole.ADMIN, UserRole.MANAGER),
+  validateRequest({ body: BulkStatusUpdateBodySchema }),
+  asyncHandler(bulkUpdateShipmentStatus)
 );
 
 shipmentsRouter.get(

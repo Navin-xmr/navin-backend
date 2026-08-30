@@ -1,8 +1,16 @@
 import { env } from '../env.js';
+import { resolveStellarUrls } from './stellarNetwork.js';
 
 const allowedOrigins = env.ALLOWED_ORIGINS.split(',')
   .map(origin => origin.trim())
   .filter(Boolean);
+
+// Fails fast at startup if STELLAR_NETWORK is somehow neither 'testnet' nor 'public'
+// (the zod enum in env.ts already guards this, but this keeps config.ts self-defending).
+const stellarUrls = resolveStellarUrls(env.STELLAR_NETWORK, {
+  horizonUrl: env.HORIZON_URL,
+  sorobanRpcUrl: env.SOROBAN_RPC_URL,
+});
 
 export const config = {
   nodeEnv: env.NODE_ENV,
@@ -11,6 +19,7 @@ export const config = {
   jwtSecret: env.JWT_SECRET,
   stellarSecretKey: env.STELLAR_SECRET_KEY,
   stellarNetwork: env.STELLAR_NETWORK,
+  horizonUrl: stellarUrls.horizonUrl,
   allowedOrigins,
   redisUrl: env.REDIS_URL,
   corsOrigin: env.CORS_ORIGIN,
@@ -45,7 +54,7 @@ export const config = {
     apiKey: process.env.CLOUDINARY_API_KEY,
     apiSecret: process.env.CLOUDINARY_API_SECRET,
   },
-  sorobanRpcUrl: env.SOROBAN_RPC_URL,
+  sorobanRpcUrl: stellarUrls.sorobanRpcUrl,
   escrowContractId: env.ESCROW_CONTRACT_ID,
   sentryDsn: env.SENTRY_DSN,
   totpEncryptionKey: env.TOTP_ENCRYPTION_KEY,

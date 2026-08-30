@@ -4,7 +4,7 @@
  * Copy-paste this file when scaffolding a new module.
  * Replace "__template__" / "Template" / "/api/templates" with your module name.
  */
-import { jest } from '@jest/globals';
+import { describe, it, expect, afterEach } from '@jest/globals';
 import request from 'supertest';
 import mongoose from 'mongoose';
 import jwt from 'jsonwebtoken';

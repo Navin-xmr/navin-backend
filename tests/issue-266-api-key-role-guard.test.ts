@@ -28,6 +28,10 @@ await jest.unstable_mockModule('../src/modules/auth/auth.service.js', () => ({
   verifyToken: jest.fn((token: string) => jwt.verify(token, JWT_SECRET) as { userId: string; role: string; jti?: string }),
   forgotPassword: jest.fn(),
   resetPassword: jest.fn(),
+  refreshToken: jest.fn(),
+  registerCompany: jest.fn(),
+  setup2fa: jest.fn(),
+  changePassword: jest.fn(),
 }));
 
 await jest.unstable_mockModule('../src/infra/redis/connection.js', () => ({
@@ -91,7 +95,7 @@ describe('Issue #266: requireRole on API key management routes', () => {
         .post('/api/auth/api-keys')
         .set('Authorization', `Bearer ${makeToken('ADMIN')}`)
         .send({ name: 'test-key', organizationId: 'org-1' });
-      expect(res.status).not.toBe(403);
+      expect(res.status).toBe(201);
     });
 
     it('allows SUPER_ADMIN role', async () => {
@@ -99,7 +103,7 @@ describe('Issue #266: requireRole on API key management routes', () => {
         .post('/api/auth/api-keys')
         .set('Authorization', `Bearer ${makeToken('SUPER_ADMIN')}`)
         .send({ name: 'test-key', organizationId: 'org-1' });
-      expect(res.status).not.toBe(403);
+      expect(res.status).toBe(201);
     });
 
     it('returns 401 without token', async () => {
@@ -129,14 +133,14 @@ describe('Issue #266: requireRole on API key management routes', () => {
       const res = await request(app)
         .get('/api/auth/api-keys/org-1')
         .set('Authorization', `Bearer ${makeToken('ADMIN')}`);
-      expect(res.status).not.toBe(403);
+      expect(res.status).toBe(200);
     });
 
     it('allows SUPER_ADMIN role', async () => {
       const res = await request(app)
         .get('/api/auth/api-keys/org-1')
         .set('Authorization', `Bearer ${makeToken('SUPER_ADMIN')}`);
-      expect(res.status).not.toBe(403);
+      expect(res.status).toBe(200);
     });
 
     it('returns 401 without token', async () => {
@@ -165,14 +169,14 @@ describe('Issue #266: requireRole on API key management routes', () => {
       const res = await request(app)
         .delete('/api/auth/api-keys/key-1')
         .set('Authorization', `Bearer ${makeToken('ADMIN')}`);
-      expect(res.status).not.toBe(403);
+      expect(res.status).toBe(200);
     });
 
     it('allows SUPER_ADMIN role', async () => {
       const res = await request(app)
         .delete('/api/auth/api-keys/key-1')
         .set('Authorization', `Bearer ${makeToken('SUPER_ADMIN')}`);
-      expect(res.status).not.toBe(403);
+      expect(res.status).toBe(200);
     });
 
     it('returns 401 without token', async () => {

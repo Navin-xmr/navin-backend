@@ -58,7 +58,10 @@ const EnvSchema = z.object({
   CLOUDINARY_API_KEY: z.string().min(1).optional(),
   CLOUDINARY_API_SECRET: z.string().min(1).optional(),
 
-  // Stellar Soroban / Escrow
+  // Stellar Horizon / Soroban / Escrow
+  // Both are optional overrides — when unset, the URL is derived from STELLAR_NETWORK
+  // (see src/config/stellarNetwork.ts).
+  HORIZON_URL: z.string().url('HORIZON_URL must be a valid URL').optional(),
   SOROBAN_RPC_URL: z.string().url('SOROBAN_RPC_URL must be a valid URL').optional(),
   ESCROW_CONTRACT_ID: z.string().min(1).optional(),
 

@@ -128,6 +128,7 @@ describe('RBAC Matrix Integration Tests', () => {
         .fn<any>()
         .mockResolvedValue({ _id: 'anomaly-1', status: 'RESOLVED' }),
       detectAnomaly: jest.fn<any>().mockResolvedValue({ detected: false, anomalies: [] }),
+      getAnomalyStatsService: jest.fn<any>().mockResolvedValue({ total: 0, open: 0, resolved: 0 }),
     }));
 
     // ✅ Correct layout - top-level export matching shipments.service.ts
@@ -167,6 +168,9 @@ describe('RBAC Matrix Integration Tests', () => {
         .fn<any>()
         .mockResolvedValue({ referenceNumber: 'DSP-000001', status: 'PENDING' }),
       deleteShipmentService: jest.fn<any>().mockResolvedValue({ _id: 'shipment-1' }),
+      bulkUpdateShipmentStatusService: jest
+        .fn<any>()
+        .mockResolvedValue({ updated: 0, failed: [] }),
       getShipmentEtaService: jest
         .fn<any>()
         .mockResolvedValue({ estimatedArrival: null, reason: 'not in transit' }),
@@ -256,6 +260,13 @@ describe('RBAC Matrix Integration Tests', () => {
 
     await jest.unstable_mockModule('../src/modules/analytics/analytics.service.js', () => ({
       getAnalyticsPerformance: mockAnalyticsAggregate,
+      getAnalyticsSummary: jest.fn<any>().mockResolvedValue({
+        totalShipments: 0,
+        onTimeRate: 0,
+        avgTransitDays: 0,
+        disputeRate: 0,
+        sparklines: [],
+      }),
     }));
 
     await jest.unstable_mockModule('../src/modules/users/users.service.js', () => ({
@@ -264,6 +275,22 @@ describe('RBAC Matrix Integration Tests', () => {
         email: 'newuser@test.com',
         name: 'New User',
       }),
+      createTeamMember: jest.fn<any>().mockResolvedValue({
+        _id: 'user-team',
+        email: 'team@test.com',
+        name: 'Team User',
+      }),
+      listOrganizationUsers: jest.fn<any>().mockResolvedValue({
+        data: [],
+        total: 0,
+        hasMore: false,
+        nextCursor: null,
+      }),
+      deleteUser: jest.fn<any>().mockResolvedValue({ _id: 'user-deleted' }),
+      generateInvitationLink: jest.fn<any>().mockResolvedValue({ token: 'invite-token' }),
+      verifyInvitationToken: jest.fn<any>().mockReturnValue({ email: 'invite@test.com' }),
+      acceptInvitation: jest.fn<any>().mockResolvedValue({ _id: 'user-accepted' }),
+      getCurrentUser: jest.fn<any>().mockResolvedValue({ _id: 'user-1', role: 'ADMIN' }),
     }));
 
     await jest.unstable_mockModule('../src/modules/webhooks/iot.service.js', () => ({
@@ -355,7 +382,7 @@ describe('RBAC Matrix Integration Tests', () => {
             .send({ email: 'newuser@test.com', name: 'New User' });
 
           if (shouldAllow) {
-            expect([201, 400, 409]).toContain(res.status);
+            expect(res.status).toBe(201);
           } else {
             expect(res.status).toBe(403);
           }
@@ -384,13 +411,14 @@ describe('RBAC Matrix Integration Tests', () => {
             .post('/api/shipments')
             .set('Authorization', `Bearer ${token}`)
             .send({
-              origin: { address: 'Origin Address', city: 'Origin City', country: 'US' },
-              destination: { address: 'Dest Address', city: 'Dest City', country: 'US' },
-              estimatedDelivery: '2026-02-01T00:00:00.000Z',
+              origin: 'Origin Address',
+              destination: 'Dest Address',
+              enterpriseId: testOrganizationId,
+              logisticsId: testOrganizationId,
             });
 
           if (shouldAllow) {
-            expect([201, 400, 404]).toContain(res.status);
+            expect(res.status).toBe(201);
           } else {
             expect(res.status).toBe(403);
           }
@@ -415,7 +443,7 @@ describe('RBAC Matrix Integration Tests', () => {
             .send({ offChainMetadata: { note: 'updated' } });
 
           if (shouldAllow) {
-            expect([200, 404]).toContain(res.status);
+            expect(res.status).toBe(200);
           } else {
             expect(res.status).toBe(403);
           }
@@ -438,7 +466,7 @@ describe('RBAC Matrix Integration Tests', () => {
             .set('Authorization', `Bearer ${token}`);
 
           if (shouldAllow) {
-            expect([200, 400]).toContain(res.status);
+            expect(res.status).toBe(200);
           } else {
             expect(res.status).toBe(403);
           }
@@ -460,7 +488,7 @@ describe('RBAC Matrix Integration Tests', () => {
             .set('Authorization', `Bearer ${token}`);
 
           if (shouldAllow) {
-            expect([200, 404]).toContain(res.status);
+            expect(res.status).toBe(200);
           } else {
             expect(res.status).toBe(403);
           }
@@ -485,7 +513,7 @@ describe('RBAC Matrix Integration Tests', () => {
             .send({ status: 'RESOLVED' });
 
           if (shouldAllow) {
-            expect([200, 404]).toContain(res.status);
+            expect(res.status).toBe(200);
           } else {
             expect(res.status).toBe(403);
           }
@@ -507,7 +535,7 @@ describe('RBAC Matrix Integration Tests', () => {
             .set('Authorization', `Bearer ${token}`);
 
           if (shouldAllow) {
-            expect([200, 404]).toContain(res.status);
+            expect(res.status).toBe(200);
           } else {
             expect(res.status).toBe(403);
           }
@@ -622,7 +650,7 @@ describe('RBAC Matrix Integration Tests', () => {
 
       const res = await request(app).get('/api/shipments').set('Authorization', `Bearer ${token}`);
 
-      expect([200, 404]).toContain(res.status);
+      expect(res.status).toBe(200);
     });
 
     it('VIEWER should NOT be able to read anomalies', async () => {
@@ -665,7 +693,7 @@ describe('RBAC Matrix Integration Tests', () => {
 
       const res = await request(app).get('/api/telemetry').set('Authorization', `Bearer ${token}`);
 
-      expect([200, 404]).toContain(res.status);
+      expect(res.status).toBe(200);
     });
   });
 
@@ -692,7 +720,7 @@ describe('RBAC Matrix Integration Tests', () => {
         if (requiresAuth) {
           expect(res.status).toBe(401);
         } else {
-          expect([200, 400]).toContain(res.status);
+          expect(res.status).toBe(200);
         }
       }
     });

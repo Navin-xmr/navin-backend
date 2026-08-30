@@ -73,6 +73,7 @@ export const ListUsersQuerySchema = z
     search: z.string().trim().optional(),
     role: z.nativeEnum(UserRole).optional(),
   })
+  .strict()
   .refine(data => !(data.cursor && data.page !== undefined), {
     message: 'Use either cursor or page for pagination, not both.',
   });

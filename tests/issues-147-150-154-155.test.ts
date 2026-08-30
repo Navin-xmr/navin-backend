@@ -152,8 +152,9 @@ describe('Issues #147, #150, #154, #155 - Integration Tests', () => {
           password: 'password123',
         });
 
-      // Should either succeed with default org or fail with validation error
-      expect([201, 400, 422]).toContain(res.status);
+      // organizationId is optional on signup; omitting it succeeds with 201
+      expect(res.status).toBe(201);
+      expect(res.body.success).toBe(true);
     });
   });
 
@@ -374,8 +375,9 @@ describe('Issues #147, #150, #154, #155 - Integration Tests', () => {
           logisticsId: testOrgId,
         });
 
-      // Should either auto-generate or fail validation
-      expect([201, 400]).toContain(res.status);
+      // Empty trackingNumber is treated as omitted and auto-generated
+      expect(res.status).toBe(201);
+      expect(res.body.data.trackingNumber).toMatch(/^NVN-\d{6}$/);
     });
   });
 

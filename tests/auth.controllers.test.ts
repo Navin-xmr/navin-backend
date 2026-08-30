@@ -114,7 +114,10 @@ describe('Auth and User Controllers', () => {
 
     const { signupController, loginController } = await import('../src/modules/auth/auth.controller.js');
 
-    const signupReq = { body: { email: 'u@example.com', name: 'User', password: 'Password123!' } } as Request;
+    const signupReq = {
+      body: { email: 'u@example.com', name: 'User', password: 'Password123!' },
+      headers: {},
+    } as unknown as Request;
     const signupRes = makeRes();
     await signupController(signupReq, signupRes, jest.fn());
     expect(signupRes.status).toHaveBeenCalledWith(201);
@@ -122,7 +125,10 @@ describe('Auth and User Controllers', () => {
       expect.objectContaining({ data: expect.objectContaining({ token: 'token-signup' }) })
     );
 
-    const loginReq = { body: { email: 'u@example.com', password: 'Password123!' } } as Request;
+    const loginReq = {
+      body: { email: 'u@example.com', password: 'Password123!' },
+      headers: {},
+    } as unknown as Request;
     const loginRes = makeRes();
     await loginController(loginReq, loginRes, jest.fn());
     expect(loginRes.status).toHaveBeenCalledWith(200);

@@ -1,93 +1,98 @@
 # Storage adapter contract
 
-Navin Backend uploads delivery proofs, shipment documents/photos, and dispute
-evidence through a **storage adapter** so the shipments module does not couple
-directly to a cloud SDK.
+Navin Backend uploads delivery proofs, shipment documents/photos, and dispute evidence through a **storage adapter** (`src/services/storage/index.ts`) so the shipments and payments modules do not couple directly to a single cloud SDK.
 
 Related work: real object-storage implementation — [#375](https://github.com/Navin-xmr/navin-backend/issues/375).
 
-## Current state (mock)
+---
 
-`src/services/mockStorageService.ts` exports `mockUploadToStorage`, which:
+## Current state (Factory & Providers)
 
-- Accepts an Express/Multer `file` (in-memory buffer)
-- Sleeps briefly to simulate network I/O
-- Returns a fake URL (`https://mock-storage.com/proof…`)
+A runtime factory (`getStorageAdapter()` in `src/services/storage/index.ts:29–63`) initializes a singleton `StorageAdapter` implementation based on the `STORAGE_PROVIDER` environment variable.
 
-Call sites today:
+Supported providers:
 
-| Flow | Service entry |
-|------|----------------|
-| Delivery proof | `uploadShipmentProofService` |
-| Dispute evidence | `createDisputeService` |
-| Document upload | `uploadShipmentDocumentService` |
-| Photo upload | `uploadShipmentPhotoService` |
+| Provider ID | Implementation Class | Target Environment |
+|-------------|----------------------|--------------------|
+| `mock` | `MockStorageAdapter` (`src/services/storage/mockStorage.ts`) | Local development & testing (default) |
+| `s3` | `S3StorageAdapter` (`src/services/storage/s3Storage.ts`) | AWS S3 object storage |
+| `r2` | `S3StorageAdapter` (`src/services/storage/s3Storage.ts`) | Cloudflare R2 (S3-compatible endpoint) |
+| `cloudinary` | `CloudinaryStorageAdapter` (`src/services/storage/cloudinaryStorage.ts`) | Cloudinary CDN (image optimization) |
 
-All of these import the mock directly. There is **no** runtime provider switch yet.
+### Mock Storage URL Scheme
 
-## Target interface
+The `MockStorageAdapter` generates synthetic public URLs using the standard scheme:
 
-The real adapter (issue #375) should implement:
+```
+https://mock-storage.local/{key}?mock=1&ts={timestamp}
+```
+
+(Note: Legacy shim `src/services/mockStorageService.ts` used `https://mock-storage.com/...` and is deprecated; see below).
+
+---
+
+## StorageAdapter Contract Interface
+
+The storage adapter abstraction is declared in `src/services/storage/types.ts:8–31`:
 
 ```ts
 export interface StorageAdapter {
   /**
-   * Persist file bytes under a stable object key and return a public or signed URL.
+   * Persist file bytes under a stable object key and return public/signed URL.
    */
-  uploadFile(
-    buffer: Buffer,
-    mimeType: string,
-    key: string
-  ): Promise<{ url: string; key: string }>;
+  uploadFile(buffer: Buffer, mimeType: string, key: string): Promise<StorageUploadResult>;
+
+  /**
+   * Optional: delete object from storage.
+   */
+  deleteObject?(key: string): Promise<void>;
+
+  /**
+   * Optional: generate signed URL valid for limited time.
+   */
+  getSignedUrl?(key: string, expiresInSeconds: number): Promise<string>;
+}
+
+export interface StorageUploadResult {
+  url: string;
+  key: string;
 }
 ```
 
-Optional follow-ons (not required for the first cut):
+---
 
-- `deleteObject(key: string): Promise<void>`
-- `getSignedUrl(key: string, expiresInSeconds: number): Promise<string>`
+## Environment Variable Matrix
 
-## Provider selection
+All storage configuration variables are validated at runtime in `src/env.ts`:
 
-When wiring the real adapter, select the implementation from env:
+| Variable | Type / Values | Required For | Description |
+|----------|---------------|--------------|-------------|
+| `STORAGE_PROVIDER` | `z.enum(['mock', 's3', 'r2', 'cloudinary'])` | All (default `mock`) | Provider selector |
+| `S3_BUCKET` | `z.string().min(1)` | `s3`, `r2` | Target bucket name |
+| `S3_ENDPOINT` | `z.string().url()` | `r2` (or MinIO/custom S3) | S3 API endpoint URL |
+| `S3_ACCESS_KEY` | `z.string().min(1)` | `s3`, `r2` | Access key ID |
+| `S3_SECRET_KEY` | `z.string().min(1)` | `s3`, `r2` | Secret access key |
+| `S3_REGION` | `z.string().min(1)` | `s3` (optional for `r2`) | S3 region (defaults to `us-east-1` if omitted) |
+| `CLOUDINARY_CLOUD_NAME` | `z.string().min(1)` | `cloudinary` | Cloudinary account cloud name |
+| `CLOUDINARY_API_KEY` | `z.string().min(1)` | `cloudinary` | Cloudinary API key |
+| `CLOUDINARY_API_SECRET` | `z.string().min(1)` | `cloudinary` | Cloudinary API secret |
 
-| Variable | Purpose |
-|----------|---------|
-| `STORAGE_PROVIDER` | Provider id: `mock` (default), `s3`, or `cloudinary` |
-| `STORAGE_BUCKET` | Logical bucket / container name (alias for provider bucket) |
-| `S3_BUCKET` | AWS/S3-compatible bucket (already in `.env.example`) |
-| `S3_ENDPOINT` | Custom S3 API endpoint (MinIO, R2, etc.) |
-| `S3_ACCESS_KEY` | Access key id |
-| `S3_SECRET_KEY` | Secret access key |
-| `S3_REGION` | Region string |
-| `CLOUDINARY_CLOUD_NAME` | Cloudinary cloud name (if provider is `cloudinary`) |
-| `CLOUDINARY_API_KEY` | Cloudinary API key |
-| `CLOUDINARY_API_SECRET` | Cloudinary API secret |
+---
 
-Existing config already maps the S3 family under `config.s3` in `src/config/index.ts`.
-`STORAGE_PROVIDER` / `STORAGE_BUCKET` / Cloudinary vars are the **planned** surface for #375;
-they are not validated in `src/env.ts` until the real adapter lands.
+## Deprecation Notice: Legacy `mockStorageService.ts`
 
-## Migration path (mock → real)
+> [!WARNING]
+> `src/services/mockStorageService.ts` (`mockUploadToStorage`) is **deprecated** and unreferenced by active domain flows. All active upload flows (proofs, documents, photos, dispute evidence) consume `getStorageAdapter()` from `src/services/storage/index.ts`. Removal of `mockStorageService.ts` is tracked under task **P5-06**.
 
-1. **Introduce** `StorageAdapter` (shared types) and a `createStorageAdapter()` factory
-   that returns the mock when `STORAGE_PROVIDER` is unset or `mock`.
-2. **Implement** `S3StorageAdapter.uploadFile` using `config.s3`, building object keys
-   such as `shipments/{shipmentId}/proofs/{uuid}.{ext}`.
-3. **Swap** call sites from `mockUploadToStorage(file)` to:
+---
 
-   ```ts
-   const { url } = await storage.uploadFile(file.buffer, file.mimetype, key);
-   ```
+## Usage Example
 
-4. **Keep** the mock adapter for local tests and CI without cloud credentials.
-5. **Document** provider-specific IAM / CORS requirements in this file when #375 merges.
+```ts
+import { getStorageAdapter } from '../services/storage/index.js';
 
-## Design notes
+const storage = getStorageAdapter();
+const key = `shipments/${shipmentId}/proofs/${uuid}.jpg`;
+const { url, key: storedKey } = await storage.uploadFile(file.buffer, file.mimetype, key);
+```
 
-- Prefer returning `{ url, key }` so soft-delete and re-signing can use the key later;
-  callers that only need a string URL can destructure `url`.
-- Keys should be deterministic enough for ops (prefix by shipment id) but unique
-  (UUID or content hash suffix) to avoid overwrites.
-- Do not embed credentials in URLs stored on shipment documents; prefer public
-  CDN URLs or short-lived signed URLs depending on the provider.

@@ -78,7 +78,7 @@ describe('#290 refreshToken service', () => {
   const JWT_SECRET = process.env.JWT_SECRET!;
 
   const mockUser = { _id: 'u1', email: 'a@b.com', name: 'A', role: 'ADMIN', deletedAt: null };
-  const mockFindById = jest.fn(async () => ({ ...mockUser, lean: () => mockUser }));
+  const mockFindById = jest.fn(async () => mockUser);
 
   beforeEach(async () => {
     jest.resetModules();
@@ -91,7 +91,7 @@ describe('#290 refreshToken service', () => {
       disconnectRedis: jest.fn(async () => {}),
     }));
     await jest.unstable_mockModule('../src/modules/users/users.model.js', () => ({
-      UserModel: { findOne: jest.fn(), findById: jest.fn(() => ({ lean: jest.fn(async () => mockUser) })) },
+      UserModel: { findOne: jest.fn(), findById: mockFindById },
       OrganizationModel: { findById: jest.fn() },
       UserRole: { ADMIN: 'ADMIN', VIEWER: 'VIEWER' },
       OrganizationType: {},
@@ -131,13 +131,16 @@ describe('#296 exportShipmentsService + shipmentsToCSV', () => {
     { _id: 's2', trackingNumber: 'NVN-002', origin: 'Kano', destination: 'PH', status: 'DELIVERED', createdAt: new Date('2026-01-02'), updatedAt: new Date('2026-01-02') },
   ];
 
-  const mockSort = jest.fn(() => ({ lean: jest.fn(async () => shipments) }));
+  const mockLimit = jest.fn(() => ({ lean: jest.fn(async () => shipments) }));
+  const mockSort = jest.fn(() => ({ limit: mockLimit }));
   const mockFind = jest.fn(() => ({ sort: mockSort }));
   const mockCount = jest.fn(async () => 2);
 
   beforeEach(async () => {
     jest.resetModules();
     mockFind.mockClear();
+    mockSort.mockClear();
+    mockLimit.mockClear();
     mockCount.mockClear();
 
     await jest.unstable_mockModule('../src/modules/shipments/shipments.model.js', () => ({
@@ -177,11 +180,14 @@ describe('#296 exportShipmentsService + shipmentsToCSV', () => {
 // ─── Issue #297 — Anomaly stats ──────────────────────────────────────────────
 
 describe('#297 getAnomalyStatsService', () => {
+  // Mirrors the real $facet output of getAnomalyStatsService: each key is an
+  // array of { count } (or { _id, count } for the grouped facets).
   const facetResult = [{
     totalActive: [{ count: 5 }],
+    totalAll: [{ count: 10 }],
+    resolved: [{ count: 4 }],
     bySeverity: [{ _id: 'HIGH', count: 3 }, { _id: 'LOW', count: 2 }],
     byType: [{ _id: 'TEMPERATURE_EXCEEDED', count: 5 }],
-    totals: [{ total: 10, resolved: 4 }],
   }];
 
   const mockAggregate = jest.fn(async () => facetResult);
@@ -205,8 +211,7 @@ describe('#297 getAnomalyStatsService', () => {
     const { getAnomalyStatsService } = await import('../src/modules/anomaly/anomaly.service.js');
     const stats = await getAnomalyStatsService();
     expect(stats.totalActive).toBe(5);
-    expect(stats.bySeverity.high).toBe(3);
-    expect(stats.bySeverity.low).toBe(2);
+    expect(stats.bySeverity).toEqual({ CRITICAL: 0, HIGH: 3, MEDIUM: 0, LOW: 2 });
     expect(stats.byType['TEMPERATURE_EXCEEDED']).toBe(5);
     expect(stats.resolutionRate).toBeCloseTo(0.4);
   });
@@ -223,9 +228,10 @@ describe('#297 getAnomalyStatsService', () => {
   it('returns zeros for empty collection', async () => {
     mockAggregate.mockResolvedValueOnce([{
       totalActive: [],
+      totalAll: [],
+      resolved: [],
       bySeverity: [],
       byType: [],
-      totals: [],
     }] as any);
     const { getAnomalyStatsService } = await import('../src/modules/anomaly/anomaly.service.js');
     const stats = await getAnomalyStatsService('org-empty');

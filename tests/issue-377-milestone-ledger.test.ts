@@ -13,9 +13,12 @@ let mockShipmentDoc: Record<string, unknown> = {};
 
 const findByIdMock = jest.fn<(...args: unknown[]) => Promise<unknown>>();
 
+const findByIdAndUpdateMock = jest.fn<(...args: unknown[]) => Promise<unknown>>();
+
 jest.unstable_mockModule('../src/modules/shipments/shipments.model.js', () => ({
   Shipment: {
     findById: findByIdMock,
+    findByIdAndUpdate: findByIdAndUpdateMock,
   },
   ShipmentStatus: {
     CREATED: 'CREATED',
@@ -94,6 +97,12 @@ describe('Ledger block creation on lifecycle events', () => {
       eventType: 'CREATED',
       createdAt: new Date(),
     });
+    findByIdAndUpdateMock.mockReset();
+    findByIdAndUpdateMock.mockResolvedValue({
+      _id: 'ship-1',
+      trackingNumber: 'TRK-1',
+      stellarTxHash: 'tx123',
+    });
   });
 
   it('status change creates a ledger block', async () => {
@@ -156,7 +165,7 @@ describe('Ledger block creation on lifecycle events', () => {
     expect(createLedgerBlockMock).toHaveBeenCalledWith(
       expect.objectContaining({
         shipmentId: 'ship-1',
-        eventType: 'PROOF_SUBMITTED',
+        milestoneEvent: 'PROOF_SUBMITTED',
       })
     );
   });
@@ -196,12 +205,17 @@ describe('Ledger block creation on lifecycle events', () => {
     const now = new Date();
     mockShipmentDoc = {
       _id: 'ship-1',
-      status: 'DELIVERED',
+      status: 'OUT_FOR_DELIVERY',
       milestones: [],
       stellarTxHash: undefined,
       updatedAt: now,
       save: mockSave.mockImplementation(async function (this: Record<string, unknown>) {
         this.status = 'DELIVERED';
+        (this.milestones as unknown[]).push({
+          name: 'DELIVERED',
+          timestamp: now,
+          description: 'Status changed to DELIVERED',
+        });
         return this;
       }),
     };

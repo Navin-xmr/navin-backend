@@ -181,19 +181,14 @@ describe('Password hashing — invitation acceptance flow', () => {
     jest.unstable_mockModule('../src/modules/users/users.repo.js', () => ({
       createUser: jest.fn(),
       findUserByEmail: jest.fn<(...args: unknown[]) => Promise<null>>().mockResolvedValue(null),
+      findUserById: jest.fn(),
       findUsersByOrganizationId: jest.fn(),
     }));
 
-    jest.unstable_mockModule('../src/modules/users/users.model.js', () => ({
-      UserModel: { create: mockCreate },
-      UserRole: {
-        SUPER_ADMIN: 'SUPER_ADMIN',
-        ADMIN: 'ADMIN',
-        MANAGER: 'MANAGER',
-        VIEWER: 'VIEWER',
-        CUSTOMER: 'CUSTOMER',
-      },
-    }));
+    jest.unstable_mockModule(
+      '../src/modules/users/users.model.js',
+      () => makeModelMock(mockCreate, jest.fn(), jest.fn()),
+    );
 
     const service = await import('../src/modules/users/users.service.js');
 
@@ -228,19 +223,14 @@ describe('Password hashing — invitation acceptance flow', () => {
       findUserByEmail: jest
         .fn<(...args: unknown[]) => Promise<ReturnType<typeof makeUserDoc>>>()
         .mockResolvedValue(makeUserDoc({ email: 'invited@example.com' })),
+      findUserById: jest.fn(),
       findUsersByOrganizationId: jest.fn(),
     }));
 
-    jest.unstable_mockModule('../src/modules/users/users.model.js', () => ({
-      UserModel: { create: mockCreate },
-      UserRole: {
-        SUPER_ADMIN: 'SUPER_ADMIN',
-        ADMIN: 'ADMIN',
-        MANAGER: 'MANAGER',
-        VIEWER: 'VIEWER',
-        CUSTOMER: 'CUSTOMER',
-      },
-    }));
+    jest.unstable_mockModule(
+      '../src/modules/users/users.model.js',
+      () => makeModelMock(mockCreate, jest.fn(), jest.fn()),
+    );
 
     const service = await import('../src/modules/users/users.service.js');
 
@@ -267,21 +257,14 @@ describe('Password hashing — invitation acceptance flow', () => {
     jest.unstable_mockModule('../src/modules/users/users.repo.js', () => ({
       createUser: jest.fn(),
       findUserByEmail: jest.fn<(...args: unknown[]) => Promise<null>>().mockResolvedValue(null),
+      findUserById: jest.fn(),
       findUsersByOrganizationId: jest.fn(),
     }));
 
-    jest.unstable_mockModule('../src/modules/users/users.model.js', () => ({
-      UserModel: {
-        create: jest.fn<(...args: unknown[]) => Promise<ReturnType<typeof makeUserDoc>>>(),
-      },
-      UserRole: {
-        SUPER_ADMIN: 'SUPER_ADMIN',
-        ADMIN: 'ADMIN',
-        MANAGER: 'MANAGER',
-        VIEWER: 'VIEWER',
-        CUSTOMER: 'CUSTOMER',
-      },
-    }));
+    jest.unstable_mockModule(
+      '../src/modules/users/users.model.js',
+      () => makeModelMock(jest.fn(), jest.fn(), jest.fn()),
+    );
 
     const service = await import('../src/modules/users/users.service.js');
 
@@ -313,21 +296,14 @@ describe('Password hashing — team member creation flow', () => {
     jest.unstable_mockModule('../src/modules/users/users.repo.js', () => ({
       createUser: mockCreateUser,
       findUserByEmail: jest.fn<(...args: unknown[]) => Promise<null>>().mockResolvedValue(null),
+      findUserById: jest.fn(),
       findUsersByOrganizationId: jest.fn(),
     }));
 
-    jest.unstable_mockModule('../src/modules/users/users.model.js', () => ({
-      UserModel: {
-        create: jest.fn<(...args: unknown[]) => Promise<ReturnType<typeof makeUserDoc>>>(),
-      },
-      UserRole: {
-        SUPER_ADMIN: 'SUPER_ADMIN',
-        ADMIN: 'ADMIN',
-        MANAGER: 'MANAGER',
-        VIEWER: 'VIEWER',
-        CUSTOMER: 'CUSTOMER',
-      },
-    }));
+    jest.unstable_mockModule(
+      '../src/modules/users/users.model.js',
+      () => makeModelMock(jest.fn(), jest.fn(), jest.fn()),
+    );
 
     const service = await import('../src/modules/users/users.service.js');
 
@@ -360,21 +336,14 @@ describe('Password hashing — team member creation flow', () => {
       findUserByEmail: jest
         .fn<(...args: unknown[]) => Promise<ReturnType<typeof makeUserDoc>>>()
         .mockResolvedValue(makeUserDoc({ email: 'taken@example.com' })),
+      findUserById: jest.fn(),
       findUsersByOrganizationId: jest.fn(),
     }));
 
-    jest.unstable_mockModule('../src/modules/users/users.model.js', () => ({
-      UserModel: {
-        create: jest.fn<(...args: unknown[]) => Promise<ReturnType<typeof makeUserDoc>>>(),
-      },
-      UserRole: {
-        SUPER_ADMIN: 'SUPER_ADMIN',
-        ADMIN: 'ADMIN',
-        MANAGER: 'MANAGER',
-        VIEWER: 'VIEWER',
-        CUSTOMER: 'CUSTOMER',
-      },
-    }));
+    jest.unstable_mockModule(
+      '../src/modules/users/users.model.js',
+      () => makeModelMock(jest.fn(), jest.fn(), jest.fn()),
+    );
 
     const service = await import('../src/modules/users/users.service.js');
 
