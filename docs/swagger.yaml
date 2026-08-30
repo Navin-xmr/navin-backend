@@ -3797,8 +3797,16 @@ paths:
                        $ref: '#/components/schemas/Organization'
          '401':
            description: Unauthorized
+           content:
+             application/json:
+               schema:
+                 $ref: '#/components/schemas/ErrorResponse'
          '403':
            description: Forbidden - not SUPER_ADMIN
+           content:
+             application/json:
+               schema:
+                 $ref: '#/components/schemas/ErrorResponse'
   /api/organizations/{id}:
      get:
        summary: Get organization by ID
@@ -3820,10 +3828,22 @@ paths:
                  $ref: '#/components/schemas/Organization'
          '401':
            description: Unauthorized
+           content:
+             application/json:
+               schema:
+                 $ref: '#/components/schemas/ErrorResponse'
          '403':
            description: Forbidden - insufficient role or cross-org access
+           content:
+             application/json:
+               schema:
+                 $ref: '#/components/schemas/ErrorResponse'
          '404':
            description: Organization not found
+           content:
+             application/json:
+               schema:
+                 $ref: '#/components/schemas/ErrorResponse'
      patch:
        summary: Update organization
        description: Update organization details. ADMIN can update own; SUPER_ADMIN can update any. ADMIN cannot modify type.
@@ -3853,12 +3873,30 @@ paths:
              application/json:
                schema:
                  $ref: '#/components/schemas/Organization'
+         '400':
+           description: Validation error
+           content:
+             application/json:
+               schema:
+                 $ref: '#/components/schemas/ErrorResponse'
          '401':
            description: Unauthorized
+           content:
+             application/json:
+               schema:
+                 $ref: '#/components/schemas/ErrorResponse'
          '403':
            description: Forbidden - insufficient role or cross-org access
+           content:
+             application/json:
+               schema:
+                 $ref: '#/components/schemas/ErrorResponse'
          '404':
            description: Organization not found
+           content:
+             application/json:
+               schema:
+                 $ref: '#/components/schemas/ErrorResponse'
      delete:
        summary: Delete an organization
        description: Soft-delete an organization. Requires SUPER_ADMIN role.
@@ -3886,10 +3924,22 @@ paths:
                      $ref: '#/components/schemas/Organization'
          '401':
            description: Unauthorized
+           content:
+             application/json:
+               schema:
+                 $ref: '#/components/schemas/ErrorResponse'
          '403':
            description: Forbidden - not SUPER_ADMIN
+           content:
+             application/json:
+               schema:
+                 $ref: '#/components/schemas/ErrorResponse'
          '404':
            description: Organization not found
+           content:
+             application/json:
+               schema:
+                 $ref: '#/components/schemas/ErrorResponse'
   /api/shipments/export:
     get:
       summary: Export shipments as CSV or JSON
