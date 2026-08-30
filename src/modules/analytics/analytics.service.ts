@@ -150,7 +150,14 @@ export async function getAnalyticsPerformance(
           },
         ],
         delayedShipments: [
-          { $match: { status: { $ne: 'DELIVERED' } } },
+          // Count only truly overdue shipments: expectedDelivery is set,
+          // it is in the past, and the shipment has not been delivered yet.
+          {
+            $match: {
+              status: { $ne: 'DELIVERED' },
+              expectedDelivery: { $lt: new Date() },
+            },
+          },
           {
             $count: 'totalDelayed',
           },
