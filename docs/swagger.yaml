@@ -1673,6 +1673,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                message: Invalid email or password
+                data: null
+                error:
+                  code: ERR_AUTH_INVALID
         '429':
           description: Too many login attempts
           content:
@@ -1757,6 +1763,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                message: Token has expired or is invalid
+                data: null
+                error:
+                  code: ERR_AUTH_INVALID
   /api/auth/logout:
     post:
       summary: Logout current user
@@ -4142,6 +4154,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                message: Validation failed - limit must be between 1 and 100
+                data: null
+                error:
+                  code: ERR_VALIDATION_FAILED
+                details:
+                  - path: limit
+                    message: limit must be between 1 and 100
+                    code: too_big
     post:
       summary: Create a shipment
       security:
@@ -5142,8 +5164,28 @@ paths:
                         type: string
         '401':
           description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                message: Missing or invalid token
+                data: null
+                error:
+                  code: ERR_AUTH_INVALID
         '403':
           description: Forbidden - insufficient role
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                message: Insufficient permissions
+                data: null
+                error:
+                  code: ERR_PERMISSION_DENIED
   /api/ledger/blocks/{id}:
     get:
       summary: Get a ledger block by ID
@@ -5803,17 +5845,64 @@ components:
         - success
         - message
         - data
+        - error
       properties:
         success:
           type: boolean
           example: false
+          description: Always false for error responses
         message:
           type: string
-          description: Error message describing why the request failed.
+          example: Validation failed
+          description: Human-readable error message describing why the request failed.
         data:
           type: object
           nullable: true
+          example: null
           description: Null payload for error responses.
+        error:
+          type: object
+          required:
+            - code
+          properties:
+            code:
+              type: string
+              example: ERR_VALIDATION_FAILED
+              description: |
+                Machine-readable error code for programmatic handling.
+                See docs/ERROR_CODES.md for the complete registry.
+                Common codes: ERR_AUTH_INVALID, ERR_PERMISSION_DENIED, ERR_NOT_FOUND,
+                ERR_VALIDATION_FAILED, ERR_DUPLICATE_KEY, ERR_INTERNAL_SERVER_ERROR
+          description: Error details container with machine-readable code
+        details:
+          type: array
+          nullable: true
+          description: Optional field-level validation details (present for 400/422 validation errors)
+          items:
+            type: object
+            properties:
+              path:
+                type: string
+                example: email
+                description: JSON path to the field that failed validation
+              message:
+                type: string
+                example: Invalid email format
+                description: Human-readable validation error message
+              code:
+                type: string
+                example: invalid_string
+                description: Zod validation error code (see Zod documentation)
+      example:
+        success: false
+        message: Validation failed - email must be a valid email address
+        data: null
+        error:
+          code: ERR_VALIDATION_FAILED
+        details:
+          - path: email
+            message: Invalid email format
+            code: invalid_string
     CreateShipmentRequest:
       type: object
       required:
