@@ -52,7 +52,35 @@ Soft-delete prevents data loss, retains historical shipping and telemetry logs f
 
 ---
 
-## 3. Database Indexing Strategy
+## 3. Migrations Workflow
+
+Schema migrations are handled by [migrate-mongo](https://www.npmjs.com/package/migrate-mongo) (v11). The setup lives in [`migrate-mongo.config.cjs`](../migrate-mongo.config.cjs): it reads the connection string from `MONGO_URI`, points at the `migrations/` directory, and records applied migrations in the `changelog` collection.
+
+### Available Scripts
+
+| Command                 | Description                                                     |
+| ----------------------- | --------------------------------------------------------------- |
+| `npm run migrate:up`    | Applies all pending migrations in `migrations/`, in name order.  |
+| `npm run migrate:down`  | Rolls back the most recently applied migration.                 |
+| `npm run migrate:status`| Lists each migration with its applied/pending state.            |
+
+### Workflow
+
+1. Add a new file in `migrations/` using the `YYYYMMDDHHmmss-description.js` convention. Each file exports `up(db)` and `down(db)` and operates on raw collection handles.
+2. Inspect the pending set with `npm run migrate:status`.
+3. Apply with `npm run migrate:up`; roll back with `npm run migrate:down` if needed.
+
+> **Note:** Migrations are not wired into the app entrypoint or Docker Compose — they must be run manually or via a one-shot service (see TODO H2.1).
+
+### Current Migrations
+
+| Migration                                 | Purpose                                                                   |
+| ----------------------------------------- | ------------------------------------------------------------------------- |
+| `20240101000000-add-compound-indexes.js`  | Creates compound indexes on `shipments`, `anomalies`, `telemetries`, and `apikeys`, mirroring the schema-level declarations below. |
+
+---
+
+## 4. Database Indexing Strategy
 
 Indexing is critical for high-performance retrieval, especially for real-time telemetry and shipment tracking. We follow these indexing principles:
 
@@ -62,22 +90,32 @@ Indexing is critical for high-performance retrieval, especially for real-time te
 
 ### Key Index Reference:
 
-| Model         | Index Definition                                | Query Pattern Optimized                                                      |
-| ------------- | ----------------------------------------------- | ---------------------------------------------------------------------------- |
-| **Shipment**  | `{ status: 1, createdAt: -1 }`                  | Filtering shipments by current operational status, sorted newest first.      |
-| **Shipment**  | `{ enterpriseId: 1, createdAt: -1 }`            | Customer dashboard filtering for an enterprise shipper, sorted newest first. |
-| **Shipment**  | `{ logisticsId: 1, createdAt: -1 }`             | Carrier dashboard filtering for a logistics provider, sorted newest first.   |
-| **Shipment**  | `{ createdAt: -1, _id: -1 }`                    | Deterministic pagination for general shipment lists.                         |
-| **Shipment**  | `{ origin: 'text', destination: 'text' }`       | Free-text search for origin/destination locations.                           |
-| **Telemetry** | `{ shipmentId: 1, timestamp: -1 }`              | Live telemetry chart rendering for a specific shipment.                      |
-| **Telemetry** | `{ sensorId: 1, shipmentId: 1, timestamp: -1 }` | Querying specific IoT sensor telemetry records for a shipment.               |
-| **Anomaly**   | `{ shipmentId: 1, timestamp: -1, _id: -1 }`     | Listing anomalies for a shipment with deterministic pagination.              |
-| **Anomaly**   | `{ resolved: 1, timestamp: -1, _id: -1 }`       | Unresolved anomaly dashboard views.                                          |
-| **Payment**   | `{ organizationId: 1, createdAt: -1 }`          | Financial ledger and invoicing lists for an organization.                    |
+| Model           | Index Definition                                          | Query Pattern Optimized                                                      |
+| --------------- | --------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| **Shipment**    | `{ status: 1, createdAt: -1 }`                            | Filtering shipments by current operational status, sorted newest first.      |
+| **Shipment**    | `{ enterpriseId: 1, createdAt: -1 }`                      | Customer dashboard filtering for an enterprise shipper, sorted newest first. |
+| **Shipment**    | `{ logisticsId: 1, createdAt: -1 }`                       | Carrier dashboard filtering for a logistics provider, sorted newest first.   |
+| **Shipment**    | `{ createdAt: -1, _id: -1 }`                              | Deterministic pagination for general shipment lists.                         |
+| **Shipment**    | `{ trackingNumber: 'text', origin: 'text', destination: 'text' }` | Free-text search across tracking number and origin/destination locations.    |
+| **Telemetry**   | `{ shipmentId: 1, timestamp: -1 }`                        | Live telemetry chart rendering for a specific shipment.                      |
+| **Telemetry**   | `{ sensorId: 1, shipmentId: 1, timestamp: -1 }`           | Querying specific IoT sensor telemetry records for a shipment.               |
+| **Telemetry**   | `{ anchorStatus: 1 }`                                     | Filtering telemetry by anchoring status in the Stellar anchoring workflow.   |
+| **Anomaly**     | `{ shipmentId: 1, timestamp: -1, _id: -1 }`               | Listing anomalies for a shipment with deterministic pagination.              |
+| **Anomaly**     | `{ resolved: 1, timestamp: -1, _id: -1 }`                 | Unresolved anomaly dashboard views.                                          |
+| **Anomaly**     | `{ severity: 1, timestamp: -1, _id: -1 }`                 | Filtering anomalies by severity, sorted newest first with deterministic pagination. |
+| **Anomaly**     | `{ severity: 1, shipmentId: 1, timestamp: -1, _id: -1 }`  | Filtering anomalies by severity within a shipment (e.g., critical shipment anomalies). |
+| **ApiKey**      | `{ keyHash: 1 }`                                          | Unique lookup by hashed API key during authentication.                       |
+| **ApiKey**      | `{ organizationId: 1 }`                                   | Listing an organization's API keys.                                          |
+| **ApiKey**      | `{ shipmentId: 1 }`                                       | Finding API keys scoped to a specific shipment.                              |
+| **LedgerBlock** | `{ shipmentId: 1, milestoneEvent: 1, createdAt: -1 }`     | Querying ledger blocks for a shipment, newest first.                         |
+| **LedgerBlock** | `{ eventType: 1, createdAt: -1 }`                         | Filtering ledger blocks by event type across shipments.                      |
+| **Payment**     | `{ organizationId: 1, createdAt: -1 }`                    | Financial ledger and invoicing lists for an organization.                    |
+
+> **Planned (K3):** once `dataHash` lands on `LedgerBlock` as part of the event-driven indexer, expect a `{ dataHash: 1 }` index (plus unique constraint) to support verification lookups.
 
 ---
 
-## 4. Schema Conventions & Guardrails
+## 5. Schema Conventions & Guardrails
 
 To prevent NoSQL injections, data corruption, and unauthorized leaks:
 
