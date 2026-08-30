@@ -743,6 +743,197 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /api/company/api-keys:
+    post:
+      summary: Create a new API key
+      description: |
+        Generates a new API key for machine-to-machine authentication.
+        The API key is derived from the caller's organization (taken from JWT claims).
+        The raw API key secret is returned exactly once and should be stored securely.
+        
+        This endpoint replaces the deprecated `/api/auth/api-keys` route.
+      tags:
+        - API Keys
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 200
+                  description: Descriptive name for this API key
+      responses:
+        '201':
+          description: API key created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: API key created successfully
+                  data:
+                    type: object
+                    properties:
+                      _id:
+                        type: string
+                        description: API Key document ID
+                      key:
+                        type: string
+                        description: Base64-encoded API key (shown only once)
+                      secret:
+                        type: string
+                        description: Raw secret key (shown only once)
+                      name:
+                        type: string
+                      organizationId:
+                        type: string
+                      isActive:
+                        type: boolean
+                      createdAt:
+                        type: string
+                        format: date-time
+        '400':
+          description: Validation error - missing or invalid name
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Missing or invalid authorization token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Insufficient permissions - only ADMIN or SUPER_ADMIN can create API keys
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    get:
+      summary: List all active API keys
+      description: |
+        Returns all active API keys for the caller's organization.
+        organizationId is derived from the JWT — no query parameter needed.
+        
+        This endpoint replaces the deprecated `/api/auth/api-keys/{organizationId}` route.
+      tags:
+        - API Keys
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: API keys list retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: API keys retrieved
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        _id:
+                          type: string
+                        name:
+                          type: string
+                        organizationId:
+                          type: string
+                        isActive:
+                          type: boolean
+                        createdAt:
+                          type: string
+                          format: date-time
+                        lastUsedAt:
+                          type: string
+                          format: date-time
+                          nullable: true
+        '401':
+          description: Missing or invalid authorization token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Insufficient permissions - only ADMIN or SUPER_ADMIN can list API keys
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/company/api-keys/{apiKeyId}:
+    delete:
+      summary: Revoke an API key
+      description: |
+        Soft-revokes an API key by setting `isActive = false`.
+        The key cannot be used after revocation, but the record is retained for audit purposes.
+        Only API keys belonging to the caller's organization can be revoked.
+        
+        This endpoint replaces the deprecated `/api/auth/api-keys/{apiKeyId}` route.
+      tags:
+        - API Keys
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: apiKeyId
+          required: true
+          schema:
+            type: string
+          description: MongoDB ObjectId of the API key to revoke
+      responses:
+        '200':
+          description: API key revoked successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: API key revoked
+                  data:
+                    nullable: true
+        '401':
+          description: Missing or invalid authorization token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Insufficient permissions or API key belongs to a different organization
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: API key not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/company/invitations:
     post:
       summary: Create and send invitation
@@ -1497,6 +1688,75 @@ paths:
                     type: integer
                   data:
                     nullable: true
+  /api/auth/refresh:
+    post:
+      summary: Refresh authentication token
+      description: |
+        Refreshes an expired or expiring JWT by providing the old token.
+        The old token's `jti` is blocklisted, preventing reuse.
+        
+        Returns a new JWT valid for 7 days with fresh claims (userId, organizationId, role).
+        Useful for maintaining user sessions without requiring re-login.
+      tags:
+        - Auth
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - token
+              properties:
+                token:
+                  type: string
+                  description: Expired or expiring JWT token to refresh
+      responses:
+        '200':
+          description: Token refreshed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Token refreshed
+                  data:
+                    type: object
+                    properties:
+                      userId:
+                        type: string
+                        description: User ID
+                      email:
+                        type: string
+                        description: User email
+                      token:
+                        type: string
+                        description: New JWT token (valid 7 days from now)
+                      organizationId:
+                        type: string
+                        description: Organization ID from token claims
+                      role:
+                        type: string
+                        enum: [SUPER_ADMIN, ADMIN, MANAGER, VIEWER, DRIVER, CUSTOMER]
+                        description: User role from token claims
+        '400':
+          description: Validation error - missing or invalid token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Token invalid, expired, or already revoked
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/auth/logout:
     post:
       summary: Logout current user
@@ -4594,6 +4854,96 @@ paths:
           description: Forbidden — admin role required
         '422':
           description: Validation error
+  /api/anomalies/stats:
+    get:
+      summary: Get anomaly statistics
+      description: |
+        Returns aggregated anomaly statistics for the organization, including:
+        - Total active (unresolved) anomalies
+        - Total anomalies (all time)
+        - Total resolved anomalies
+        - Breakdown by severity (LOW, MEDIUM, HIGH)
+        - Breakdown by type (TEMPERATURE_EXCEEDED, HUMIDITY_EXCEEDED, etc.)
+        
+        Results are cached for 5 minutes. Requires ADMIN or MANAGER role.
+      tags:
+        - Anomalies
+      security:
+        - bearerAuth: []
+      x-required-role: [ADMIN, MANAGER]
+      responses:
+        '200':
+          description: Anomaly statistics retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Anomaly stats retrieved
+                  data:
+                    type: object
+                    properties:
+                      totalActive:
+                        type: integer
+                        description: Count of unresolved anomalies
+                        example: 12
+                      totalAll:
+                        type: integer
+                        description: Total count of all anomalies (resolved + unresolved)
+                        example: 156
+                      resolved:
+                        type: integer
+                        description: Count of resolved anomalies
+                        example: 144
+                      bySeverity:
+                        type: object
+                        description: Count of active anomalies grouped by severity
+                        properties:
+                          LOW:
+                            type: integer
+                            example: 5
+                          MEDIUM:
+                            type: integer
+                            example: 4
+                          HIGH:
+                            type: integer
+                            example: 3
+                      byType:
+                        type: object
+                        description: Count of active anomalies grouped by type
+                        properties:
+                          TEMPERATURE_EXCEEDED:
+                            type: integer
+                            example: 3
+                          TEMPERATURE_BELOW_MIN:
+                            type: integer
+                            example: 1
+                          HUMIDITY_EXCEEDED:
+                            type: integer
+                            example: 2
+                          HUMIDITY_BELOW_MIN:
+                            type: integer
+                            example: 1
+                          BATTERY_LOW:
+                            type: integer
+                            example: 5
+        '401':
+          description: Missing or invalid authorization token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Insufficient permissions - only ADMIN or MANAGER can view stats
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/anomalies:
     get:
       summary: Get anomalies with pagination and filtering
