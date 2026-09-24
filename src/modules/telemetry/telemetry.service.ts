@@ -182,14 +182,6 @@ export async function getTelemetryService(params: {
 }
 
 /**
- * Returns the hardcoded sensor alert thresholds.
- * @returns {TelemetryThresholds} Threshold constants for temperature, humidity, and battery level.
- */
-export function getTelemetryThresholds(): TelemetryThresholds {
-  return { maxTemp: 85, maxHumidity: 90, minBatteryLevel: 20 };
-}
-
-/**
  * Ingests multiple telemetry items in bulk and schedules downstream processing.
  * @param {BulkTelemetryItem[]} items - List of telemetry payloads to ingest.
  * @returns {Promise<{insertedCount: number; insertedIds: string[]}>} Summary of inserted telemetry documents.

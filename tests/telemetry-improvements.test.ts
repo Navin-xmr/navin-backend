@@ -29,11 +29,12 @@ describe('TelemetrySchema index definitions', () => {
  * Unit tests for getTelemetryThresholds service function.
  * Validates Requirement 2.3.
  */
-describe('getTelemetryThresholds', () => {
-  it('returns the hardcoded threshold object { maxTemp: 85, maxHumidity: 90, minBatteryLevel: 20 }', async () => {
-    const { getTelemetryThresholds } = await import('../src/modules/telemetry/telemetry.service.js');
-    const result = getTelemetryThresholds();
-    expect(result).toEqual({ maxTemp: 85, maxHumidity: 90, minBatteryLevel: 20 });
+describe('getOrgTelemetryThresholdsService', () => {
+  it('returns org-scoped or default threshold values', async () => {
+    const { getOrgTelemetryThresholdsService } = await import('../src/modules/telemetry/telemetryThreshold.service.js');
+    const result = await getOrgTelemetryThresholdsService('671000000000000000000002');
+    expect(result).toHaveProperty('thresholds');
+    expect(result.thresholds.maxTemp).toBeDefined();
   });
 });
 
@@ -454,6 +455,9 @@ describe('POST /api/telemetry/bulk — Socket.io broadcast (example-based)', () 
       emitAnomalyDetected: jest.fn(),
       emitTelemetryUpdate: mockEmitTelemetryUpdate,
       emitStatusUpdate: jest.fn(),
+      emitPaymentStatusChange: jest.fn(),
+      emitNotification: jest.fn(),
+      emitSettlementStatus: jest.fn(),
     }));
 
     await jest.unstable_mockModule('../src/infra/redis/queue.js', () => ({
