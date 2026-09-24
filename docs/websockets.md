@@ -1,7 +1,7 @@
 # Socket.IO Real-Time Events
 
 For the full IoT → BullMQ (`transaction_queue` / `alert_queue`) → Stellar → anomaly detection
-flow that produces `telemetry_update` and `anomaly_detected`, see
+flow that produces `location:update` and `anomaly:detected`, see
 [Telemetry Ingestion Pipeline](./telemetry-pipeline.md).
 
 ## Connection
