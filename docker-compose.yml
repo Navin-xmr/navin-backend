@@ -39,6 +39,29 @@ services:
       retries: 5
       start_period: 5s
 
+  # One-shot schema migrations (see TODO H2.1, docs/DATABASE.md §3).
+  # Runs `migrate:up` to completion before app/workers start; re-runs are a
+  # no-op via the `changelog` collection. Deliberately UNTAGGED (no profiles):
+  # profile-gating a hard startup dependency breaks plain `docker compose up`
+  # on compose versions that don't auto-resolve profiled dependencies, and
+  # `required: false` would silently skip migrations — the drift this prevents.
+  migrate:
+    build: .
+    image: navin-backend:local
+    command: ["npm", "run", "migrate:up"]
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      - MONGO_URI=mongodb://mongo:27017/navin_dev
+    depends_on:
+      mongo:
+        condition: service_healthy
+    # One-shot: no restart policy, no ports, no app healthcheck.
+    # `MONGO_URI` must stay in lock-step with `app`/workers (P4-02 auth change).
+    healthcheck:
+      disable: true
+
   app:
     build: .
     image: navin-backend:local
@@ -60,6 +83,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health"]
@@ -87,6 +112,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     restart: unless-stopped
     # Worker containers do not listen on 3000 — disable the app image's
     # inherited healthcheck (only `app` should probe /api/health).
@@ -112,6 +139,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     restart: unless-stopped
     # Worker containers do not listen on 3000 — disable the app image's
     # inherited healthcheck (only `app` should probe /api/health).

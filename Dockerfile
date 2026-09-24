@@ -46,6 +46,11 @@ COPY docs ./dist/docs
 
 COPY package.json ./
 
+# migrate-mongo runtime for the one-shot `migrate` compose service
+# (`npm run migrate:up` needs the config + migrations dir next to node_modules).
+COPY migrate-mongo.config.cjs ./
+COPY migrations ./migrations
+
 RUN chown -R node:node /app
 
 EXPOSE 3000

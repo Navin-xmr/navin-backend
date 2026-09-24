@@ -70,7 +70,17 @@ Schema migrations are handled by [migrate-mongo](https://www.npmjs.com/package/m
 2. Inspect the pending set with `npm run migrate:status`.
 3. Apply with `npm run migrate:up`; roll back with `npm run migrate:down` if needed.
 
-> **Note:** Migrations are not wired into the app entrypoint or Docker Compose — they must be run manually or via a one-shot service (see TODO H2.1).
+> **Note:** Migrations run automatically in Docker Compose via the one-shot `migrate`
+> service (`docker-compose.yml`): it executes `npm run migrate:up` after `mongo` is
+> healthy, and `app`, `stellar-worker`, and `stellar-indexer` all gate on
+> `service_completed_successfully`. Re-runs are a no-op — `migrate-mongo up` only
+> applies migrations missing from the `changelog` collection — so a fresh-volume boot
+> applies each migration once and container restarts skip it. The service is
+> deliberately untagged (no `profiles`): profile-gating a hard startup dependency
+> breaks plain `docker compose up` on some compose versions. Outside compose, run
+> `npm run migrate:up` manually with `MONGO_URI` set (it must carry credentials once
+> mongo auth lands — see TODO P4-02). The runner image ships `migrations/` and
+> `migrate-mongo.config.cjs` for this purpose (see `Dockerfile`).
 
 ### Current Migrations
 
