@@ -1,10 +1,29 @@
 # Shared runtime env for the API and the BullMQ workers (kept in a single
 # anchor so worker services stay in lock-step with `app`).
 x-worker-env: &worker-env
-  MONGO_URI: mongodb://mongo:27017/navin_dev
-  REDIS_URL: redis://redis:6379
-  JWT_SECRET: ${JWT_SECRET:-dev-secret-key-replace-in-prod-min-32-chars}
-  STELLAR_NETWORK: testnet
+  MONGO_URI: ${MONGO_URI}
+  REDIS_URL: ${REDIS_URL}
+  JWT_SECRET: ${JWT_SECRET}
+  STELLAR_NETWORK: ${STELLAR_NETWORK}
+
+# Common resource limits for all services
+x-resource-limits: &resource-limits
+  deploy:
+    resources:
+      limits:
+        cpus: '1.0'
+        memory: 512M
+      reservations:
+        cpus: '0.25'
+        memory: 128M
+
+# Common logging configuration for all services
+x-logging: &logging
+  logging:
+    driver: json-file
+    options:
+      max-size: '10m'
+      max-file: '3'
 
 services:
   mongo:
@@ -14,12 +33,17 @@ services:
     volumes:
       - mongo_data:/data/db
     restart: unless-stopped
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=${MONGO_INITDB_ROOT_USERNAME}
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_INITDB_ROOT_PASSWORD}
     healthcheck:
       test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 20s
+    <<: *resource-limits
+    <<: *logging
 
   redis:
     image: redis:7-alpine
@@ -32,23 +56,49 @@ services:
       timeout: 5s
       retries: 5
       start_period: 5s
+    <<: *resource-limits
+    <<: *logging
 
   app:
     build: .
     image: navin-backend:local
     ports:
       - "3000:3000"
-    # Optional: copy .env.example to .env and override secrets locally.
-    # Compose does not set NODE_ENV — the image defaults to production (#499).
     env_file:
-      - path: .env
+      - path: .env.docker
         required: false
     environment:
       - PORT=3000
-      - MONGO_URI=mongodb://mongo:27017/navin_dev
-      - REDIS_URL=redis://redis:6379
-      - JWT_SECRET=${JWT_SECRET:-dev-secret-key-replace-in-prod-min-32-chars}
-      - STELLAR_NETWORK=testnet
+      - NODE_ENV=${NODE_ENV:-production}
+      - FRONTEND_URL=${FRONTEND_URL}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS}
+      - CORS_ORIGIN=${CORS_ORIGIN}
+      - SENDGRID_API_KEY=${SENDGRID_API_KEY}
+      - SMTP_FROM=${SMTP_FROM}
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PASS=${SMTP_PASS}
+      - SMTP_PORT=${SMTP_PORT}
+      - SMTP_USER=${SMTP_USER}
+      - S3_ACCESS_KEY=${S3_ACCESS_KEY}
+      - S3_BUCKET=${S3_BUCKET}
+      - S3_ENDPOINT=${S3_ENDPOINT}
+      - S3_REGION=${S3_REGION}
+      - S3_SECRET_KEY=${S3_SECRET_KEY}
+      - STORAGE_PROVIDER=${STORAGE_PROVIDER}
+      - CLOUDINARY_CLOUD_NAME=${CLOUDINARY_CLOUD_NAME}
+      - CLOUDINARY_API_KEY=${CLOUDINARY_API_KEY}
+      - CLOUDINARY_API_SECRET=${CLOUDINARY_API_SECRET}
+      - ESCROW_CONTRACT_ID=${ESCROW_CONTRACT_ID}
+      - SOROBAN_RPC_URL=${SOROBAN_RPC_URL}
+      - TWILIO_FROM=${TWILIO_FROM}
+      - TWILIO_SID=${TWILIO_SID}
+      - TWILIO_TOKEN=${TWILIO_TOKEN}
+      - SENTRY_DSN=${SENTRY_DSN}
+      - LOG_LEVEL=${LOG_LEVEL}
+      - TOTP_ENCRYPTION_KEY=${TOTP_ENCRYPTION_KEY}
+      - STELLAR_SECRET_KEY=${STELLAR_SECRET_KEY}
+      - STELLAR_WEBHOOK_SECRET=${STELLAR_WEBHOOK_SECRET}
+      - HORIZON_URL=${HORIZON_URL}
     depends_on:
       mongo:
         condition: service_healthy
@@ -61,6 +111,8 @@ services:
       timeout: 10s
       retries: 3
       start_period: 15s
+    <<: *resource-limits
+    <<: *logging
 
   # Dedicated Stellar anchor worker (see docs/adr-worker-topology.md).
   # No ports published — communicates with infra over the compose network only.
@@ -69,13 +121,40 @@ services:
     image: navin-backend-worker:local
     command: ["node", "dist/src/workers/stellar.worker.js"]
     env_file:
-      - path: .env
+      - path: .env.docker
         required: false
     environment:
-      - MONGO_URI=mongodb://mongo:27017/navin_dev
-      - REDIS_URL=redis://redis:6379
-      - JWT_SECRET=${JWT_SECRET:-dev-secret-key-replace-in-prod-min-32-chars}
-      - STELLAR_NETWORK=testnet
+      - NODE_ENV=${NODE_ENV:-production}
+      - FRONTEND_URL=${FRONTEND_URL}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS}
+      - CORS_ORIGIN=${CORS_ORIGIN}
+      - SENDGRID_API_KEY=${SENDGRID_API_KEY}
+      - SMTP_FROM=${SMTP_FROM}
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PASS=${SMTP_PASS}
+      - SMTP_PORT=${SMTP_PORT}
+      - SMTP_USER=${SMTP_USER}
+      - S3_ACCESS_KEY=${S3_ACCESS_KEY}
+      - S3_BUCKET=${S3_BUCKET}
+      - S3_ENDPOINT=${S3_ENDPOINT}
+      - S3_REGION=${S3_REGION}
+      - S3_SECRET_KEY=${S3_SECRET_KEY}
+      - STORAGE_PROVIDER=${STORAGE_PROVIDER}
+      - CLOUDINARY_CLOUD_NAME=${CLOUDINARY_CLOUD_NAME}
+      - CLOUDINARY_API_KEY=${CLOUDINARY_API_KEY}
+      - CLOUDINARY_API_SECRET=${CLOUDINARY_API_SECRET}
+      - ESCROW_CONTRACT_ID=${ESCROW_CONTRACT_ID}
+      - SOROBAN_RPC_URL=${SOROBAN_RPC_URL}
+      - TWILIO_FROM=${TWILIO_FROM}
+      - TWILIO_SID=${TWILIO_SID}
+      - TWILIO_TOKEN=${TWILIO_TOKEN}
+      - SENTRY_DSN=${SENTRY_DSN}
+      - LOG_LEVEL=${LOG_LEVEL}
+      - TOTP_ENCRYPTION_KEY=${TOTP_ENCRYPTION_KEY}
+      - STELLAR_SECRET_KEY=${STELLAR_SECRET_KEY}
+      - STELLAR_WEBHOOK_SECRET=${STELLAR_WEBHOOK_SECRET}
+      - HORIZON_URL=${HORIZON_URL}
+      <<: *worker-env
     depends_on:
       mongo:
         condition: service_healthy
@@ -86,6 +165,8 @@ services:
     # inherited healthcheck (only `app` should probe /api/health).
     healthcheck:
       disable: true
+    <<: *resource-limits
+    <<: *logging
 
   # Dedicated Stellar confirmation indexer worker (see docs/adr-worker-topology.md).
   # No ports published — communicates with infra over the compose network only.
@@ -94,13 +175,40 @@ services:
     image: navin-backend-indexer:local
     command: ["node", "dist/src/workers/stellar-indexer.worker.js"]
     env_file:
-      - path: .env
+      - path: .env.docker
         required: false
     environment:
-      - MONGO_URI=mongodb://mongo:27017/navin_dev
-      - REDIS_URL=redis://redis:6379
-      - JWT_SECRET=${JWT_SECRET:-dev-secret-key-replace-in-prod-min-32-chars}
-      - STELLAR_NETWORK=testnet
+      - NODE_ENV=${NODE_ENV:-production}
+      - FRONTEND_URL=${FRONTEND_URL}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS}
+      - CORS_ORIGIN=${CORS_ORIGIN}
+      - SENDGRID_API_KEY=${SENDGRID_API_KEY}
+      - SMTP_FROM=${SMTP_FROM}
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PASS=${SMTP_PASS}
+      - SMTP_PORT=${SMTP_PORT}
+      - SMTP_USER=${SMTP_USER}
+      - S3_ACCESS_KEY=${S3_ACCESS_KEY}
+      - S3_BUCKET=${S3_BUCKET}
+      - S3_ENDPOINT=${S3_ENDPOINT}
+      - S3_REGION=${S3_REGION}
+      - S3_SECRET_KEY=${S3_SECRET_KEY}
+      - STORAGE_PROVIDER=${STORAGE_PROVIDER}
+      - CLOUDINARY_CLOUD_NAME=${CLOUDINARY_CLOUD_NAME}
+      - CLOUDINARY_API_KEY=${CLOUDINARY_API_KEY}
+      - CLOUDINARY_API_SECRET=${CLOUDINARY_API_SECRET}
+      - ESCROW_CONTRACT_ID=${ESCROW_CONTRACT_ID}
+      - SOROBAN_RPC_URL=${SOROBAN_RPC_URL}
+      - TWILIO_FROM=${TWILIO_FROM}
+      - TWILIO_SID=${TWILIO_SID}
+      - TWILIO_TOKEN=${TWILIO_TOKEN}
+      - SENTRY_DSN=${SENTRY_DSN}
+      - LOG_LEVEL=${LOG_LEVEL}
+      - TOTP_ENCRYPTION_KEY=${TOTP_ENCRYPTION_KEY}
+      - STELLAR_SECRET_KEY=${STELLAR_SECRET_KEY}
+      - STELLAR_WEBHOOK_SECRET=${STELLAR_WEBHOOK_SECRET}
+      - HORIZON_URL=${HORIZON_URL}
+      <<: *worker-env
     depends_on:
       mongo:
         condition: service_healthy
@@ -111,6 +219,8 @@ services:
     # inherited healthcheck (only `app` should probe /api/health).
     healthcheck:
       disable: true
+    <<: *resource-limits
+    <<: *logging
 
 volumes:
   mongo_data:

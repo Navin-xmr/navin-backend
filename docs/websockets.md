@@ -1,7 +1,7 @@
 # Socket.IO Real-Time Events
 
 For the full IoT → BullMQ (`transaction_queue` / `alert_queue`) → Stellar → anomaly detection
-flow that produces `telemetry_update` and `anomaly_detected`, see
+flow that produces `location:update` and `anomaly:detected`, see
 [Telemetry Ingestion Pipeline](./telemetry-pipeline.md).
 
 ## Connection
@@ -18,19 +18,19 @@ import { io } from 'socket.io-client';
 const socket = io('https://api.navin.local', {
   transports: ['websocket'],
   auth: {
-    token: 'Bearer eyJhbGciOiJI...'
+    token: 'eyJhbGciOiJI...' // raw JWT, no "Bearer " prefix
   },
 });
 ```
 
-- The server uses `src/infra/socket/io.ts` and `src/shared/middleware/socketAuth.js`.
+- The server uses `src/infra/socket/io.ts` and `src/shared/middleware/socketAuth.ts`.
 - Valid JWTs are required to establish a connection and are attached to `socket.user`.
 - Once connected, the server maintains an active socket registry and automatically cleans up rooms and state on `disconnecting` / `disconnect`.
 
 ## Authentication and handshake
 
 1. Client connects to the Socket.IO endpoint.
-2. The client includes an `auth.token` field containing the bearer JWT.
+2. The client includes an `auth.token` field containing the **raw JWT** (no `Bearer ` prefix).
 3. `socketAuth` validates the token, populates `socket.user`, and allows the connection.
 4. If authentication fails, the socket connection is rejected.
 
@@ -54,6 +54,10 @@ socket.on('room_left', payload => {
   console.log('Left shipment room', payload);
 });
 ```
+
+> **Note:** There is no `join_notification` or equivalent event. `notification:new` is
+> emitted directly to a recipient-scoped room (`userId` or `organizationId`) by the
+> server; the client does not join that room explicitly.
 
 ## Events emitted by the server
 
@@ -112,7 +116,16 @@ Payload schema:
 ```ts
 interface StatusUpdatePayload {
   shipmentId: string;
-  status: 'CREATED' | 'IN_TRANSIT' | 'DELIVERED' | 'CANCELLED';
+  status:
+    | 'CREATED'
+    | 'PICKUP_CONFIRMED'
+    | 'IN_TRANSIT'
+    | 'CUSTOMS_CLEARED'
+    | 'OUT_FOR_DELIVERY'
+    | 'DELIVERED'
+    | 'SETTLEMENT_INITIATED'
+    | 'SETTLEMENT_COMPLETED'
+    | 'CANCELLED';
   milestones?: Array<{
     name: string;
     timestamp: string | Date;
@@ -162,7 +175,7 @@ Example:
 
 Emitted directly to a user or organisation room (not a shipment room). Use this event for user-scoped notifications such as anomaly alerts, milestone updates, and system messages.
 
-The emitter `emitNotificationNew(recipientId, payload)` in `src/infra/socket/io.ts` targets the room keyed by `recipientId` (a userId or organizationId). Clients must join that room explicitly.
+The emitter `emitNotificationNew(recipientId, payload)` in `src/infra/socket/io.ts` targets the room keyed by `recipientId` (a userId or organizationId). Clients **do not** join this room explicitly; the server manages membership.
 
 Payload schema:
 
@@ -224,6 +237,14 @@ Payload example:
 - The server listens on `disconnecting` and logs room state for cleanup.
 - It also removes the socket from the active user registry on `disconnect`.
 - Clients should call `socket.disconnect()` when leaving the app or swapping contexts.
+
+## SSE fan-out
+
+Every Socket.IO emit listed above is also fanned out to Server-Sent Events (SSE) clients
+via `safeFanout` in `src/infra/sse/fanout.ts`. The SSE stream at `GET /api/events`
+receives identical payloads for `location:update`, `anomaly:detected`,
+`shipment:status`, and `settlement:status`. This ensures parity between WebSocket
+and SSE consumers without duplicating business logic.
 
 ## Notes
 
