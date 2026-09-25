@@ -125,7 +125,7 @@ Tests use `jest.unstable_mockModule()`; merged source now imports symbols the mo
 
 ### H2. P1 — Production readiness
 
-- [ ] **H2.1. Migrations never run** — `migrate:mongo up` isn't wired into any entrypoint or one-shot compose service (migrations/ currently holds one compound-index migration)
+- [x] **H2.1. Migrations never run** — wired: untagged one-shot `migrate` compose service runs `migrate:up` after mongo healthy; app + both workers gate on `service_completed_successfully`; runner image ships `migrations/` + config (changelog-gated no-op on re-run; untagged deliberately — profile-gating a hard dep breaks plain `up` on some compose versions)
 - [ ] **H2.2. Worker topology undefined** — package.json ships `worker:stellar` / `worker:stellar-indexer` entry points but neither main.ts nor compose runs them, while main.ts starts alert+maintenance BullMQ workers *in-process*. Decide: dedicated worker services vs documented single-process mode
 - [ ] **H2.3. Secret/config management** — only 6 of ~40 env vars settable; secrets inline in repo compose file. Adopt `env_file:` (.env.docker pattern, gitignored) or compose secrets
 - [ ] **H2.4. Redis durability** — no persistent volume for redis → BullMQ queue jobs lost on restart. Add `appendonly` + volume or document ephemerality
