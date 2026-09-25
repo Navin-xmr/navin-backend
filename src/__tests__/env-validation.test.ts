@@ -106,4 +106,44 @@ describe('env validation', () => {
     const { code } = await runWithEnv({ HORIZON_URL: 'not-a-url' });
     expect(code).not.toBe(0);
   });
+
+  describe('SOROBAN_ADAPTER validation', () => {
+    it('defaults to simulated and succeeds without Soroban vars', async () => {
+      const { code } = await runWithEnv({ SOROBAN_ADAPTER: 'simulated' });
+      expect(code).toBe(0);
+    });
+
+    it('rejects an invalid SOROBAN_ADAPTER value', async () => {
+      const { code, output } = await runWithEnv({ SOROBAN_ADAPTER: 'invalid-adapter' });
+      expect(code).not.toBe(0);
+      expect(output).toContain('SOROBAN_ADAPTER');
+    });
+
+    it('fails when SOROBAN_ADAPTER=soroban but SOROBAN_RPC_URL is missing', async () => {
+      const { code, output } = await runWithEnv({
+        SOROBAN_ADAPTER: 'soroban',
+        ESCROW_CONTRACT_ID: 'CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2B',
+      });
+      expect(code).not.toBe(0);
+      expect(output).toContain('SOROBAN_RPC_URL is required when SOROBAN_ADAPTER is "soroban"');
+    });
+
+    it('fails when SOROBAN_ADAPTER=soroban but ESCROW_CONTRACT_ID is missing', async () => {
+      const { code, output } = await runWithEnv({
+        SOROBAN_ADAPTER: 'soroban',
+        SOROBAN_RPC_URL: 'https://soroban-testnet.stellar.org',
+      });
+      expect(code).not.toBe(0);
+      expect(output).toContain('ESCROW_CONTRACT_ID is required when SOROBAN_ADAPTER is "soroban"');
+    });
+
+    it('succeeds when SOROBAN_ADAPTER=soroban and both RPC URL and contract ID are provided', async () => {
+      const { code } = await runWithEnv({
+        SOROBAN_ADAPTER: 'soroban',
+        SOROBAN_RPC_URL: 'https://soroban-testnet.stellar.org',
+        ESCROW_CONTRACT_ID: 'CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2B',
+      });
+      expect(code).toBe(0);
+    });
+  });
 });
