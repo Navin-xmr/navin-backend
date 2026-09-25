@@ -72,16 +72,16 @@
   <p class="sub">
     Diff of <code>docs/swagger.yaml</code> paths vs Express mounts in <code>src/app.ts</code>
     and handlers in <code>src/modules/**/*.routes.ts</code>.
-    Generated <time datetime="2026-07-26T17:58:15.418Z">2026-07-26T17:58:15.418Z</time>.
+    Generated <time datetime="2026-09-25T20:13:21.752Z">2026-09-25T20:13:21.752Z</time>.
     Re-run with <code>node reports/generate-coverage.js</code>.
   </p>
 
   <div class="cards">
-    <div class="card"><strong>67</strong><span>total operations</span></div>
-    <div class="card"><strong>54</strong><span>aligned</span></div>
-    <div class="card"><strong>13</strong><span>drift</span></div>
-    <div class="card"><strong>1</strong><span>swagger-only</span></div>
-    <div class="card"><strong>12</strong><span>code-only</span></div>
+    <div class="card"><strong>102</strong><span>total operations</span></div>
+    <div class="card"><strong>92</strong><span>aligned</span></div>
+    <div class="card"><strong>10</strong><span>drift</span></div>
+    <div class="card"><strong>3</strong><span>swagger-only</span></div>
+    <div class="card"><strong>7</strong><span>code-only</span></div>
   </div>
 
   <table>
@@ -97,7 +97,49 @@
     <tbody>
 <tr class="ok">
   <td><code>DELETE</code></td>
+  <td><code>/api/auth/2fa</code></td>
+  <td class="yes">yes</td>
+  <td class="yes">yes</td>
+  <td><span class="badge aligned">aligned</span></td>
+</tr>
+<tr class="drift">
+  <td><code>DELETE</code></td>
   <td><code>/api/auth/api-keys/{apiKeyId}</code></td>
+  <td class="no">no</td>
+  <td class="yes">yes</td>
+  <td><span class="badge code-only">code-only</span></td>
+</tr>
+<tr class="drift">
+  <td><code>DELETE</code></td>
+  <td><code>/api/auth/api-keys/{id}</code></td>
+  <td class="yes">yes</td>
+  <td class="no">no</td>
+  <td><span class="badge swagger-only">swagger-only</span></td>
+</tr>
+<tr class="ok">
+  <td><code>DELETE</code></td>
+  <td><code>/api/auth/sessions/{jti}</code></td>
+  <td class="yes">yes</td>
+  <td class="yes">yes</td>
+  <td><span class="badge aligned">aligned</span></td>
+</tr>
+<tr class="ok">
+  <td><code>DELETE</code></td>
+  <td><code>/api/company/api-keys/{apiKeyId}</code></td>
+  <td class="yes">yes</td>
+  <td class="yes">yes</td>
+  <td><span class="badge aligned">aligned</span></td>
+</tr>
+<tr class="ok">
+  <td><code>DELETE</code></td>
+  <td><code>/api/company/invitations/{id}</code></td>
+  <td class="yes">yes</td>
+  <td class="yes">yes</td>
+  <td><span class="badge aligned">aligned</span></td>
+</tr>
+<tr class="ok">
+  <td><code>DELETE</code></td>
+  <td><code>/api/notifications/{id}</code></td>
   <td class="yes">yes</td>
   <td class="yes">yes</td>
   <td><span class="badge aligned">aligned</span></td>
@@ -125,7 +167,21 @@
 </tr>
 <tr class="ok">
   <td><code>DELETE</code></td>
+  <td><code>/api/users/me</code></td>
+  <td class="yes">yes</td>
+  <td class="yes">yes</td>
+  <td><span class="badge aligned">aligned</span></td>
+</tr>
+<tr class="ok">
+  <td><code>DELETE</code></td>
   <td><code>/api/users/{id}</code></td>
+  <td class="yes">yes</td>
+  <td class="yes">yes</td>
+  <td><span class="badge aligned">aligned</span></td>
+</tr>
+<tr class="ok">
+  <td><code>GET</code></td>
+  <td><code>/api/activity</code></td>
   <td class="yes">yes</td>
   <td class="yes">yes</td>
   <td><span class="badge aligned">aligned</span></td>
@@ -139,17 +195,24 @@
 </tr>
 <tr class="ok">
   <td><code>GET</code></td>
+  <td><code>/api/analytics/summary</code></td>
+  <td class="yes">yes</td>
+  <td class="yes">yes</td>
+  <td><span class="badge aligned">aligned</span></td>
+</tr>
+<tr class="ok">
+  <td><code>GET</code></td>
   <td><code>/api/anomalies</code></td>
   <td class="yes">yes</td>
   <td class="yes">yes</td>
   <td><span class="badge aligned">aligned</span></td>
 </tr>
-<tr class="drift">
+<tr class="ok">
   <td><code>GET</code></td>
   <td><code>/api/anomalies/stats</code></td>
-  <td class="no">no</td>
   <td class="yes">yes</td>
-  <td><span class="badge code-only">code-only</span></td>
+  <td class="yes">yes</td>
+  <td><span class="badge aligned">aligned</span></td>
 </tr>
 <tr class="ok">
   <td><code>GET</code></td>
@@ -158,9 +221,58 @@
   <td class="yes">yes</td>
   <td><span class="badge aligned">aligned</span></td>
 </tr>
-<tr class="ok">
+<tr class="drift">
+  <td><code>GET</code></td>
+  <td><code>/api/auth/api-keys/{id}</code></td>
+  <td class="yes">yes</td>
+  <td class="no">no</td>
+  <td><span class="badge swagger-only">swagger-only</span></td>
+</tr>
+<tr class="drift">
   <td><code>GET</code></td>
   <td><code>/api/auth/api-keys/{organizationId}</code></td>
+  <td class="no">no</td>
+  <td class="yes">yes</td>
+  <td><span class="badge code-only">code-only</span></td>
+</tr>
+<tr class="ok">
+  <td><code>GET</code></td>
+  <td><code>/api/auth/sessions</code></td>
+  <td class="yes">yes</td>
+  <td class="yes">yes</td>
+  <td><span class="badge aligned">aligned</span></td>
+</tr>
+<tr class="ok">
+  <td><code>GET</code></td>
+  <td><code>/api/company/api-keys</code></td>
+  <td class="yes">yes</td>
+  <td class="yes">yes</td>
+  <td><span class="badge aligned">aligned</span></td>
+</tr>
+<tr class="ok">
+  <td><code>GET</code></td>
+  <td><code>/api/company/invitations</code></td>
+  <td class="yes">yes</td>
+  <td class="yes">yes</td>
+  <td><span class="badge aligned">aligned</span></td>
+</tr>
+<tr class="ok">
+  <td><code>GET</code></td>
+  <td><code>/api/company/invitations/info</code></td>
+  <td class="yes">yes</td>
+  <td class="yes">yes</td>
+  <td><span class="badge aligned">aligned</span></td>
+</tr>
+<tr class="ok">
+  <td><code>GET</code></td>
+  <td><code>/api/events</code></td>
+  <td class="yes">yes</td>
+  <td class="yes">yes</td>
+  <td><span class="badge aligned">aligned</span></td>
+</tr>
+<tr class="ok">
+  <td><code>GET</code></td>
+  <td><code>/api/events/poll</code></td>
   <td class="yes">yes</td>
   <td class="yes">yes</td>
   <td><span class="badge aligned">aligned</span></td>
@@ -182,6 +294,27 @@
 <tr class="ok">
   <td><code>GET</code></td>
   <td><code>/api/ledger/blocks/{id}</code></td>
+  <td class="yes">yes</td>
+  <td class="yes">yes</td>
+  <td><span class="badge aligned">aligned</span></td>
+</tr>
+<tr class="ok">
+  <td><code>GET</code></td>
+  <td><code>/api/notifications</code></td>
+  <td class="yes">yes</td>
+  <td class="yes">yes</td>
+  <td><span class="badge aligned">aligned</span></td>
+</tr>
+<tr class="ok">
+  <td><code>GET</code></td>
+  <td><code>/api/notifications/preferences</code></td>
+  <td class="yes">yes</td>
+  <td class="yes">yes</td>
+  <td><span class="badge aligned">aligned</span></td>
+</tr>
+<tr class="ok">
+  <td><code>GET</code></td>
+  <td><code>/api/notifications/unread-count</code></td>
   <td class="yes">yes</td>
   <td class="yes">yes</td>
   <td><span class="badge aligned">aligned</span></td>
@@ -214,12 +347,19 @@
   <td class="yes">yes</td>
   <td><span class="badge code-only">code-only</span></td>
 </tr>
-<tr class="drift">
+<tr class="ok">
   <td><code>GET</code></td>
   <td><code>/api/payments/{id}</code></td>
-  <td class="no">no</td>
   <td class="yes">yes</td>
-  <td><span class="badge code-only">code-only</span></td>
+  <td class="yes">yes</td>
+  <td><span class="badge aligned">aligned</span></td>
+</tr>
+<tr class="drift">
+  <td><code>GET</code></td>
+  <td><code>/api/public/tracking/{trackingNumber}</code></td>
+  <td class="yes">yes</td>
+  <td class="no">no</td>
+  <td><span class="badge swagger-only">swagger-only</span></td>
 </tr>
 <tr class="ok">
   <td><code>GET</code></td>
@@ -263,12 +403,12 @@
   <td class="yes">yes</td>
   <td><span class="badge aligned">aligned</span></td>
 </tr>
-<tr class="drift">
+<tr class="ok">
   <td><code>GET</code></td>
   <td><code>/api/shipments/export</code></td>
-  <td class="no">no</td>
   <td class="yes">yes</td>
-  <td><span class="badge code-only">code-only</span></td>
+  <td class="yes">yes</td>
+  <td><span class="badge aligned">aligned</span></td>
 </tr>
 <tr class="ok">
   <td><code>GET</code></td>
@@ -335,17 +475,38 @@
 </tr>
 <tr class="ok">
   <td><code>PATCH</code></td>
+  <td><code>/api/auth/password</code></td>
+  <td class="yes">yes</td>
+  <td class="yes">yes</td>
+  <td><span class="badge aligned">aligned</span></td>
+</tr>
+<tr class="ok">
+  <td><code>PATCH</code></td>
+  <td><code>/api/notifications/preferences</code></td>
+  <td class="yes">yes</td>
+  <td class="yes">yes</td>
+  <td><span class="badge aligned">aligned</span></td>
+</tr>
+<tr class="ok">
+  <td><code>PATCH</code></td>
+  <td><code>/api/notifications/{id}/read</code></td>
+  <td class="yes">yes</td>
+  <td class="yes">yes</td>
+  <td><span class="badge aligned">aligned</span></td>
+</tr>
+<tr class="ok">
+  <td><code>PATCH</code></td>
   <td><code>/api/organizations/{id}</code></td>
   <td class="yes">yes</td>
   <td class="yes">yes</td>
   <td><span class="badge aligned">aligned</span></td>
 </tr>
-<tr class="drift">
+<tr class="ok">
   <td><code>PATCH</code></td>
   <td><code>/api/payments/{id}/status</code></td>
-  <td class="no">no</td>
   <td class="yes">yes</td>
-  <td><span class="badge code-only">code-only</span></td>
+  <td class="yes">yes</td>
+  <td><span class="badge aligned">aligned</span></td>
 </tr>
 <tr class="drift">
   <td><code>PATCH</code></td>
@@ -361,12 +522,12 @@
   <td class="yes">yes</td>
   <td><span class="badge aligned">aligned</span></td>
 </tr>
-<tr class="drift">
+<tr class="ok">
   <td><code>PATCH</code></td>
   <td><code>/api/shipments/bulk/status</code></td>
   <td class="yes">yes</td>
-  <td class="no">no</td>
-  <td><span class="badge swagger-only">swagger-only</span></td>
+  <td class="yes">yes</td>
+  <td><span class="badge aligned">aligned</span></td>
 </tr>
 <tr class="ok">
   <td><code>PATCH</code></td>
@@ -378,6 +539,34 @@
 <tr class="ok">
   <td><code>PATCH</code></td>
   <td><code>/api/shipments/{id}/status</code></td>
+  <td class="yes">yes</td>
+  <td class="yes">yes</td>
+  <td><span class="badge aligned">aligned</span></td>
+</tr>
+<tr class="ok">
+  <td><code>PATCH</code></td>
+  <td><code>/api/users/me</code></td>
+  <td class="yes">yes</td>
+  <td class="yes">yes</td>
+  <td><span class="badge aligned">aligned</span></td>
+</tr>
+<tr class="ok">
+  <td><code>POST</code></td>
+  <td><code>/api/auth/2fa/backup-codes/regenerate</code></td>
+  <td class="yes">yes</td>
+  <td class="yes">yes</td>
+  <td><span class="badge aligned">aligned</span></td>
+</tr>
+<tr class="ok">
+  <td><code>POST</code></td>
+  <td><code>/api/auth/2fa/setup</code></td>
+  <td class="yes">yes</td>
+  <td class="yes">yes</td>
+  <td><span class="badge aligned">aligned</span></td>
+</tr>
+<tr class="ok">
+  <td><code>POST</code></td>
+  <td><code>/api/auth/2fa/verify</code></td>
   <td class="yes">yes</td>
   <td class="yes">yes</td>
   <td><span class="badge aligned">aligned</span></td>
@@ -410,12 +599,19 @@
   <td class="yes">yes</td>
   <td><span class="badge aligned">aligned</span></td>
 </tr>
-<tr class="drift">
+<tr class="ok">
   <td><code>POST</code></td>
   <td><code>/api/auth/refresh</code></td>
-  <td class="no">no</td>
   <td class="yes">yes</td>
-  <td><span class="badge code-only">code-only</span></td>
+  <td class="yes">yes</td>
+  <td><span class="badge aligned">aligned</span></td>
+</tr>
+<tr class="ok">
+  <td><code>POST</code></td>
+  <td><code>/api/auth/register/company</code></td>
+  <td class="yes">yes</td>
+  <td class="yes">yes</td>
+  <td><span class="badge aligned">aligned</span></td>
 </tr>
 <tr class="drift">
   <td><code>POST</code></td>
@@ -433,17 +629,66 @@
 </tr>
 <tr class="ok">
   <td><code>POST</code></td>
+  <td><code>/api/company/api-keys</code></td>
+  <td class="yes">yes</td>
+  <td class="yes">yes</td>
+  <td><span class="badge aligned">aligned</span></td>
+</tr>
+<tr class="ok">
+  <td><code>POST</code></td>
+  <td><code>/api/company/invitations</code></td>
+  <td class="yes">yes</td>
+  <td class="yes">yes</td>
+  <td><span class="badge aligned">aligned</span></td>
+</tr>
+<tr class="ok">
+  <td><code>POST</code></td>
+  <td><code>/api/company/invitations/accept</code></td>
+  <td class="yes">yes</td>
+  <td class="yes">yes</td>
+  <td><span class="badge aligned">aligned</span></td>
+</tr>
+<tr class="ok">
+  <td><code>POST</code></td>
+  <td><code>/api/company/invitations/{id}/resend</code></td>
+  <td class="yes">yes</td>
+  <td class="yes">yes</td>
+  <td><span class="badge aligned">aligned</span></td>
+</tr>
+<tr class="ok">
+  <td><code>POST</code></td>
+  <td><code>/api/notifications/phone/send-otp</code></td>
+  <td class="yes">yes</td>
+  <td class="yes">yes</td>
+  <td><span class="badge aligned">aligned</span></td>
+</tr>
+<tr class="ok">
+  <td><code>POST</code></td>
+  <td><code>/api/notifications/phone/verify-otp</code></td>
+  <td class="yes">yes</td>
+  <td class="yes">yes</td>
+  <td><span class="badge aligned">aligned</span></td>
+</tr>
+<tr class="ok">
+  <td><code>POST</code></td>
+  <td><code>/api/notifications/read-all</code></td>
+  <td class="yes">yes</td>
+  <td class="yes">yes</td>
+  <td><span class="badge aligned">aligned</span></td>
+</tr>
+<tr class="ok">
+  <td><code>POST</code></td>
   <td><code>/api/organizations</code></td>
   <td class="yes">yes</td>
   <td class="yes">yes</td>
   <td><span class="badge aligned">aligned</span></td>
 </tr>
-<tr class="drift">
+<tr class="ok">
   <td><code>POST</code></td>
   <td><code>/api/payments</code></td>
-  <td class="no">no</td>
   <td class="yes">yes</td>
-  <td><span class="badge code-only">code-only</span></td>
+  <td class="yes">yes</td>
+  <td><span class="badge aligned">aligned</span></td>
 </tr>
 <tr class="drift">
   <td><code>POST</code></td>
@@ -508,12 +753,12 @@
   <td class="yes">yes</td>
   <td><span class="badge aligned">aligned</span></td>
 </tr>
-<tr class="drift">
+<tr class="ok">
   <td><code>POST</code></td>
   <td><code>/api/telemetry/bulk</code></td>
-  <td class="no">no</td>
   <td class="yes">yes</td>
-  <td><span class="badge code-only">code-only</span></td>
+  <td class="yes">yes</td>
+  <td><span class="badge aligned">aligned</span></td>
 </tr>
 <tr class="ok">
   <td><code>POST</code></td>
@@ -570,7 +815,7 @@
   <section>
     <h2>Unmounted routers</h2>
     <p class="muted">Route modules that define handlers but are not wired via <code>app.use</code> in <code>src/app.ts</code>.</p>
-    <ul><li><code>GET /api/ledger/blocks</code> — Router ledgerRouter is defined but not mounted in src/app.ts (<code>src/modules/ledger/ledger.routes.ts</code>)</li><li><code>GET /api/ledger/blocks/{id}</code> — Router ledgerRouter is defined but not mounted in src/app.ts (<code>src/modules/ledger/ledger.routes.ts</code>)</li></ul>
+    <p class="muted">No unmounted routers detected.</p>
   </section>
 
   <section>
