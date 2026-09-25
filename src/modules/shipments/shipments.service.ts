@@ -609,9 +609,12 @@ export const updateShipmentStatusService = async (
     await createLedgerBlockService({
       shipmentId: id,
       eventType: status as unknown as MilestoneEvent,
-      transactionHash: shipment.stellarTxHash ?? undefined,
+      // No transactionHash: this block records a status change, and the only
+      // hash the shipment carries is the tokenisation tx from creation. Citing
+      // it here pointed every milestone at one unrelated transaction, so the
+      // block is explicitly marked as not anchored instead (issue #663).
       actor: actor?.userId,
-      metadata: { previousStatus },
+      metadata: { previousStatus, simulated: true },
     });
   } catch (ledgerErr) {
     logger.warn(
@@ -911,10 +914,12 @@ export const uploadShipmentProofService = async (
       shipmentId: id,
       milestoneEvent: MilestoneEvent.PROOF_SUBMITTED,
       shipmentReference: shipment?.trackingNumber,
-      transactionHash: shipment?.stellarTxHash ?? undefined,
+      // Same as the status blocks above: the creation-time hash is not this
+      // event's transaction, so it is not cited (issue #663).
       metadata: {
         proofUrl,
         recipientSignatureName: proof.recipientSignatureName,
+        simulated: true,
       },
     });
   } catch (ledgerErr) {

@@ -107,6 +107,9 @@ describe('Ledger block creation on lifecycle events', () => {
       _id: 'ship-1',
       status: 'CREATED',
       milestones: [],
+      // The shipment carries the tokenisation tx from creation; the status block
+      // must not cite it (issue #663).
+      stellarTxHash: 'tx-creation-abc',
       updatedAt: now,
       save: mockSave.mockImplementation(async function (this: Record<string, unknown>) {
         this.status = 'IN_TRANSIT';
@@ -133,6 +136,13 @@ describe('Ledger block creation on lifecycle events', () => {
         actor: 'user-1',
       })
     );
+
+    // ...and it does not cite the creation-time tokenisation tx, and says so.
+    const statusBlock = createLedgerBlockMock.mock.calls.at(-1)?.[0] as
+      | Record<string, unknown>
+      | undefined;
+    expect(statusBlock?.transactionHash).toBeUndefined();
+    expect(statusBlock?.metadata).toEqual(expect.objectContaining({ simulated: true }));
   });
 
   it('proof upload creates a PROOF_SUBMITTED ledger block', async () => {
@@ -154,6 +164,15 @@ describe('Ledger block creation on lifecycle events', () => {
         milestoneEvent: 'PROOF_SUBMITTED',
       })
     );
+
+    // The fixture above deliberately has `stellarTxHash: 'tx123'`; the block must
+    // still not cite it, because that hash belongs to tokenisation, not to this
+    // upload (issue #663).
+    const proofBlock = createLedgerBlockMock.mock.calls.at(-1)?.[0] as
+      | Record<string, unknown>
+      | undefined;
+    expect(proofBlock?.transactionHash).toBeUndefined();
+    expect(proofBlock?.metadata).toEqual(expect.objectContaining({ simulated: true }));
   });
 
   it('settlement initiation creates a SETTLEMENT_INITIATED ledger block', async () => {
