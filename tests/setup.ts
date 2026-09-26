@@ -20,24 +20,13 @@ let mongoServer: MongoMemoryServer | null = null;
 let mongoReady = false;
 
 beforeAll(async () => {
-  await jest.unstable_mockModule('../src/infra/redis/connection.js', () => ({
-    getRedisClient: () => ({
-      get: jest.fn(async () => null),
-      set: jest.fn(async () => 'OK'),
-      exists: jest.fn(async () => 0),
-    }),
-    getRedisConnection: () => ({
-      get: jest.fn(async () => null),
-      set: jest.fn(async () => 'OK'),
-    }),
-    disconnectRedis: jest.fn(async () => undefined),
-  }));
-
   try {
-    // Prefer MongoMemoryServer when pointing at the default local URI.
-    // Set SKIP_MONGO_MEMORY=1 to skip (fully mocked unit suites / no MMS binary).
+    // A shared MongoDB Memory Server is provided by tests/globalSetup.ts
+    // (MONGO_MEMORY_SHARED=1). Only spawn a per-file server when running
+    // without it. Set SKIP_MONGO_MEMORY=1 to skip (fully mocked unit suites).
     if (
       process.env.SKIP_MONGO_MEMORY !== '1' &&
+      process.env.MONGO_MEMORY_SHARED !== '1' &&
       (!process.env.MONGO_URI || process.env.MONGO_URI.includes('127.0.0.1:27017'))
     ) {
       mongoServer = await MongoMemoryServer.create({
@@ -72,6 +61,33 @@ afterAll(async () => {
   }
   if (mongoServer) {
     await mongoServer.stop();
+    mongoServer = null;
+  }
+  // Release shared infrastructure handles so `jest --runInBand` exits
+  // naturally without `--forceExit` and never depends on a live Redis.
+  try {
+    const { disconnectRedis } = await import('../src/infra/redis/connection.js');
+    await disconnectRedis();
+  } catch {
+    // Teardown must never fail the suite.
+  }
+  try {
+    const { closeSseHub } = await import('../src/infra/sse/sseHub.js');
+    await closeSseHub();
+  } catch {
+    // Ignore — suite may never have initialized the hub.
+  }
+  try {
+    const { closeSocketIO } = await import('../src/infra/socket/io.js');
+    await closeSocketIO();
+  } catch {
+    // Ignore — suite may never have initialized Socket.IO.
+  }
+  try {
+    const { disconnectQueueRedis } = await import('../src/infra/redis/queue.js');
+    await disconnectQueueRedis();
+  } catch {
+    // Ignore — suite may never have touched the queue module.
   }
 }, 60_000);
 
@@ -94,4 +110,19 @@ afterAll(async () => {
 // Reset all mocks between tests
 afterEach(() => {
   jest.clearAllMocks();
+  // Heal NODE_ENV poisoning: suites such as swaggerDocs/errorMiddleware flip
+  // NODE_ENV mid-test and restore it in their own afterEach, but if one ever
+  // leaks, every later test in the file would take production code paths.
+  process.env.NODE_ENV = 'test';
+});
+
+// Clear per-test SSE registrations (heartbeat timers) so no suite leaks
+// intervals into the next file when running `--runInBand`.
+afterEach(async () => {
+  try {
+    const { resetSseHubForTest } = await import('../src/infra/sse/sseHub.js');
+    resetSseHubForTest();
+  } catch {
+    // Ignore — module may be mocked in this suite.
+  }
 });

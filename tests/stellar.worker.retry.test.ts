@@ -47,30 +47,23 @@ describe('Stellar Worker Failure and Retry Tests', () => {
   });
 
   it('configures anchor jobs with exponential backoff in queue helper', async () => {
-    const mockAdd = jest.fn<(...args: unknown[]) => Promise<{ id: string }>>();
-    const QueueMock = jest.fn().mockImplementation(() => ({ add: mockAdd }));
-
-    mockAdd.mockResolvedValue({ id: 'job-1' });
-
-    await jest.unstable_mockModule('ioredis', () => ({
-      Redis: jest.fn().mockImplementation(() => ({
-        lpush: jest.fn(async () => 1),
-      })),
-    }));
-    await jest.unstable_mockModule('bullmq', () => ({ Queue: QueueMock }));
-    await jest.unstable_mockModule('../src/config/index.js', () => ({
-      config: { redisUrl: 'redis://127.0.0.1:6379' },
-    }));
-
+    // Isolation contract: under Jest the queue module serves an in-memory
+    // stub (never a live Redis/BullMQ connection). Assert the retry/backoff
+    // options on the stub's `add` instead of mocking bullmq internals.
     jest.resetModules();
     const queueMod = await import('../src/infra/redis/queue.js');
+    const queue = queueMod.getTransactionQueue() as unknown as {
+      add: (...args: unknown[]) => Promise<unknown>;
+    };
+    const addSpy = jest.spyOn(queue, 'add');
+
     await queueMod.pushStellarAnchorJob({
       telemetryId: 'telemetry-dlq',
       shipmentId: 'shipment-dlq',
       dataHash: 'dlq-hash',
     });
 
-    expect(mockAdd).toHaveBeenCalledWith(
+    expect(addSpy).toHaveBeenCalledWith(
       'anchor_telemetry',
       {
         telemetryId: 'telemetry-dlq',
@@ -82,5 +75,7 @@ describe('Stellar Worker Failure and Retry Tests', () => {
         backoff: { type: 'exponential', delay: 2000 },
       }
     );
+
+    await queueMod.disconnectQueueRedis();
   });
 });
