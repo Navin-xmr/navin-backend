@@ -8,10 +8,46 @@ import {
   BASE_FEE,
 } from '@stellar/stellar-sdk';
 import { config } from '../config/index.js';
+import { resolveStellarUrls, type StellarNetwork } from '../config/stellarNetwork.js';
 import { AppError, ErrorCodes } from '../shared/http/errors.js';
 import { logger } from '../shared/logger/logger.js';
 
-const horizon = new Horizon.Server(config.horizonUrl);
+/** Resolves the Horizon endpoint and network passphrase for one Stellar network. */
+export interface StellarNetworkTarget {
+  horizonUrl: string;
+  networkPassphrase: string;
+}
+
+/**
+ * Resolves the server URL and signing passphrase for a Stellar network.
+ *
+ * Both values come from the configured network, and only from it: the passphrase
+ * is what makes a mismatch dangerous (submitting to one network while signing for
+ * another), so the two are resolved together and asserted together in
+ * `__tests__/stellarNetworkMatrix.test.ts`.
+ */
+export function resolveStellarNetworkTarget(network: StellarNetwork): StellarNetworkTarget {
+  return {
+    horizonUrl: resolveStellarUrls(network).horizonUrl,
+    networkPassphrase: network === 'public' ? Networks.PUBLIC : Networks.TESTNET,
+  };
+}
+
+/**
+ * Horizon server for the configured network.
+ *
+ * Deliberately not a module-level instance: a server built once at import time
+ * keeps pointing at whatever was configured then, which is how a hardcoded
+ * endpoint can hide behind a network switch.
+ */
+export function getHorizonServer(): Horizon.Server {
+  return new Horizon.Server(resolveStellarNetworkTarget(config.stellarNetwork).horizonUrl);
+}
+
+/** Passphrase for the configured network, for signing. */
+function configuredNetworkPassphrase(): string {
+  return resolveStellarNetworkTarget(config.stellarNetwork).networkPassphrase;
+}
 
 /**
  * Creates a Stellar manage-data transaction for a shipment and returns token metadata.
@@ -31,9 +67,9 @@ export async function tokenizeShipment(shipmentData: {
   }
 
   const keypair = Keypair.fromSecret(secretKey);
-  const account = await horizon.loadAccount(keypair.publicKey());
+  const account = await getHorizonServer().loadAccount(keypair.publicKey());
 
-  const network = config.stellarNetwork === 'public' ? Networks.PUBLIC : Networks.TESTNET;
+  const network = configuredNetworkPassphrase();
 
   const transaction = new TransactionBuilder(account, {
     fee: BASE_FEE,
@@ -56,7 +92,7 @@ export async function tokenizeShipment(shipmentData: {
 
   transaction.sign(keypair);
 
-  const result = await horizon.submitTransaction(transaction);
+  const result = await getHorizonServer().submitTransaction(transaction);
   const txHash = result.hash;
   const stellarTokenId = `stellar:${shipmentData.shipmentId}:${txHash.slice(0, 8)}`;
 
@@ -83,9 +119,9 @@ export async function anchorTelemetryHash(telemetryData: {
   }
 
   const keypair = Keypair.fromSecret(secretKey);
-  const account = await horizon.loadAccount(keypair.publicKey());
+  const account = await getHorizonServer().loadAccount(keypair.publicKey());
 
-  const network = config.stellarNetwork === 'public' ? Networks.PUBLIC : Networks.TESTNET;
+  const network = configuredNetworkPassphrase();
 
   // We must include a Memo to embed the hash, and at least one operation
   // for the transaction to be valid.
@@ -105,7 +141,7 @@ export async function anchorTelemetryHash(telemetryData: {
 
   transaction.sign(keypair);
 
-  const result = await horizon.submitTransaction(transaction);
+  const result = await getHorizonServer().submitTransaction(transaction);
   const txHash = result.hash;
 
   return { stellarTxHash: txHash };
@@ -126,9 +162,9 @@ export async function releaseEscrow(escrowData: {
     }
 
     const keypair = Keypair.fromSecret(secretKey);
-    const account = await horizon.loadAccount(keypair.publicKey());
+    const account = await getHorizonServer().loadAccount(keypair.publicKey());
 
-    const network = config.stellarNetwork === 'public' ? Networks.PUBLIC : Networks.TESTNET;
+    const network = configuredNetworkPassphrase();
 
     // Build a transaction to release the escrow by recording the release event on-chain
     const transaction = new TransactionBuilder(account, {
@@ -147,7 +183,7 @@ export async function releaseEscrow(escrowData: {
 
     transaction.sign(keypair);
 
-    const result = await horizon.submitTransaction(transaction);
+    const result = await getHorizonServer().submitTransaction(transaction);
     const txHash = result.hash;
 
     return {
