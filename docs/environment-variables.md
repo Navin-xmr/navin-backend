@@ -68,12 +68,13 @@ Cross-check source: `src/env.ts`, `.env.example`, and `process.env` / `env.*` us
 | `STORAGE_BUCKET` | no | no | no | Optional (planned) | **TODO** — documented in storage adapter; not in `env.ts` yet. [#379](https://github.com/Navin-xmr/navin-backend/issues/379) |
 | `STORAGE_PROVIDER` | no | no | no | Optional (planned) | **TODO** — `mock` \| `s3` \| `cloudinary`. [#379](https://github.com/Navin-xmr/navin-backend/issues/379) |
 
-## Soroban / escrow — TODO gap
+## Soroban / escrow
 
 | Variable | Validated | `.env.example` | Used in code | Required vs optional | Notes / implementing issue |
 |----------|:---------:|:--------------:|:------------:|----------------------|----------------------------|
-| `ESCROW_CONTRACT_ID` | yes | yes | no (config only) | Optional | **TODO** — no Soroban client yet. [#358](https://github.com/Navin-xmr/navin-backend/issues/358) |
-| `SOROBAN_RPC_URL` | yes | yes | no (config only) | Optional | **TODO** — same as above |
+| `SOROBAN_ADAPTER` | yes | yes | yes | Optional (default `simulated`) | `simulated` \| `soroban`; selects adapter implementation |
+| `ESCROW_CONTRACT_ID` | yes | yes | yes (config) | Required iff `SOROBAN_ADAPTER=soroban` | Escrow contract ID on Stellar Soroban |
+| `SOROBAN_RPC_URL` | yes | yes | yes (config) | Required iff `SOROBAN_ADAPTER=soroban` | RPC endpoint URL for Soroban contract calls |
 
 ## Observability
 

@@ -51,9 +51,10 @@ export const config = {
   },
   cloudinary: {
     cloudName: process.env.CLOUDINARY_CLOUD_NAME,
-    apiKey: process.env.CLOUDINARY_API_KEY,
+    apiKey: process.env['CLOUDINARY_API_KEY'],
     apiSecret: process.env.CLOUDINARY_API_SECRET,
   },
+  sorobanAdapter: env.SOROBAN_ADAPTER,
   sorobanRpcUrl: stellarUrls.sorobanRpcUrl,
   escrowContractId: env.ESCROW_CONTRACT_ID,
   sentryDsn: env.SENTRY_DSN,
