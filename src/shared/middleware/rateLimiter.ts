@@ -2,6 +2,7 @@ import rateLimit, { type Store, type IncrementResponse } from 'express-rate-limi
 import type { Request, Response } from 'express';
 import { sendResponse } from '../http/sendResponse.js';
 import { logger } from '../logger/logger.js';
+import { getRedisClient } from '../../infra/redis/connection.js';
 
 const isDev = process.env.NODE_ENV !== 'production';
 
@@ -26,13 +27,11 @@ interface FallbackEntry {
 
 function tryGetRedis(): RedisLike | null {
   try {
-    // Dynamic import via module resolution — works in ESM because we import
-    // the already-resolved module cache reference at call time.
-
-    const mod = require('../../infra/redis/connection.js') as {
-      getRedisClient?: () => RedisLike;
-    };
-    return mod.getRedisClient?.() ?? null;
+    const client = getRedisClient() as unknown as RedisLike;
+    // The in-memory test client and real ioredis both expose incr; anything
+    // else (e.g. a partial test double) falls back to memory.
+    if (typeof client?.incr !== 'function') return null;
+    return client;
   } catch {
     return null;
   }

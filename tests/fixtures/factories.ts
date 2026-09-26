@@ -260,19 +260,109 @@ export function paymentDoc(overrides: Record<string, unknown> = {}) {
  * Register via `jest.unstable_mockModule('../src/infra/redis/connection.js', () => redisMock(store))`.
  */
 export function redisMock(store: Map<string, string> = new Map()) {
+  const lists = new Map<string, string[]>();
+  const expirations = new Map<string, number>();
+  const isExpired = (key: string): boolean => {
+    const at = expirations.get(key);
+    if (at !== undefined && Date.now() >= at) {
+      store.delete(key);
+      expirations.delete(key);
+      return true;
+    }
+    return false;
+  };
   const client = {
-    get: async (key: string) => store.get(key) ?? null,
-    set: async (key: string, value: string) => {
+    get: async (key: string) => (isExpired(key) ? null : (store.get(key) ?? null)),
+    set: async (key: string, value: string, ...args: unknown[]) => {
       store.set(key, value);
+      for (let i = 0; i < args.length; i += 1) {
+        if ((args[i] === 'EX' || args[i] === 'ex') && typeof args[i + 1] === 'number') {
+          expirations.set(key, Date.now() + (args[i + 1] as number) * 1000);
+        }
+      }
       return 'OK';
     },
-    del: async (key: string) => (store.delete(key) ? 1 : 0),
+    setex: async (key: string, seconds: number, value: string) => {
+      store.set(key, value);
+      expirations.set(key, Date.now() + seconds * 1000);
+      return 'OK';
+    },
+    del: async (...keys: string[]) => {
+      let removed = 0;
+      for (const key of keys.flat()) {
+        if (store.delete(key)) removed += 1;
+        expirations.delete(key);
+        if (lists.delete(key)) removed += 1;
+      }
+      return removed;
+    },
+    exists: async (...keys: string[]) => {
+      let count = 0;
+      for (const key of keys.flat()) {
+        if (!isExpired(key) && store.has(key)) count += 1;
+      }
+      return count;
+    },
+    ttl: async (key: string) => {
+      if (!store.has(key) || isExpired(key)) return -2;
+      const at = expirations.get(key);
+      if (at === undefined) return -1;
+      return Math.max(0, Math.ceil((at - Date.now()) / 1000));
+    },
+    expire: async (key: string, seconds: number) => {
+      if (!store.has(key)) return 0;
+      expirations.set(key, Date.now() + seconds * 1000);
+      return 1;
+    },
+    pttl: async (key: string) => {
+      if (!store.has(key) || isExpired(key)) return -2;
+      const at = expirations.get(key);
+      if (at === undefined) return -1;
+      return Math.max(0, at - Date.now());
+    },
+    incr: async (key: string) => {
+      const next = (Number(store.get(key) ?? '0') || 0) + 1;
+      store.set(key, String(next));
+      return next;
+    },
+    decr: async (key: string) => {
+      const next = (Number(store.get(key) ?? '0') || 0) - 1;
+      store.set(key, String(next));
+      return next;
+    },
+    scan: async (): Promise<[string, string[]]> => ['0', [...store.keys()]],
+    lpush: async (key: string, ...values: string[]) => {
+      const list = lists.get(key) ?? [];
+      list.unshift(...values.reverse());
+      lists.set(key, list);
+      return list.length;
+    },
+    ltrim: async () => 'OK' as const,
+    lindex: async () => null,
+    rpop: async () => null,
+    lrange: async () => [] as string[],
+    publish: async () => 0,
+    subscribe: async () => 0,
+    unsubscribe: async () => 0,
+    pipeline: () => ({ lpush: () => undefined, ltrim: () => undefined, exec: async () => [] as Array<[null, unknown]> }),
+    duplicate: () => client,
+    on: () => client,
+    removeAllListeners: () => client,
+    quit: async () => 'OK' as const,
+    disconnect: () => undefined,
+    options: { host: 'localhost', port: 6379 },
   };
   return {
     getRedisClient: () => client,
     getRedisConnection: () => client,
     getBullMQConnection: () => ({ host: 'localhost', port: 6379 }),
     disconnectRedis: async () => undefined,
+    isRedisInitialized: () => true,
+    resetInMemoryRedisForTest: () => {
+      store.clear();
+      lists.clear();
+      expirations.clear();
+    },
   };
 }
 
