@@ -13,6 +13,8 @@
     "lint:openapi": "npx @redocly/cli lint docs/swagger.yaml",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
     "test:watch": "node --experimental-vm-modules node_modules/jest/bin/jest.js --watch",
+    "test:redis-persistence:enqueue": "node scripts/redis-persistence-probe.mjs enqueue",
+    "test:redis-persistence:verify": "node scripts/redis-persistence-probe.mjs verify",
     "seed": "tsx src/scripts/seed.ts",
     "generate-api-key": "tsx src/scripts/generateApiKey.ts",
     "worker:stellar": "tsx src/workers/stellar.worker.ts",

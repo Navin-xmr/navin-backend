@@ -18,6 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       docker: ${{ steps.filter.outputs.docker }}
+      redis: ${{ steps.filter.outputs.redis }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -35,6 +36,15 @@ jobs:
               - 'src/**'
               - 'package.json'
               - 'package-lock.json'
+            # Redis durability surface: the compose redis service, the AOF/volume
+            # config, and the persistence probe itself (#637).
+            redis:
+              - 'docker-compose.yml'
+              - 'docker-compose.override.yml'
+              - 'scripts/redis-persistence-probe.mjs'
+              - 'package.json'
+              - 'package-lock.json'
+              - '.github/workflows/ci.yml'
 
   verify:
     name: Deps audit · Typecheck · Build
@@ -233,3 +243,127 @@ jobs:
       - name: Tear down
         if: always()
         run: docker compose -p smoke-negative -f docker-compose.yml down -v --remove-orphans
+
+  # #637 - proves the H2.4 durability decision actually holds: a real BullMQ
+  # job must survive a restart of *only* the redis container, with its volume
+  # left intact, and must still be processable afterwards.
+  #
+  # Only the `redis` service is started. Bringing up the whole stack would let
+  # `stellar-worker` consume the probe job before the restart, leaving nothing
+  # to assert. The dedicated project name (`redis-persistence`) keeps the probe
+  # on its own volume, so a developer's local stack is never touched.
+  redis-persistence:
+    name: Redis queue persistence across restart
+    runs-on: ubuntu-latest
+    needs: changes
+    # Always verify on main pushes; on PRs only when the persistence config moves.
+    if: github.event_name == 'push' || needs.changes.outputs.redis == 'true'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Set up Docker
+        uses: docker/setup-buildx-action@v3
+
+      - name: Clean install dependencies
+        run: npm ci
+
+      - name: Assert the durability config is declared in compose
+        # Cheap static gate: fails fast and points at the exact line if the AOF
+        # flag or the named volume is dropped from docker-compose.yml.
+        run: |
+          docker compose -f docker-compose.yml config --format json > /tmp/compose.json
+          node -e '
+            const fs = require("fs");
+            const compose = JSON.parse(fs.readFileSync("/tmp/compose.json", "utf8"));
+            const redis = compose.services.redis;
+            const problems = [];
+            if (!redis) problems.push("no `redis` service in docker-compose.yml");
+            else {
+              const cmd = JSON.stringify(redis.command ?? "");
+              if (!cmd.includes("--appendonly") || !cmd.includes("yes")) {
+                problems.push("redis command does not enable AOF: " + cmd);
+              }
+              const mounts = (redis.volumes ?? []).map((v) =>
+                typeof v === "string" ? v : v.source + ":" + v.target
+              );
+              if (!mounts.some((m) => m.includes("redis_data") && m.includes("/data"))) {
+                problems.push("redis is not backed by the named redis_data volume on /data: " + JSON.stringify(mounts));
+              }
+            }
+            if (!compose.volumes || !compose.volumes.redis_data) {
+              problems.push("top-level `redis_data` volume is not declared");
+            }
+            if (problems.length) {
+              console.error("FAIL: Redis durability config regressed:");
+              for (const p of problems) console.error("  - " + p);
+              process.exit(1);
+            }
+            console.log("PASS: redis runs with AOF and the named redis_data volume");
+          '
+
+      - name: Start redis only
+        run: docker compose -p redis-persistence -f docker-compose.yml up -d redis
+
+      - name: Wait for redis
+        run: |
+          for i in $(seq 1 30); do
+            if docker compose -p redis-persistence -f docker-compose.yml exec -T \
+                redis redis-cli ping | grep -q PONG; then
+              echo "redis is up after $((i)) attempt(s)"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "FAIL: redis did not answer PING"
+          exit 1
+
+      - name: Enqueue a real BullMQ job
+        run: node scripts/redis-persistence-probe.mjs enqueue
+
+      - name: Restart only the redis container (volume preserved)
+        # `restart`, never `down -v`: removing the volume is exactly the
+        # scenario this check exists to distinguish from a plain restart.
+        run: |
+          docker compose -p redis-persistence -f docker-compose.yml restart redis
+          for i in $(seq 1 30); do
+            if docker compose -p redis-persistence -f docker-compose.yml exec -T \
+                redis redis-cli ping | grep -q PONG; then
+              echo "redis restarted and healthy again (attempt $i)"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "FAIL: redis did not come back after restart"
+          exit 1
+
+      - name: Assert the job survived and is still processable
+        run: node scripts/redis-persistence-probe.mjs verify
+
+      - name: Debug on failure
+        if: failure()
+        run: |
+          echo "=== docker compose ps ==="
+          docker compose -p redis-persistence -f docker-compose.yml ps
+          echo "=== redis logs ==="
+          docker compose -p redis-persistence -f docker-compose.yml logs redis || true
+          echo "=== appendonly / dataset ==="
+          docker compose -p redis-persistence -f docker-compose.yml exec -T \
+            redis redis-cli config get appendonly || true
+          docker compose -p redis-persistence -f docker-compose.yml exec -T \
+            redis redis-cli dbsize || true
+          echo "=== bullmq keys ==="
+          docker compose -p redis-persistence -f docker-compose.yml exec -T \
+            redis redis-cli keys 'bull:transaction_queue:*' || true
+
+      - name: Tear down (scoped to this project only)
+        # `down -v` is scoped to the `redis-persistence` project, so only the
+        # probe's own redis_data volume is removed - no unrelated volumes.
+        if: always()
+        run: docker compose -p redis-persistence -f docker-compose.yml down -v --remove-orphans
