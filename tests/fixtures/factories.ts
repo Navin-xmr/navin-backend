@@ -197,6 +197,11 @@ export function createMockTelemetry(overrides: Partial<ITelemetry> = {}): ITelem
     confirmationMetadata: undefined,
     createdAt: now,
     updatedAt: now,
+    ...overrides,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Auth tokens
 // ---------------------------------------------------------------------------
 
