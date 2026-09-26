@@ -259,6 +259,7 @@ describe('RBAC Matrix Integration Tests', () => {
 
     await jest.unstable_mockModule('../src/modules/analytics/analytics.service.js', () => ({
       getAnalyticsPerformance: mockAnalyticsAggregate,
+      // Mock the summary endpoint for analytics controller
       getAnalyticsSummary: jest.fn().mockResolvedValue({
         totalShipments: 0,
         onTimeRate: 0,
