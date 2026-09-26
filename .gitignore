@@ -43,6 +43,9 @@ coverage/
 .agent/
 issue.md
 
+# Redis persistence probe state (scripts/redis-persistence-probe.mjs)
+.redis-persistence-probe.json
+
 # Agent Skills & Prompts
 .agents/*
 !.agents/skills/

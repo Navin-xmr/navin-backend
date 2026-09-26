@@ -5154,27 +5154,48 @@ paths:
                   message:
                     type: string
                   data:
+                    # Mirrors the `ShipmentEtaPayload` discriminated union in
+                    # src/modules/shipments/shipmentsEta.cache.ts. The two
+                    # branches are mutually exclusive: each closes its object
+                    # (`additionalProperties: false`) and requires a property
+                    # the other branch forbids, so no response can satisfy
+                    # both.
                     oneOf:
-                      - type: object
+                      - title: Estimated arrival (shipment is in transit)
+                        type: object
+                        additionalProperties: false
+                        required:
+                          - estimatedArrival
+                          - distanceRemaining
+                          - averageSpeed
+                          - confidence
                         properties:
                           estimatedArrival:
                             type: string
                             format: date-time
                           distanceRemaining:
                             type: number
+                            description: Kilometres remaining to the destination.
                           averageSpeed:
                             type: number
+                            description: Average speed in km/h over the telemetry window.
                           confidence:
                             type: string
                             enum: [LOW, MEDIUM, HIGH]
-                      - type: object
+                      - title: ETA unavailable (shipment is not in transit)
+                        type: object
+                        additionalProperties: false
+                        required:
+                          - estimatedArrival
+                          - reason
                         properties:
                           estimatedArrival:
                             type: string
-                            format: date-time
                             nullable: true
+                            description: Always `null` in this branch.
                           reason:
                             type: string
+                            description: Human-readable explanation of why no ETA was computed.
         '400':
           description: Missing destination coordinates or invalid request data
         '401':
@@ -6353,8 +6374,17 @@ components:
           nullable: true
           description: Stellar explorer URL for the transaction (computed).
         escrowRelease:
-          $ref: '#/components/schemas/EscrowRelease'
+          # OAS 3.0 has no `oneOf: [{$ref}, null]`, and a `nullable` sibling
+          # next to `$ref` is ignored per JSON Reference semantics. Wrapping the
+          # reference in `allOf` and declaring `type` keeps the nullability
+          # meaningful for generated clients and validators.
+          type: object
+          description: >-
+            Escrow release outcome; `null` while the escrow has not been
+            released, disputed, or otherwise finalised.
           nullable: true
+          allOf:
+            - $ref: '#/components/schemas/EscrowRelease'
         createdAt:
           type: string
           format: date-time

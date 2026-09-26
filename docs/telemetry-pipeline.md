@@ -91,6 +91,84 @@ overhead; `docker compose down -v` still destroys the volume; and a single-node 
 is crash durability, not HA or backup — production should use managed Redis with replication,
 persistence, and backups.
 
+#### Durability boundary
+
+What is and is not covered, stated explicitly so nobody reads more into the
+setup than it guarantees:
+
+| Scenario | Durable? | Notes |
+|----------|----------|-------|
+| `docker compose restart redis` | **Yes** | Container is recreated against the same `redis_data` volume. Covered by the automated check below. |
+| `docker compose stop redis` / `start redis` | **Yes** | Same volume, same guarantee. |
+| `docker compose down` (no `-v`) | **Yes** | Volume is retained; the next `up` recovers the queues. |
+| `docker compose down -v` | **No** | **Deletes the volume and every queued job.** This is the boundary the check exists to keep honest. |
+| `docker compose down -v --volumes=<other project>` | **No** | `-v` is scoped to the project you name, so a *different* project's volumes are untouched. |
+| Host crash / power loss | **Up to ~1s lost** | AOF runs at the default `appendfsync everysec`. |
+| `docker system prune --volumes`, or deleting the volume by hand | **No** | Outside the mechanism entirely. |
+
+AOF is a **durability** feature, not a **backup** or **HA** strategy:
+
+- It is a single-node, local append-only log. If the volume is lost, so is the
+  queue. There is no copy elsewhere.
+- It gives no failover, replication, or read-scaling. A second Redis node is
+  not a hot spare here.
+- Recovery beyond "the same volume came back" needs a real backup/restore
+  story. For production, run managed Redis with replication, persistence, and
+  scheduled backups, and treat the Compose setup as development-only.
+
+#### Automated check (`redis-persistence` CI job)
+
+The `compose-smoke` job only waits for `/api/health`; it never inspects queue
+state, so it cannot catch a silently broken persistence config. The
+`redis-persistence` job closes that gap.
+
+`scripts/redis-persistence-probe.mjs` is a two-phase check:
+
+```bash
+# 1. Enqueue a real BullMQ job on transaction_queue.
+docker compose -p redis-persistence -f docker-compose.yml up -d redis
+node scripts/redis-persistence-probe.mjs enqueue
+
+# 2. Restart ONLY the redis container, leaving the volume in place.
+docker compose -p redis-persistence -f docker-compose.yml restart redis
+
+# 3. Assert the job survived and is still processable. Non-zero exit on failure.
+node scripts/redis-persistence-probe.mjs verify
+
+docker compose -p redis-persistence -f docker-compose.yml down -v
+```
+
+`verify` does more than look the job up — it drains the queue with a local
+worker and asserts the payload round-tripped, so "still available" and "still
+processable" are both covered. It also re-reads `CONFIG GET appendonly`, which
+is what makes the check **fail if AOF is removed** rather than quietly degrading
+to ephemeral. Removing the `redis_data` volume fails it the same way: the job
+is simply gone.
+
+Two isolation properties are deliberate:
+
+- Only the `redis` service is started. With the full stack up, the
+  `stellar-worker` container would consume the probe job *before* the restart,
+  leaving nothing to assert.
+- The project name is `redis-persistence`, so the probe uses its own
+  `redis-persistence_redis_data` volume. A developer's local stack and its data
+  are never involved, and the `down -v` teardown is scoped to that one project.
+
+Environment overrides: `REDIS_URL` (default `redis://127.0.0.1:6379`),
+`REDIS_PERSISTENCE_QUEUE` (default `transaction_queue`),
+`REDIS_PERSISTENCE_STATE` (default `.redis-persistence-probe.json`),
+`PROBE_TIMEOUT_MS` (default `30000`). Keep the queue name identical across both
+phases — the state file records it and `verify` rejects a mismatch.
+
+The job runs on every push to `main`, and on PRs that touch
+`docker-compose.yml`, `docker-compose.override.yml`, the probe script, the
+dependency manifests, or `ci.yml` itself.
+
+`tests/redis-persistence.config.test.ts` guards the declarative half of this —
+that `docker-compose.yml` still declares AOF and the named volume, and that the
+CI job is still wired to `restart redis` (never `down -v`) and to run both probe
+phases — so a regression is caught even without Docker available.
+
 ## Anomaly detection engines
 
 ## Anomaly detection engines
