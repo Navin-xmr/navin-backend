@@ -720,11 +720,10 @@ paths:
       tags: [Public Tracking]
       summary: Public shipment tracking by tracking number
       description: |
-        **NOT IMPLEMENTED** — stub for frontend discovery.
-
-        Unauthenticated public tracking surface expected by the frontend.
-        No dedicated implementing issue yet (planned alongside shipments UX).
-      x-implemented: false
+        Unauthenticated public tracking endpoint. Returns a safe subset of shipment
+        data suitable for public tracking pages. No authentication required.
+        Rate limited to prevent abuse.
+      x-implemented: true
       security: []
       parameters:
         - in: path
@@ -732,9 +731,42 @@ paths:
           required: true
           schema:
             type: string
+          description: Carrier tracking number (e.g., NVN-123456)
       responses:
-        '501':
-          description: Not implemented
+        '200':
+          description: Shipment tracking information retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, message, data]
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Shipment tracking retrieved
+                  data:
+                    $ref: '#/components/schemas/PublicTrackingResponse'
+        '404':
+          description: Shipment not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '400':
+          description: Invalid tracking number parameter
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Too many requests
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /api/events:
     get:
@@ -6655,6 +6687,61 @@ components:
           type: object
           additionalProperties: true
           description: Source-specific fields (status, telemetryId, stellarTxHash, proof URL, etc.)
+    PublicTrackingMilestone:
+      type: object
+      required: [id, label, status, timestamp, isCompleted]
+      description: A single milestone in the public tracking timeline.
+      properties:
+        id:
+          type: string
+          description: Unique milestone identifier.
+        label:
+          type: string
+          description: Human-readable milestone label (e.g., CREATED, IN_TRANSIT, DELIVERED).
+        status:
+          type: string
+          description: Current status of this milestone.
+        timestamp:
+          type: string
+          format: date-time
+          description: When this milestone occurred (ISO 8601 UTC).
+        location:
+          type: string
+          nullable: true
+          description: Optional location associated with the milestone.
+        isCompleted:
+          type: boolean
+          description: Whether this milestone is completed.
+        isCurrent:
+          type: boolean
+          description: Whether this is the current active milestone.
+    PublicTrackingResponse:
+      type: object
+      required: [trackingNumber, status, originCity, destinationCity, milestones]
+      description: Public shipment tracking response for unauthenticated tracking page.
+      properties:
+        trackingNumber:
+          type: string
+          description: Unique tracking number for the shipment.
+        status:
+          type: string
+          description: Current lifecycle status of the shipment.
+        originCity:
+          type: string
+          description: Human-readable origin city/location name.
+        destinationCity:
+          type: string
+          description: Human-readable destination city/location name.
+        expectedDelivery:
+          type: string
+          format: date-time
+          nullable: true
+          description: Expected delivery timestamp (ISO 8601 UTC), if available.
+        milestones:
+          type: array
+          items:
+            $ref: '#/components/schemas/PublicTrackingMilestone'
+          description: Chronological list of tracking milestones.
     MilestoneEvent:
       type: string
       enum:

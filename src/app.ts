@@ -34,6 +34,7 @@ import { ledgerRouter } from './modules/ledger/ledger.routes.js';
 import { eventsRouter } from './modules/events/events.routes.js';
 import { notificationsRouter } from './modules/notifications/notifications.routes.js';
 import { apiKeysRouter } from './modules/api-keys/apiKey.routes.js';
+import { publicTrackingRouter } from './modules/public-tracking/publicTracking.routes.js';
 
 const swaggerDocumentPath = fileURLToPath(new URL('../docs/swagger.yaml', import.meta.url));
 
@@ -68,6 +69,8 @@ export function buildApp() {
   app.use('/api/auth/reset-password', otpLimiter);
   app.use('/api/auth/2fa/verify', otpLimiter);
   app.use('/api/auth/2fa/backup-codes/regenerate', strictLimiter);
+  // Stricter limiter for public tracking endpoint
+  app.use('/api/public/tracking', strictLimiter);
 
   app.use('/api/health', healthRouter);
   app.use('/api/auth', authRouter);
@@ -78,6 +81,7 @@ export function buildApp() {
   app.use('/api/shipments', shipmentsRouter);
   app.use('/api/payments', paymentsRouter);
   app.use('/api/settlements', paymentsRouter);
+  app.use('/api/public/tracking', publicTrackingRouter);
   app.use('/api/webhooks', webhooksRouter);
   app.use('/api/analytics', analyticsRouter);
   app.use('/api/anomalies', anomaliesRouter);
