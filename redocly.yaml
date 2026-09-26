@@ -1,0 +1,11 @@
+# Redocly CLI configuration for `npm run lint:openapi`.
+extends:
+  - recommended
+rules:
+  # Express mounts `GET /api/auth/api-keys/:organizationId` and
+  # `DELETE /api/auth/api-keys/:apiKeyId` (src/modules/auth/auth.routes.ts).
+  # Both deprecated aliases must keep their distinct parameter names to stay
+  # backward compatible, but OpenAPI considers same-shape templates identical,
+  # so the two operations are documented as separate path items (#628).
+  # Downgraded to a warning: the API surface report stays fully aligned.
+  no-identical-paths: warn
