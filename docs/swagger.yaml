@@ -2300,6 +2300,66 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /api/auth/reset-password:
+    post:
+      summary: Reset a password with a reset token
+      description: >-
+        Completes the password-reset flow started by
+        `POST /api/auth/forgot-password`. Exchanges the emailed reset token for
+        a new password and invalidates the token. Public route (no bearer token
+        required); rate-limited per IP.
+      tags:
+        - Auth
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - token
+                - newPassword
+              properties:
+                token:
+                  type: string
+                  minLength: 1
+                  description: Reset token from the password-reset email link
+                newPassword:
+                  type: string
+                  minLength: 8
+                  description: Replacement password (at least 8 characters)
+      responses:
+        '200':
+          description: Password reset successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Password reset successfully
+                  data:
+                    type: string
+                    nullable: true
+        '400':
+          description: >-
+            Validation error (missing/short token or password) or invalid,
+            expired, or wrong-type reset token (`ERR_AUTH_INVALID_RESET_TOKEN`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Too many reset attempts — rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/auth/2fa/setup:
     post:
       summary: Initiate TOTP 2FA setup
@@ -2512,15 +2572,21 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-  /api/auth/api-keys/{id}:
+  /api/auth/api-keys/{organizationId}:
     get:
       summary: List API keys for an organization
-      description: Returns all active API keys for the specified organization (without exposing the raw keys)
+      description: >-
+        Deprecated alias of `GET /api/company/api-keys`. Returns all active API
+        keys for the specified organization (without exposing the raw keys).
+        Requires JWT auth plus ADMIN or SUPER_ADMIN role.
+      tags:
+        - Auth
       security:
         - bearerAuth: []
+      x-required-role: [ADMIN, SUPER_ADMIN]
       parameters:
         - in: path
-          name: id
+          name: organizationId
           required: true
           schema:
             type: string
@@ -2560,14 +2626,27 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Insufficient role permissions (ADMIN / SUPER_ADMIN required)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/auth/api-keys/{apiKeyId}:
     delete:
       summary: Revoke an API key
-      description: Deactivates an API key, preventing it from being used for authentication
+      description: >-
+        Deprecated alias of `DELETE /api/company/api-keys/{apiKeyId}`.
+        Deactivates an API key, preventing it from being used for
+        authentication. Requires JWT auth plus ADMIN or SUPER_ADMIN role.
+      tags:
+        - Auth
       security:
         - bearerAuth: []
+      x-required-role: [ADMIN, SUPER_ADMIN]
       parameters:
         - in: path
-          name: id
+          name: apiKeyId
           required: true
           schema:
             type: string
@@ -2584,6 +2663,12 @@ paths:
                     type: string
         '401':
           description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Insufficient role permissions (ADMIN / SUPER_ADMIN required)
           content:
             application/json:
               schema:
@@ -3537,6 +3622,67 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /api/payments/summary:
+    get:
+      summary: Get settlement summary (legacy payments alias)
+      description: |
+        Legacy alias of `GET /api/settlements/summary` — both `/api/payments` and
+        `/api/settlements` resolve to the same router. Returns aggregated
+        settlement totals and a per-day sparkline array for the chosen period.
+        Results are cached in Redis for 5 minutes.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: period
+          schema:
+            type: string
+            enum: [week, month, quarter]
+            default: week
+          description: Aggregation window. `week`=7 days, `month`=30 days, `quarter`=90 days.
+      responses:
+        '200':
+          description: Summary retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      totalReleased:
+                        type: number
+                        description: Sum of released settlement amounts in the period.
+                      totalInEscrow:
+                        type: number
+                        description: Sum of escrowed settlement amounts in the period.
+                      totalPending:
+                        type: number
+                        description: Sum of pending settlement amounts in the period.
+                      sparkline:
+                        type: array
+                        items:
+                          type: number
+                        description: One entry per day in the period (released amounts per day).
+                      period:
+                        type: string
+                        enum: [week, month, quarter]
+        '400':
+          description: Invalid period value
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
   /api/payments/{id}:
     get:
       summary: Get payment / settlement by ID
@@ -3653,6 +3799,77 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /api/payments/{id}/dispute:
+    post:
+      summary: Dispute a payment / settlement (legacy payments alias)
+      description: |
+        Legacy alias of `POST /api/settlements/{id}/dispute` — both `/api/payments`
+        and `/api/settlements` resolve to the same router. Transitions the
+        settlement status to `Disputed` and records dispute metadata
+        (`disputedAt`, `disputeReason`, `additionalNotes`) in `escrowRelease`.
+        Requires JWT auth and ADMIN or MANAGER role.
+      security:
+        - bearerAuth: []
+      x-required-role: [ADMIN, MANAGER]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            minLength: 1
+          description: Payment / settlement ObjectId.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - reason
+              properties:
+                reason:
+                  type: string
+                  minLength: 1
+                  description: Reason for the dispute.
+                notes:
+                  type: string
+                  description: Optional additional context.
+      responses:
+        '200':
+          description: Settlement disputed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: '#/components/schemas/Settlement'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Forbidden — requires ADMIN or MANAGER role
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Payment not found (`ERR_PAYMENT_NOT_FOUND`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /api/settlements:
     get:
       summary: List settlements
@@ -3738,6 +3955,82 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+
+    post:
+      summary: Create a settlement
+      description: |
+        Creates a settlement record tied to a shipment. Canonical settlement
+        creation endpoint — `/api/payments` shares this router, so this operation
+        is contract-identical to `POST /api/payments`.
+        Requires JWT auth and ADMIN or SUPER_ADMIN.
+        Provide `token` (preferred) or legacy `tokenType` (`XLMN` | `USDC` | `Other`).
+      security:
+        - bearerAuth: []
+      x-required-role: [ADMIN, SUPER_ADMIN]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - shipmentId
+                - amount
+              properties:
+                shipmentId:
+                  type: string
+                  minLength: 1
+                  description: MongoDB ObjectId of the related shipment.
+                amount:
+                  type: number
+                  minimum: 0
+                  exclusiveMinimum: true
+                  description: Positive settlement amount.
+                token:
+                  type: string
+                  enum: [XLMN, USDC, Other]
+                  description: Preferred on-chain asset field.
+                tokenType:
+                  type: string
+                  enum: [XLMN, USDC, Other]
+                  description: Deprecated alias for token (backward compatibility).
+                payerAddress:
+                  type: string
+                payeeAddress:
+                  type: string
+                status:
+                  type: string
+                  enum: [Pending, Escrowed, Released, Failed, Disputed]
+                  default: Pending
+      responses:
+        '201':
+          description: Settlement created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                    example: Payment created successfully
+                  data:
+                    $ref: '#/components/schemas/Settlement'
+        '400':
+          description: Validation error (e.g. missing token/tokenType, non-positive amount)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Insufficient role permissions (ADMIN / SUPER_ADMIN required)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /api/settlements/summary:
     get:
@@ -3831,6 +4124,76 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           description: Settlement not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/settlements/{id}/status:
+    patch:
+      summary: Update settlement status
+      description: |
+        Canonical settlement status transition — contract-identical to
+        `PATCH /api/payments/{id}/status` (both paths share the payments router).
+        Advances settlement lifecycle status and optionally records
+        `stellarTxHash`. Requires JWT auth and ADMIN or SUPER_ADMIN.
+      security:
+        - bearerAuth: []
+      x-required-role: [ADMIN, SUPER_ADMIN]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            minLength: 1
+          description: Settlement ObjectId.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - status
+              properties:
+                status:
+                  type: string
+                  enum: [Pending, Escrowed, Released, Failed, Disputed]
+                stellarTxHash:
+                  type: string
+                  description: Optional on-chain transaction hash for audit.
+      responses:
+        '200':
+          description: Settlement status updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                    example: Payment status updated successfully
+                  data:
+                    $ref: '#/components/schemas/Settlement'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Insufficient role permissions (ADMIN / SUPER_ADMIN required)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Settlement not found (`ERR_PAYMENT_NOT_FOUND`)
           content:
             application/json:
               schema:
