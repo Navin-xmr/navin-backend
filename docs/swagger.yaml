@@ -248,6 +248,18 @@ paths:
                         type: string
                         format: date-time
                         description: Current UTC timestamp
+        '400':
+          description: Invalid request (should not occur for this endpoint)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/notifications:
     get:
       tags: [Notifications]
@@ -1469,6 +1481,18 @@ paths:
                         type: boolean
                       nextCursor:
                         type: string
+        '401':
+          description: Missing, invalid, or revoked JWT
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden - insufficient role (requires ADMIN)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/company/invitations/{id}/resend:
     post:
       summary: Resend invitation
@@ -1506,6 +1530,24 @@ paths:
                       expiresAt:
                         type: string
                         format: date-time
+        '401':
+          description: Missing, invalid, or revoked JWT
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden - insufficient role (requires ADMIN)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Invitation not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/company/invitations/{id}:
     delete:
       summary: Revoke invitation
@@ -1535,6 +1577,24 @@ paths:
                     type: string
                   data:
                     type: object
+        '401':
+          description: Missing, invalid, or revoked JWT
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden - insufficient role (requires ADMIN)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Invitation not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/company/invitations/info:
     get:
       summary: Get invitation info from token
@@ -3166,6 +3226,24 @@ paths:
                               type: integer
                             anomalyCount:
                               type: integer
+        '400':
+          description: Invalid query parameters (e.g., invalid date format, startDate after endDate)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Missing, invalid, or revoked JWT
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden - insufficient role (must be ADMIN / MANAGER / SUPER_ADMIN)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/analytics/summary:
     get:
       summary: Get KPI summary with 30-day sparklines
@@ -3929,6 +4007,24 @@ paths:
                         type: boolean
                       page:
                         type: integer
+        '400':
+          description: Invalid query parameters (e.g., invalid date format, both cursor and page provided)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Missing, invalid, or revoked JWT
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden - insufficient permissions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/telemetry/bulk:
     post:
       summary: Bulk ingest telemetry readings
@@ -4540,6 +4636,30 @@ paths:
                     example: Shipment created
                   data:
                     $ref: '#/components/schemas/Shipment'
+        '400':
+          description: Validation error - invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Missing, invalid, or revoked JWT
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden - insufficient role (requires ADMIN / MANAGER)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Duplicate tracking number
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/shipments/{id}:
     get:
       summary: Get a single shipment by ID
@@ -4619,6 +4739,30 @@ paths:
       responses:
         '200':
           description: Shipment updated
+        '400':
+          description: Validation error - invalid request body or path parameter
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Missing, invalid, or revoked JWT
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden - insufficient role (requires ADMIN / MANAGER)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Shipment not found (`ERR_SHIPMENT_NOT_FOUND`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
     delete:
       summary: Delete a shipment
       description: Soft-delete a shipment. Requires ADMIN or MANAGER role.
