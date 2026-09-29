@@ -107,3 +107,65 @@ describe('env validation', () => {
     expect(code).not.toBe(0);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Email-service mock factory import-surface check (issue #751)
+//
+// The shared email-service test factory must expose every named export that
+// tested consumers import from the production email module. A missing export
+// (e.g. `resetPasswordEmailHtml`) previously only surfaced when the full suite
+// tried to import the service, producing a confusing failure far from the
+// cause. This check fails fast with a clear message instead.
+//
+// It runs entirely in-process against the factory module: no email is sent and
+// no secrets are read.
+//
+// Supported override pattern for tests:
+//   const email = createEmailServiceMock({ sendEmail: jest.fn() });
+//   // any named export can be overridden by passing it in the overrides object;
+//   // unspecified exports fall back to the factory defaults.
+// ---------------------------------------------------------------------------
+
+describe('email-service mock factory import surface', () => {
+  it('exposes every named export required by tested consumers', async () => {
+    // Named exports that tested consumers import from the production email
+    // module. Keep this list in sync with real consumer imports.
+    const requiredExports = [
+      'sendEmail',
+      'sendVerificationEmail',
+      'sendPasswordResetEmail',
+      'resetPasswordEmailHtml',
+    ];
+
+    const factory = await import('../test-utils/emailServiceMock.js');
+
+    const missing = requiredExports.filter(
+      name => typeof (factory as Record<string, unknown>)[name] === 'undefined'
+    );
+
+    expect(missing).toEqual([]);
+    if (missing.length > 0) {
+      throw new Error(
+        `email-service mock factory is missing named export(s): ${missing.join(
+          ', '
+        )}. Add them to the factory (or its overrides) so it stays aligned ` +
+          'with the production email module.'
+      );
+    }
+  });
+
+  it('supports overriding named exports for tests', async () => {
+    const factory = await import('../test-utils/emailServiceMock.js');
+    const createMock = (factory as Record<string, unknown>)
+      .createEmailServiceMock as
+      | ((overrides?: Record<string, unknown>) => Record<string, unknown>)
+      | undefined;
+
+    expect(typeof createMock).toBe('function');
+
+    const override = () => 'overridden';
+    const mock = createMock!({ sendEmail: override });
+
+    expect(mock.sendEmail).toBe(override);
+  });
+});
