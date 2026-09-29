@@ -618,3 +618,6 @@ If you discover a security vulnerability, email [navinxmr@gmail.com](mailto:navi
 
 <!-- handsoff-issue-752 -->
 - #752: [Mock drift] Standardize ESM mock registration in users invitation tests
+
+<!-- handsoff-issue-753 -->
+- #753: [Mock drift] Audit user-service ESM mocks for the current repository surface
