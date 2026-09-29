@@ -1,4 +1,11 @@
-/** @see issue-#147 */
+/**
+ * @see issue-#147
+ * @see issue-#754
+ *
+ * Security decision (#147, Option A): manual signup ALWAYS assigns the VIEWER
+ * role, regardless of the email domain. Role elevation is invitation- and
+ * administration-only and is never inferred from an email domain.
+ */
 import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
 import request from 'supertest';
 import type { Application } from 'express';
@@ -15,7 +22,9 @@ describe('Issue #147 - Auto-assign default user role during manual signup', () =
   afterAll(cleanupAuthShipmentSuite);
 
   describe('Issue #147: Auto-assign default user role during manual signup', () => {
-    it('should assign ADMIN role to users with admin email domains', async () => {
+    // Elevation is invitation/administration-only; a privileged-looking domain
+    // must NOT grant ADMIN at signup.
+    it('should assign VIEWER role to users with admin email domains', async () => {
       const res = await request(app)
         .post('/api/auth/signup')
         .send({
@@ -27,11 +36,11 @@ describe('Issue #147 - Auto-assign default user role during manual signup', () =
 
       expect(res.status).toBe(201);
       expect(res.body.success).toBe(true);
-      expect(res.body.data.user.role).toBe('ADMIN');
+      expect(res.body.data.user.role).toBe('VIEWER');
       expect(res.body.data.token).toBeDefined();
     });
 
-    it('should assign ADMIN role to users with navin-admin.com domain', async () => {
+    it('should assign VIEWER role to users with navin-admin.com domain', async () => {
       const res = await request(app)
         .post('/api/auth/signup')
         .send({
@@ -42,10 +51,10 @@ describe('Issue #147 - Auto-assign default user role during manual signup', () =
         });
 
       expect(res.status).toBe(201);
-      expect(res.body.data.user.role).toBe('ADMIN');
+      expect(res.body.data.user.role).toBe('VIEWER');
     });
 
-    it('should assign ADMIN role to users with admin.navin.io domain', async () => {
+    it('should assign VIEWER role to users with admin.navin.io domain', async () => {
       const res = await request(app)
         .post('/api/auth/signup')
         .send({
@@ -56,7 +65,7 @@ describe('Issue #147 - Auto-assign default user role during manual signup', () =
         });
 
       expect(res.status).toBe(201);
-      expect(res.body.data.user.role).toBe('ADMIN');
+      expect(res.body.data.user.role).toBe('VIEWER');
     });
 
     it('should assign VIEWER role to standard registrations by default', async () => {
