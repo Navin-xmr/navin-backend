@@ -2,6 +2,9 @@ openapi: 3.0.0
 info:
   title: Navin Backend API
   version: 1.0.0
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
   description: |
     Navin Backend is the logistics / supply-chain HTTP API for shipment lifecycle management,
     IoT telemetry ingest and anomaly detection, Stellar-backed settlements/payments, and

@@ -6,18 +6,23 @@
  * the frontend can narrow the payload with a simple switch/if check.
  */
 
-import type {
-  TelemetryUpdatePayload,
-  AnomalyAlertPayload,
-  StatusUpdatePayload,
-  PaymentStatusPayload,
+import {
+  SOCKET_EVENTS,
+  type TelemetryUpdatePayload,
+  type AnomalyAlertPayload,
+  type StatusUpdatePayload,
+  type SettlementStatusPayload,
 } from '../../shared/types/socketEvents.js';
 
 /** Epoch-milliseconds timestamp added by pushRecentEvent(). */
 type WithPublishedAt = { publishedAt: number };
 
+/**
+ * Discriminants come from `SOCKET_EVENTS` so the polling payload cannot drift
+ * away from the names the Socket.io/SSE emitters actually publish.
+ */
 export type RealtimeEvent =
-  | ({ type: 'telemetry_update' } & TelemetryUpdatePayload & WithPublishedAt)
-  | ({ type: 'anomaly_detected' } & AnomalyAlertPayload & WithPublishedAt)
-  | ({ type: 'status_update' } & StatusUpdatePayload & WithPublishedAt)
-  | ({ type: 'payment_status_changed' } & PaymentStatusPayload & WithPublishedAt);
+  | ({ type: typeof SOCKET_EVENTS.TELEMETRY_UPDATE } & TelemetryUpdatePayload & WithPublishedAt)
+  | ({ type: typeof SOCKET_EVENTS.ANOMALY_DETECTED } & AnomalyAlertPayload & WithPublishedAt)
+  | ({ type: typeof SOCKET_EVENTS.SHIPMENT_STATUS } & StatusUpdatePayload & WithPublishedAt)
+  | ({ type: typeof SOCKET_EVENTS.SETTLEMENT_STATUS } & SettlementStatusPayload & WithPublishedAt);

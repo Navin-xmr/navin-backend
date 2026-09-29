@@ -175,6 +175,8 @@ jobs:
         run: |
           echo "=== docker compose ps ==="
           docker compose -p smoke-positive -f docker-compose.yml ps
+          echo "=== migrate logs ==="
+          docker compose -p smoke-positive -f docker-compose.yml logs migrate || true
           echo "=== app logs ==="
           docker compose -p smoke-positive -f docker-compose.yml logs app || true
           echo "=== stellar-worker logs ==="

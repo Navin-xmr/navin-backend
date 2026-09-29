@@ -8,6 +8,7 @@
 
 import { jest } from '@jest/globals';
 import { UserRole } from '../../../shared/constants/index.js';
+import { createEmailServiceMock } from '../../../../tests/helpers/mocks.js';
 
 // ---------------------------------------------------------------------------
 // Mock users.repo — must be declared before any dynamic import of the service
@@ -21,11 +22,10 @@ jest.unstable_mockModule('../users.repo.js', () => ({
   findUserById: jest.fn(),
 }));
 
-// Mock email service to prevent network calls
-jest.unstable_mockModule('../../../services/email.service.js', () => ({
-  sendEmail: jest.fn(),
-  invitationEmailHtml: jest.fn(() => '<p>invite</p>'),
-}));
+// Mock email service to prevent network calls. The shared factory provides every
+// named export (incl. resetPasswordEmailHtml, imported transitively via auth.service)
+// with deterministic, SMTP-free implementations.
+jest.unstable_mockModule('../../../services/email.service.js', () => createEmailServiceMock());
 
 // ---------------------------------------------------------------------------
 // Dynamic imports after mocks are set up

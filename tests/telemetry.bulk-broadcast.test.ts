@@ -4,6 +4,13 @@ import request from 'supertest';
 import { signToken } from './fixtures/factories.js';
 import type { Application } from 'express';
 import * as fc from 'fast-check';
+import {
+  socketIoMock,
+  telemetryEmitterMock,
+  telemetryPayloadProblems,
+  expectTelemetryPayload,
+} from './helpers/socketContract.js';
+import type { TelemetryUpdatePayload } from '../src/shared/types/socketEvents.js';
 
 /** @see telemetry-improvements spec */
 // Relative specifier (not file://) so jest.unstable_mockModule resolves like production imports
@@ -13,22 +20,35 @@ const socketIoPath = '../src/infra/socket/io.js';
 // Task 6: Socket.io broadcast tests for POST /api/telemetry/bulk
 // ─────────────────────────────────────────────────────────────────────────────
 
+type SyntheticTelemetryDoc = {
+  _id: { toString: () => string };
+  shipmentId: { toString: () => string };
+  sensorId: string | undefined;
+  temperature: number;
+  humidity: number;
+  latitude: number;
+  longitude: number;
+  batteryLevel: number;
+  timestamp: Date;
+  dataHash: string;
+  anchorStatus: 'PENDING_ANCHOR';
+  stellarTxHash: string | undefined;
+};
+
+type TelemetryCreateInput = {
+  shipmentId: string;
+  temperature: number;
+  humidity: number;
+  latitude: number;
+  longitude: number;
+  batteryLevel: number;
+  timestamp: Date;
+  sensorId?: string;
+};
 
 // ─── Shared synthetic Telemetry.create factory ───────────────────────────────
 // Returns a document whose timestamp is a real Date (service calls .toISOString())
-function makeSyntheticTelemetryDoc(
-  doc: {
-    shipmentId: string;
-    temperature: number;
-    humidity: number;
-    latitude: number;
-    longitude: number;
-    batteryLevel: number;
-    timestamp: Date;
-    sensorId?: string;
-  },
-  id: string
-) {
+function makeSyntheticTelemetryDoc(doc: TelemetryCreateInput, id: string): SyntheticTelemetryDoc {
   return {
     _id: { toString: () => id },
     shipmentId: { toString: () => doc.shipmentId },
@@ -55,8 +75,15 @@ function makeSyntheticTelemetryDoc(
  * - jest.unstable_mockModule called in beforeEach before buildApp()
  */
 describe('POST /api/telemetry/bulk — Socket.io broadcast (example-based)', () => {
-
-  const validToken = signToken({ userId: '671000000000000000000001', role: 'ADMIN', organizationId: '671000000000000000000002', jti: 'test-jti-bulk-broadcast' }, { expiresIn: '1h' });
+  const validToken = signToken(
+    {
+      userId: '671000000000000000000001',
+      role: 'ADMIN',
+      organizationId: '671000000000000000000002',
+      jti: 'test-jti-bulk-broadcast',
+    },
+    { expiresIn: '1h' }
+  );
 
   const singleItem = {
     shipmentId: 'aabbccddeeff001122334455',
@@ -69,8 +96,9 @@ describe('POST /api/telemetry/bulk — Socket.io broadcast (example-based)', () 
   };
 
   // Stable mock references — factory closures always capture the same objects
-  const mockEmitTelemetryUpdate = jest.fn();
-  const mockTelemetryCreate = jest.fn<(...args: any[]) => Promise<ReturnType<typeof makeSyntheticTelemetryDoc>>>();
+  const mockEmitTelemetryUpdate = telemetryEmitterMock();
+  const mockTelemetryCreate =
+    jest.fn<(doc: TelemetryCreateInput) => Promise<SyntheticTelemetryDoc>>();
 
   let app: Application;
 
@@ -79,33 +107,22 @@ describe('POST /api/telemetry/bulk — Socket.io broadcast (example-based)', () 
     jest.clearAllMocks();
 
     let createCallCount = 0;
-    mockTelemetryCreate.mockImplementation(
-      (doc: {
-        shipmentId: string;
-        temperature: number;
-        humidity: number;
-        latitude: number;
-        longitude: number;
-        batteryLevel: number;
-        timestamp: Date;
-        sensorId?: string;
-      }) =>
-        Promise.resolve(
-          makeSyntheticTelemetryDoc(doc, `telemetry-id-${++createCallCount}`)
-        )
+    mockTelemetryCreate.mockImplementation(doc =>
+      Promise.resolve(makeSyntheticTelemetryDoc(doc, `telemetry-id-${++createCallCount}`))
     );
 
-    await jest.unstable_mockModule(socketIoPath, () => ({
-      initSocketIO: jest.fn(),
-      getIO: jest.fn(),
-      emitAnomalyDetected: jest.fn(),
-      emitTelemetryUpdate: mockEmitTelemetryUpdate,
-      emitStatusUpdate: jest.fn(),
-    }));
+    // #759: the mock must expose the *whole* io.js surface. The payments module
+    // imports `emitPaymentStatusChange`, so omitting it broke module linking
+    // ("does not provide an export named 'emitPaymentStatusChange'").
+    await jest.unstable_mockModule(socketIoPath, () =>
+      socketIoMock({
+        emitTelemetryUpdate: mockEmitTelemetryUpdate,
+      })
+    );
 
     await jest.unstable_mockModule('../src/infra/redis/queue.js', () => ({
       pushAlertJob: jest.fn(),
-      pushStellarAnchorJob: jest.fn<any>().mockResolvedValue(undefined),
+      pushStellarAnchorJob: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
       getTransactionQueue: jest.fn(),
       getRedisClient: jest.fn(),
     }));
@@ -135,7 +152,9 @@ describe('POST /api/telemetry/bulk — Socket.io broadcast (example-based)', () 
     }));
 
     await jest.unstable_mockModule('../src/modules/anomaly/anomaly.service.js', () => ({
-      detectAnomaly: jest.fn<any>().mockResolvedValue({ detected: false, anomalies: [] }),
+      detectAnomaly: jest
+        .fn<() => Promise<{ detected: boolean; anomalies: unknown[] }>>()
+        .mockResolvedValue({ detected: false, anomalies: [] }),
     }));
 
     const appModule = await import('../src/app.js');
@@ -152,41 +171,45 @@ describe('POST /api/telemetry/bulk — Socket.io broadcast (example-based)', () 
     expect(mockEmitTelemetryUpdate).toHaveBeenCalledTimes(1);
   });
 
-  it('first argument to emitTelemetryUpdate equals the item shipmentId (Req 4.2)', async () => {
+  it('broadcasts to the item shipmentId (Req 4.2)', async () => {
     const res = await request(app)
       .post('/api/telemetry/bulk')
       .set('Authorization', `Bearer ${validToken}`)
       .send({ items: [singleItem] });
 
     expect(res.status).toBe(201);
-    const firstArg = mockEmitTelemetryUpdate.mock.calls[0][0] as string;
-    expect(firstArg).toBe(singleItem.shipmentId);
+    const [shipmentId] = mockEmitTelemetryUpdate.mock.calls[0];
+    expect(shipmentId).toBe(singleItem.shipmentId);
   });
 
-  it('second argument to emitTelemetryUpdate contains all required TelemetryUpdatePayload fields (Req 4.3)', async () => {
+  it('broadcast payload satisfies the full TelemetryUpdatePayload contract (Req 4.3)', async () => {
     const res = await request(app)
       .post('/api/telemetry/bulk')
       .set('Authorization', `Bearer ${validToken}`)
       .send({ items: [singleItem] });
 
     expect(res.status).toBe(201);
-    const payload = mockEmitTelemetryUpdate.mock.calls[0][1] as Record<string, unknown>;
 
-    expect(payload).toEqual(
-      expect.objectContaining({
-        shipmentId: expect.any(String) as unknown,
-        temperature: expect.any(Number) as unknown,
-        humidity: expect.any(Number) as unknown,
-        latitude: expect.any(Number) as unknown,
-        longitude: expect.any(Number) as unknown,
-        batteryLevel: expect.any(Number) as unknown,
-        timestamp: expect.any(String) as unknown,
-        dataHash: expect.any(String) as unknown,
-      })
+    const payload: TelemetryUpdatePayload = expectTelemetryPayload(
+      mockEmitTelemetryUpdate.mock.calls[0][1]
     );
+
+    expect(payload.shipmentId).toBe(singleItem.shipmentId);
+    expect(payload.temperature).toBe(singleItem.temperature);
+    expect(payload.humidity).toBe(singleItem.humidity);
+    expect(payload.latitude).toBe(singleItem.latitude);
+    expect(payload.longitude).toBe(singleItem.longitude);
+    expect(payload.batteryLevel).toBe(singleItem.batteryLevel);
+    expect(payload.timestamp).toBe(new Date(singleItem.timestamp).toISOString());
+    expect(payload.telemetryId).toBe('telemetry-id-1');
+    // sensorId falls back to the shipmentId when the item carries none.
+    expect(payload.sensorId).toBe(singleItem.shipmentId);
+    expect(payload.anchorStatus).toBe('PENDING_ANCHOR');
+    // Not anchored yet, so the optional Stellar hash must stay absent.
+    expect(payload.stellarTxHash).toBeUndefined();
   });
 
-  it('returns 401 and does not call emitTelemetryUpdate when JWT is absent (Req 4.5)', async () => {
+  it('returns 401 and does not broadcast when JWT is absent (Req 4.5)', async () => {
     const res = await request(app)
       .post('/api/telemetry/bulk')
       .send({ items: [singleItem] });
@@ -202,107 +225,86 @@ describe('POST /api/telemetry/bulk — Socket.io broadcast (example-based)', () 
  * Validates: Requirements 4.4
  */
 describe('bulkIngestTelemetry — Property 1: emit count equals item count', () => {
-  it(
-    'emitTelemetryUpdate is called exactly N times for N items (Req 4.4)',
-    async () => {
-      // Feature: telemetry-improvements, Property 1: Bulk ingest emit count equals item count
-      jest.resetModules();
+  it('emitTelemetryUpdate is called exactly N times for N items (Req 4.4)', async () => {
+    // Feature: telemetry-improvements, Property 1: Bulk ingest emit count equals item count
+    jest.resetModules();
 
-      const mockEmit = jest.fn();
-      let createCallCount = 0;
+    const mockEmit = telemetryEmitterMock();
+    let createCallCount = 0;
 
-      await jest.unstable_mockModule(socketIoPath, () => ({
-        initSocketIO: jest.fn(),
-        getIO: jest.fn(),
-        emitAnomalyDetected: jest.fn(),
-        emitTelemetryUpdate: mockEmit,
-        emitStatusUpdate: jest.fn(),
-      }));
+    await jest.unstable_mockModule(socketIoPath, () =>
+      socketIoMock({ emitTelemetryUpdate: mockEmit })
+    );
 
-      await jest.unstable_mockModule('../src/infra/redis/queue.js', () => ({
-        pushAlertJob: jest.fn(),
-        pushStellarAnchorJob: jest.fn<any>().mockResolvedValue(undefined),
-        getTransactionQueue: jest.fn(),
-        getRedisClient: jest.fn(),
-      }));
+    await jest.unstable_mockModule('../src/infra/redis/queue.js', () => ({
+      pushAlertJob: jest.fn(),
+      pushStellarAnchorJob: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
+      getTransactionQueue: jest.fn(),
+      getRedisClient: jest.fn(),
+    }));
 
-      await jest.unstable_mockModule('../src/modules/anomaly/anomaly.service.js', () => ({
-        detectAnomaly: jest.fn<any>().mockResolvedValue({ detected: false, anomalies: [] }),
-      }));
+    await jest.unstable_mockModule('../src/modules/anomaly/anomaly.service.js', () => ({
+      detectAnomaly: jest
+        .fn<() => Promise<{ detected: boolean; anomalies: unknown[] }>>()
+        .mockResolvedValue({ detected: false, anomalies: [] }),
+    }));
 
-      await jest.unstable_mockModule('../src/modules/telemetry/telemetry.model.js', () => ({
-        Telemetry: {
-          create: jest.fn().mockImplementation((doc: unknown) => {
-            const typed = doc as {
-              shipmentId: string;
-              temperature: number;
-              humidity: number;
-              latitude: number;
-              longitude: number;
-              batteryLevel: number;
-              timestamp: Date;
-              sensorId?: string;
-            };
-            return Promise.resolve(
-              makeSyntheticTelemetryDoc(typed, `telemetry-id-${++createCallCount}`)
-            );
-          }),
-        },
-        TelemetryAnchorStatus: {
-          PENDING_ANCHOR: 'PENDING_ANCHOR',
-          ANCHORED: 'ANCHORED',
-          ANCHOR_FAILED: 'ANCHOR_FAILED',
-        },
-      }));
+    await jest.unstable_mockModule('../src/modules/telemetry/telemetry.model.js', () => ({
+      Telemetry: {
+        create: jest
+          .fn<(doc: TelemetryCreateInput) => Promise<SyntheticTelemetryDoc>>()
+          .mockImplementation(doc =>
+            Promise.resolve(makeSyntheticTelemetryDoc(doc, `telemetry-id-${++createCallCount}`))
+          ),
+      },
+      TelemetryAnchorStatus: {
+        PENDING_ANCHOR: 'PENDING_ANCHOR',
+        ANCHORED: 'ANCHORED',
+        ANCHOR_FAILED: 'ANCHOR_FAILED',
+      },
+    }));
 
-      await jest.unstable_mockModule('../src/modules/shipments/shipments.model.js', () => ({
-        Shipment: {
-          find: jest.fn(),
-          findOne: jest.fn(),
-          findById: jest.fn(),
-          findByIdAndUpdate: jest.fn(),
-        },
-        ShipmentStatus: {
-          CREATED: 'CREATED',
-          IN_TRANSIT: 'IN_TRANSIT',
-          DELIVERED: 'DELIVERED',
-          CANCELLED: 'CANCELLED',
-        },
-      }));
+    await jest.unstable_mockModule('../src/modules/shipments/shipments.model.js', () => ({
+      Shipment: {
+        find: jest.fn(),
+        findOne: jest.fn(),
+        findById: jest.fn(),
+        findByIdAndUpdate: jest.fn(),
+      },
+      ShipmentStatus: {
+        CREATED: 'CREATED',
+        IN_TRANSIT: 'IN_TRANSIT',
+        DELIVERED: 'DELIVERED',
+        CANCELLED: 'CANCELLED',
+      },
+    }));
 
-      const { bulkIngestTelemetry } = await import(
-        '../src/modules/telemetry/telemetry.service.js'
-      );
+    const { bulkIngestTelemetry } = await import('../src/modules/telemetry/telemetry.service.js');
 
-      const itemArb = fc.record({
-        shipmentId: fc.hexaString({ minLength: 24, maxLength: 24 }),
-        temperature: fc.float({ min: -50, max: 100, noNaN: true }),
-        humidity: fc.float({ min: 0, max: 100, noNaN: true }),
-        latitude: fc.float({ min: -90, max: 90, noNaN: true }),
-        longitude: fc.float({ min: -180, max: 180, noNaN: true }),
-        batteryLevel: fc.float({ min: 0, max: 100, noNaN: true }),
-        timestamp: fc
-          .date({ min: new Date('2020-01-01'), max: new Date('2030-01-01') })
-          .filter(d => !Number.isNaN(d.getTime())),
-      });
+    const itemArb = fc.record({
+      shipmentId: fc.hexaString({ minLength: 24, maxLength: 24 }),
+      temperature: fc.float({ min: -50, max: 100, noNaN: true }),
+      humidity: fc.float({ min: 0, max: 100, noNaN: true }),
+      latitude: fc.float({ min: -90, max: 90, noNaN: true }),
+      longitude: fc.float({ min: -180, max: 180, noNaN: true }),
+      batteryLevel: fc.float({ min: 0, max: 100, noNaN: true }),
+      timestamp: fc
+        .date({ min: new Date('2020-01-01'), max: new Date('2030-01-01') })
+        .filter(d => !Number.isNaN(d.getTime())),
+    });
 
-      await fc.assert(
-        fc.asyncProperty(
-          fc.array(itemArb, { minLength: 1, maxLength: 10 }),
-          async items => {
-            mockEmit.mockClear();
-            createCallCount = 0;
+    await fc.assert(
+      fc.asyncProperty(fc.array(itemArb, { minLength: 1, maxLength: 10 }), async items => {
+        mockEmit.mockClear();
+        createCallCount = 0;
 
-            await bulkIngestTelemetry(items);
+        await bulkIngestTelemetry(items);
 
-            return mockEmit.mock.calls.length === items.length;
-          }
-        ),
-        { numRuns: 100 }
-      );
-    },
-    60_000
-  );
+        return mockEmit.mock.calls.length === items.length;
+      }),
+      { numRuns: 100 }
+    );
+  }, 60_000);
 });
 
 /**
@@ -311,118 +313,86 @@ describe('bulkIngestTelemetry — Property 1: emit count equals item count', () 
  * Validates: Requirements 4.3
  */
 describe('bulkIngestTelemetry — Property 2: emit payload contains all required TelemetryUpdatePayload fields', () => {
-  it(
-    'second argument to emitTelemetryUpdate always contains all required TelemetryUpdatePayload fields (Req 4.3)',
-    async () => {
-      // Feature: telemetry-improvements, Property 2: Emit payload contains all required TelemetryUpdatePayload fields
-      jest.resetModules();
+  it('second argument to emitTelemetryUpdate always contains all required TelemetryUpdatePayload fields (Req 4.3)', async () => {
+    // Feature: telemetry-improvements, Property 2: Emit payload contains all required TelemetryUpdatePayload fields
+    jest.resetModules();
 
-      const mockEmit = jest.fn();
-      let createCallCount = 0;
+    const mockEmit = telemetryEmitterMock();
+    let createCallCount = 0;
 
-      await jest.unstable_mockModule(socketIoPath, () => ({
-        initSocketIO: jest.fn(),
-        getIO: jest.fn(),
-        emitAnomalyDetected: jest.fn(),
-        emitTelemetryUpdate: mockEmit,
-        emitStatusUpdate: jest.fn(),
-      }));
+    await jest.unstable_mockModule(socketIoPath, () =>
+      socketIoMock({ emitTelemetryUpdate: mockEmit })
+    );
 
-      await jest.unstable_mockModule('../src/infra/redis/queue.js', () => ({
-        pushAlertJob: jest.fn(),
-        pushStellarAnchorJob: jest.fn<any>().mockResolvedValue(undefined),
-        getTransactionQueue: jest.fn(),
-        getRedisClient: jest.fn(),
-      }));
+    await jest.unstable_mockModule('../src/infra/redis/queue.js', () => ({
+      pushAlertJob: jest.fn(),
+      pushStellarAnchorJob: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
+      getTransactionQueue: jest.fn(),
+      getRedisClient: jest.fn(),
+    }));
 
-      await jest.unstable_mockModule('../src/modules/anomaly/anomaly.service.js', () => ({
-        detectAnomaly: jest.fn<any>().mockResolvedValue({ detected: false, anomalies: [] }),
-      }));
+    await jest.unstable_mockModule('../src/modules/anomaly/anomaly.service.js', () => ({
+      detectAnomaly: jest
+        .fn<() => Promise<{ detected: boolean; anomalies: unknown[] }>>()
+        .mockResolvedValue({ detected: false, anomalies: [] }),
+    }));
 
-      await jest.unstable_mockModule('../src/modules/telemetry/telemetry.model.js', () => ({
-        Telemetry: {
-          create: jest.fn().mockImplementation((doc: unknown) => {
-            const typed = doc as {
-              shipmentId: string;
-              temperature: number;
-              humidity: number;
-              latitude: number;
-              longitude: number;
-              batteryLevel: number;
-              timestamp: Date;
-              sensorId?: string;
-            };
-            return Promise.resolve(
-              makeSyntheticTelemetryDoc(typed, `telemetry-id-${++createCallCount}`)
-            );
-          }),
-        },
-        TelemetryAnchorStatus: {
-          PENDING_ANCHOR: 'PENDING_ANCHOR',
-          ANCHORED: 'ANCHORED',
-          ANCHOR_FAILED: 'ANCHOR_FAILED',
-        },
-      }));
+    await jest.unstable_mockModule('../src/modules/telemetry/telemetry.model.js', () => ({
+      Telemetry: {
+        create: jest
+          .fn<(doc: TelemetryCreateInput) => Promise<SyntheticTelemetryDoc>>()
+          .mockImplementation(doc =>
+            Promise.resolve(makeSyntheticTelemetryDoc(doc, `telemetry-id-${++createCallCount}`))
+          ),
+      },
+      TelemetryAnchorStatus: {
+        PENDING_ANCHOR: 'PENDING_ANCHOR',
+        ANCHORED: 'ANCHORED',
+        ANCHOR_FAILED: 'ANCHOR_FAILED',
+      },
+    }));
 
-      await jest.unstable_mockModule('../src/modules/shipments/shipments.model.js', () => ({
-        Shipment: {
-          find: jest.fn(),
-          findOne: jest.fn(),
-          findById: jest.fn(),
-          findByIdAndUpdate: jest.fn(),
-        },
-        ShipmentStatus: {
-          CREATED: 'CREATED',
-          IN_TRANSIT: 'IN_TRANSIT',
-          DELIVERED: 'DELIVERED',
-          CANCELLED: 'CANCELLED',
-        },
-      }));
+    await jest.unstable_mockModule('../src/modules/shipments/shipments.model.js', () => ({
+      Shipment: {
+        find: jest.fn(),
+        findOne: jest.fn(),
+        findById: jest.fn(),
+        findByIdAndUpdate: jest.fn(),
+      },
+      ShipmentStatus: {
+        CREATED: 'CREATED',
+        IN_TRANSIT: 'IN_TRANSIT',
+        DELIVERED: 'DELIVERED',
+        CANCELLED: 'CANCELLED',
+      },
+    }));
 
-      const { bulkIngestTelemetry } = await import(
-        '../src/modules/telemetry/telemetry.service.js'
-      );
+    const { bulkIngestTelemetry } = await import('../src/modules/telemetry/telemetry.service.js');
 
-      const itemArb = fc.record({
-        shipmentId: fc.hexaString({ minLength: 24, maxLength: 24 }),
-        temperature: fc.float({ min: -50, max: 100, noNaN: true }),
-        humidity: fc.float({ min: 0, max: 100, noNaN: true }),
-        latitude: fc.float({ min: -90, max: 90, noNaN: true }),
-        longitude: fc.float({ min: -180, max: 180, noNaN: true }),
-        batteryLevel: fc.float({ min: 0, max: 100, noNaN: true }),
-        timestamp: fc
-          .date({ min: new Date('2020-01-01'), max: new Date('2030-01-01') })
-          .filter(d => !Number.isNaN(d.getTime())),
-      });
+    const itemArb = fc.record({
+      shipmentId: fc.hexaString({ minLength: 24, maxLength: 24 }),
+      temperature: fc.float({ min: -50, max: 100, noNaN: true }),
+      humidity: fc.float({ min: 0, max: 100, noNaN: true }),
+      latitude: fc.float({ min: -90, max: 90, noNaN: true }),
+      longitude: fc.float({ min: -180, max: 180, noNaN: true }),
+      batteryLevel: fc.float({ min: 0, max: 100, noNaN: true }),
+      timestamp: fc
+        .date({ min: new Date('2020-01-01'), max: new Date('2030-01-01') })
+        .filter(d => !Number.isNaN(d.getTime())),
+    });
 
-      await fc.assert(
-        fc.asyncProperty(itemArb, async item => {
-          mockEmit.mockClear();
-          createCallCount = 0;
+    await fc.assert(
+      fc.asyncProperty(itemArb, async item => {
+        mockEmit.mockClear();
+        createCallCount = 0;
 
-          await bulkIngestTelemetry([item]);
+        await bulkIngestTelemetry([item]);
 
-          if (mockEmit.mock.calls.length !== 1) return false;
+        if (mockEmit.mock.calls.length !== 1) return false;
 
-          const payload = mockEmit.mock.calls[0][1] as Record<string, unknown>;
-
-          return (
-            typeof payload['shipmentId'] === 'string' &&
-            payload['shipmentId'].length > 0 &&
-            typeof payload['temperature'] === 'number' &&
-            typeof payload['humidity'] === 'number' &&
-            typeof payload['latitude'] === 'number' &&
-            typeof payload['longitude'] === 'number' &&
-            typeof payload['batteryLevel'] === 'number' &&
-            typeof payload['timestamp'] === 'string' &&
-            payload['timestamp'].length > 0 &&
-            typeof payload['dataHash'] === 'string' &&
-            payload['dataHash'].length > 0
-          );
-        }),
-        { numRuns: 100 }
-      );
-    },
-    60_000
-  );
+        return telemetryPayloadProblems(mockEmit.mock.calls[0][1]).length === 0;
+      }),
+      { numRuns: 100 }
+    );
+  }, 60_000);
 });

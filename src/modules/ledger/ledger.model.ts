@@ -8,6 +8,7 @@ export interface ILedgerBlock {
   timestamp: Date;
   shipmentId: Types.ObjectId;
   shipmentReference?: string;
+  /** Canonical event field.  Always populated; never null after migration #661. */
   milestoneEvent: MilestoneEvent;
   /**
    * SHA-256 hex digest of the payload committed by the on-chain transaction.
@@ -17,9 +18,6 @@ export interface ILedgerBlock {
   transactionHash?: string;
   ledger: number;
   verified: boolean;
-
-  // Backward-compatible fields
-  eventType?: MilestoneEvent;
   actor?: string;
   metadata?: Record<string, unknown>;
   deletedAt?: Date;
@@ -51,11 +49,6 @@ const LedgerBlockSchema = new Schema(
       type: String,
       enum: Object.values(MilestoneEvent),
       required: true,
-    },
-    eventType: {
-      type: String,
-      enum: Object.values(MilestoneEvent),
-      required: false,
     },
     transactionHash: { type: String },
     dataHash: { type: String },

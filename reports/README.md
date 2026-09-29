@@ -35,6 +35,8 @@ All charts render with inline SVG and CSS—no external CDN dependencies.
 
 The four `reports/*.html` dashboards are generator-owned outputs. They remain **committed** so reviewers can open them in a browser without running the generators; re-run the scripts when regenerating `*-data.json` so the HTML stays in sync.
 
+They are excluded from the Docker image (`.dockerignore` contains `reports/`) because the runtime does not read them — they exist purely for reviewers and maintainers browsing the repository.
+
 ---
 
 ## API Surface Coverage Reports

@@ -10,8 +10,12 @@ import {
   flushUntilIdle,
   joinShipmentRoom,
   listenOnEphemeralPort,
+  teardownSocketSuite,
   waitForSocketEvent,
 } from './helpers/flush.js';
+import { expectTelemetryPayload } from './helpers/socketContract.js';
+import { SOCKET_EVENTS } from '../src/shared/types/socketEvents.js';
+import type { TelemetryUpdatePayload } from '../src/shared/types/socketEvents.js';
 
 type TelemetryCreateResult = {
   _id: string;
@@ -24,6 +28,9 @@ type TelemetryCreateResult = {
   timestamp: Date;
   dataHash: string;
   stellarTxHash: string;
+  // The schema defaults this to PENDING_ANCHOR, so the stub must carry it too —
+  // otherwise the broadcast contract is asserted against an unfaithful document.
+  anchorStatus: 'PENDING_ANCHOR' | 'ANCHORED' | 'ANCHOR_FAILED';
   rawPayload: Record<string, unknown>;
 };
 
@@ -43,6 +50,24 @@ describe('Socket.io Client Integration Tests', () => {
   let testPort: number;
   const TEST_SHIPMENT_ID = '671000000000000000000001';
 
+  /**
+   * The document the mocked `Telemetry.create` resolves with. Hoisted to
+   * describe scope so assertions can state the *exact* payload the server
+   * broadcasts rather than a loose subset of it.
+   */
+  const telemetryBody = {
+    sensorId: 'sensor-abc-001',
+    shipmentId: TEST_SHIPMENT_ID,
+    temperature: 22.5,
+    humidity: 55,
+    latitude: 12.34,
+    longitude: 56.78,
+    batteryLevel: 91,
+    timestamp: new Date('2026-01-15T12:30:00.000Z'),
+  };
+  const dataHash = generateDataHash(telemetryBody);
+  const anchoredTxHash = 'mock-tx-hash';
+
   const mockAnchorTelemetryHash = jest.fn<() => Promise<{ stellarTxHash: string }>>();
   const mockTelemetryCreate = jest.fn<() => Promise<TelemetryCreateResult>>();
   const mockValidateApiKey = jest.fn<() => Promise<ValidateApiKeyResult>>();
@@ -50,20 +75,7 @@ describe('Socket.io Client Integration Tests', () => {
   beforeAll(async () => {
     jest.clearAllMocks();
 
-    const telemetryBody = {
-      sensorId: 'sensor-abc-001',
-      shipmentId: TEST_SHIPMENT_ID,
-      temperature: 22.5,
-      humidity: 55,
-      latitude: 12.34,
-      longitude: 56.78,
-      batteryLevel: 91,
-      timestamp: new Date('2026-01-15T12:30:00.000Z'),
-    };
-
-    const dataHash = generateDataHash(telemetryBody);
-
-    mockAnchorTelemetryHash.mockResolvedValue({ stellarTxHash: 'mock-tx-hash' });
+    mockAnchorTelemetryHash.mockResolvedValue({ stellarTxHash: anchoredTxHash });
     mockTelemetryCreate.mockResolvedValue({
       _id: 't1',
       shipmentId: telemetryBody.shipmentId,
@@ -74,7 +86,8 @@ describe('Socket.io Client Integration Tests', () => {
       batteryLevel: telemetryBody.batteryLevel,
       timestamp: telemetryBody.timestamp,
       dataHash,
-      stellarTxHash: 'mock-tx-hash',
+      stellarTxHash: anchoredTxHash,
+      anchorStatus: 'PENDING_ANCHOR',
       rawPayload: telemetryBody,
     });
 
@@ -173,7 +186,12 @@ describe('Socket.io Client Integration Tests', () => {
     testPort = await listenOnEphemeralPort(httpServer);
 
     // Connect a real socket.io client
-    const socketToken = signToken({ userId: 'user123', role: 'ADMIN', organizationId: 'org456', jti: randomUUID() });
+    const socketToken = signToken({
+      userId: 'user123',
+      role: 'ADMIN',
+      organizationId: 'org456',
+      jti: randomUUID(),
+    });
 
     socketClient = io(`http://localhost:${testPort}`, {
       transports: ['websocket'],
@@ -183,36 +201,43 @@ describe('Socket.io Client Integration Tests', () => {
     });
 
     // Wait for connection
-    await new Promise<void>(resolve => {
+    await new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(
+        () => reject(new Error('Socket client did not connect within 10 s')),
+        10_000
+      );
       socketClient.on('connect', () => {
+        clearTimeout(timer);
         console.log('[Socket Client] Connected');
         resolve();
+      });
+      socketClient.on('connect_error', (err: Error) => {
+        clearTimeout(timer);
+        reject(err);
       });
     });
   }, 60_000);
 
   afterAll(async () => {
-    if (socketClient?.connected) {
-      socketClient.disconnect();
-    }
-    if (httpServer) {
-      await new Promise<void>(resolve => {
-        httpServer.close(() => resolve());
-      });
-    }
+    await teardownSocketSuite({ socketClient, httpServer });
   });
 
   describe('HTTP-to-WebSocket Pipeline', () => {
-    it('should receive telemetry_update event after joining shipment room and triggering webhook', async () => {
+    it('broadcasts the full location:update payload after joining the room and triggering the webhook', async () => {
       // Step 1: Join the shipment room
       await joinShipmentRoom(socketClient, TEST_SHIPMENT_ID);
 
-      // Step 2: Set up event listener for telemetry_update
-      const telemetryUpdatePromise = new Promise<unknown>(resolve => {
-        socketClient.on('telemetry_update', (data: any) => {
-          resolve(data);
-        });
-      });
+      // Step 2: Set up event listener for telemetry_update (with timeout so a
+      // missed event fails fast instead of hanging until the Jest global timeout)
+      const telemetryUpdatePromise = waitForSocketEvent<unknown>(
+        socketClient,
+        'telemetry_update',
+        10_000
+      // Step 2: Subscribe to the canonical telemetry event before it is emitted
+      const telemetryUpdatePromise = waitForSocketEvent<unknown>(
+        socketClient,
+        SOCKET_EVENTS.TELEMETRY_UPDATE
+      );
 
       // Step 3: Trigger the IoT webhook HTTP endpoint
       const body = {
@@ -233,33 +258,37 @@ describe('Socket.io Client Integration Tests', () => {
 
       expect(res.status).toBe(202);
 
-      // Step 4: Assert the client receives the WebSocket event
-      const receivedData = await telemetryUpdatePromise;
+      // Step 4: Assert the client receives the complete TelemetryUpdatePayload
+      const payload: TelemetryUpdatePayload = expectTelemetryPayload(await telemetryUpdatePromise);
 
-      expect(receivedData).toEqual(
-        expect.objectContaining({
-          shipmentId: TEST_SHIPMENT_ID,
-          temperature: 22.5,
-          humidity: 55,
-          latitude: 12.34,
-          longitude: 56.78,
-          batteryLevel: 91,
-        })
-      );
+      // Exact equality: a renamed, dropped or added required field fails here.
+      // `sensorId` falls back to the shipmentId because the stored document and
+      // the shipment-scoped webhook body carry no sensorId.
+      expect(payload).toEqual({
+        telemetryId: 't1',
+        shipmentId: TEST_SHIPMENT_ID,
+        sensorId: TEST_SHIPMENT_ID,
+        temperature: 22.5,
+        humidity: 55,
+        latitude: 12.34,
+        longitude: 56.78,
+        batteryLevel: 91,
+        timestamp: '2026-01-15T12:30:00.000Z',
+        dataHash,
+        anchorStatus: 'PENDING_ANCHOR',
+        stellarTxHash: anchoredTxHash,
+      });
     }, 30_000);
 
-    it('should not receive events for shipment room not joined', async () => {
+    it('should not receive location:update for a shipment room it never joined', async () => {
       const differentShipmentId = '671000000000000000000999';
+      const received: TelemetryUpdatePayload[] = [];
+      const listener = (payload: TelemetryUpdatePayload) => {
+        received.push(payload);
+      };
 
       // Don't join this shipment room
-      const eventReceived: { received: boolean } = { received: false };
-
-      socketClient.on('telemetry_update', (data: any) => {
-        // Check if this is for a shipment we didn't join
-        if ((data as { shipmentId: string }).shipmentId === differentShipmentId) {
-          eventReceived.received = true;
-        }
-      });
+      socketClient.on(SOCKET_EVENTS.TELEMETRY_UPDATE, listener);
 
       const body = {
         sensorId: 'sensor-abc-002',
@@ -272,16 +301,20 @@ describe('Socket.io Client Integration Tests', () => {
         timestamp: '2026-01-15T13:30:00.000Z',
       };
 
-      await request(app).post('/api/webhooks/iot').set('x-api-key', 'valid-api-key').send(body);
+      try {
+        await request(app).post('/api/webhooks/iot').set('x-api-key', 'valid-api-key').send(body);
 
-      // Let the webhook's async emit settle, then round-trip the socket so any
-      // room broadcast queued before it has been delivered.
-      await flushUntilIdle();
-      const left = waitForSocketEvent(socketClient, 'room_left');
-      socketClient.emit('leave_shipment', differentShipmentId);
-      await left;
+        // Let the webhook's async emit settle, then round-trip the socket so any
+        // room broadcast queued before it has been delivered.
+        await flushUntilIdle();
+        const left = waitForSocketEvent(socketClient, 'room_left');
+        socketClient.emit('leave_shipment', differentShipmentId);
+        await left;
+      } finally {
+        socketClient.off(SOCKET_EVENTS.TELEMETRY_UPDATE, listener);
+      }
 
-      expect(eventReceived.received).toBe(false);
+      expect(received.filter(entry => entry.shipmentId === differentShipmentId)).toEqual([]);
     }, 30_000);
   });
 });

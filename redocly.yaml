@@ -9,3 +9,54 @@ rules:
   # so the two operations are documented as separate path items (#628).
   # Downgraded to a warning: the API surface report stays fully aligned.
   no-identical-paths: warn
+
+  # ── P7-19 triage of lint_output.txt (#697) ──────────────────────────────
+  # The full warning list was captured in lint_output.txt before P7-18
+  # deletes it. Every rule below produced at least one warning; each is
+  # dispositioned either as fixed in swagger.yaml or waived with rationale.
+
+  # info-license — FIXED in swagger.yaml. An MIT license block was added to
+  # the `info` object.
+
+  # no-server-example.com — WAIVED. The only flagged server entry is
+  # `http://localhost:3000`, which documents the local dev workflow. It is
+  # intentional and referenced by README.md and docker-compose.yml.
+  no-server-example.com: off
+
+  # operation-operationId — WAIVED. 96 of the 102 warnings come from this
+  # rule. No generated client (openapi-typescript, orval, etc.) consumes
+  # operationIds in this repo, so adding 96 near-duplicates of the HTTP
+  # method + path is churn with no consumer. Revisit if a codegen client
+  # is introduced.
+  operation-operationId: off
+
+  # operation-4xx-response — WAIVED. Only `GET /api/health` triggers this.
+  # It is a liveness probe consumed by the load balancer; it returns 200 on
+  # success or fails at the LB layer, never with a 4xx from Express.
+  operation-4xx-response: off
+
+  # spec-ref-siblings — WAIVED. `Settlement.escrowRelease` uses `$ref`
+  # alongside `nullable: true` (deprecated in OpenAPI 3.0). Fixing requires
+  # moving `nullable` into the referenced EscrowRelease schema, which would
+  # make every use of EscrowRelease nullable — a schema change with a
+  # broader blast radius than the warning warrants.
+  spec-ref-siblings: off
+
+  # no-illogical-composition-keywords — WAIVED. `GET /api/shipments/{id}/eta`
+  # has a `oneOf` between a populated-ETA schema and an empty-ETA schema; the
+  # two overlap on `estimatedArrival`. Adding a discriminator would be a
+  # breaking schema change for any consumer that parses the response.
+  no-illogical-composition-keywords: off
+  # no-ambiguous-paths — WAIVED. Same root cause as no-identical-paths: the
+  # two deprecated auth api-keys aliases (`/api/auth/api-keys/{organizationId}`
+  # and `/api/auth/api-keys/{apiKeyId}`) have the same shape and differing
+  # parameter names. Documented together per #628.
+  no-ambiguous-paths: off
+
+  # no-unused-components — WAIVED. Two components are defined but unreferenced:
+  #   - `ErrorCodes` (string enum)
+  #   - `headers.X-Request-ID`
+  # Removing them is a safe follow-up once we confirm no test snapshots assert
+  # their presence. Left in place here so this triage PR stays a config-only
+  # change.
+  no-unused-components: off

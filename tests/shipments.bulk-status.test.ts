@@ -2,6 +2,7 @@ import { jest, describe, beforeAll, beforeEach, it, expect } from '@jest/globals
 import { createChainFactoryMock } from './helpers/mocks.js';
 import request from 'supertest';
 import { signToken } from './fixtures/factories.js';
+import { SOCKET_EVENTS } from '../src/shared/types/socketEvents.js';
 import process from 'process';
 import type { Application } from 'express';
 
@@ -276,7 +277,7 @@ describe('Bulk Status Update API', () => {
     expect(s1?.status).toBe('IN_TRANSIT');
   });
 
-  it('should emit status_update events for successful updates', async () => {
+  it(`should emit ${SOCKET_EVENTS.SHIPMENT_STATUS} events for successful updates`, async () => {
     const token = generateToken({ userId: 'admin-1', role: 'ADMIN', organizationId: 'org1' });
     const ioModule = await import('../src/infra/socket/io.js');
 

@@ -139,6 +139,48 @@ describe('Ledger block creation on lifecycle events', () => {
     );
   });
 
+  it('status-change ledger block carries no transactionHash (simulated placeholder, not stale creation tx)', async () => {
+    // Regression test for #663: status blocks must NOT cite shipment.stellarTxHash
+    // (the tokenization tx from creation), because that hash has nothing to do with
+    // a status update.  The block should carry no txHash and metadata.simulated===true
+    // until per-event Soroban anchoring lands.
+    const now = new Date();
+    mockShipmentDoc = {
+      _id: 'ship-2',
+      status: 'CREATED',
+      // Deliberately set stellarTxHash to verify it is NOT forwarded to the ledger.
+      stellarTxHash: 'stale-creation-tx-should-never-appear-in-status-block',
+      milestones: [],
+      updatedAt: now,
+      save: mockSave.mockImplementation(async function (this: Record<string, unknown>) {
+        this.status = 'IN_TRANSIT';
+        (this.milestones as unknown[]).push({
+          name: 'IN_TRANSIT',
+          timestamp: now,
+          description: 'Status changed to IN_TRANSIT',
+        });
+        return this;
+      }),
+    };
+
+    findByIdMock.mockResolvedValue(mockShipmentDoc);
+
+    await updateShipmentStatusService('ship-2', 'IN_TRANSIT' as never, { userId: 'user-2' });
+
+    expect(createLedgerBlockMock).toHaveBeenCalled();
+    const callArg = createLedgerBlockMock.mock.calls.find(
+      ([arg]) => (arg as Record<string, unknown>).shipmentId === 'ship-2'
+    )?.[0] as Record<string, unknown> | undefined;
+
+    expect(callArg).toBeDefined();
+    // No transactionHash — must not carry the stale creation-time tx.
+    expect(callArg).not.toHaveProperty('transactionHash');
+    // metadata.simulated flag must be true so readers know anchoring is pending.
+    expect(callArg?.metadata).toMatchObject({ simulated: true });
+    // previousStatus must still be present for audit purposes.
+    expect(callArg?.metadata).toMatchObject({ previousStatus: 'CREATED' });
+  });
+
   it('proof upload creates a PROOF_SUBMITTED ledger block', async () => {
     const mockFile = multerFile();
 

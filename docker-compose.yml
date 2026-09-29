@@ -1,27 +1,58 @@
+# Mongo root credentials (P4-02). Defaults keep `docker compose up` and the CI
+# smoke test bootable without a local .env.docker; override both in any real
+# deployment. Auth is enforced because MONGO_INITDB_ROOT_* is set — note that it
+# only takes effect on a FRESH `mongo_data` volume (`docker compose down -v`).
+#
+# Shared resource limits + log rotation. Each service merges these with ONE key:
+#   <<: [*resource-limits, *logging]
+# (never two `<<:` keys, never a merge key inside a sequence).
+x-resource-limits: &resource-limits
+  deploy:
+    resources:
+      limits:
+        cpus: "1.0"
+        memory: 1G
+      reservations:
+        cpus: "0.25"
+        memory: 256M
+
+x-logging: &logging
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+
 # Shared runtime env for the API and the BullMQ workers (kept in a single
 # anchor so worker services stay in lock-step with `app`).
 x-worker-env: &worker-env
-  MONGO_URI: mongodb://mongo:27017/navin_dev
+  MONGO_URI: mongodb://${MONGO_INITDB_ROOT_USERNAME:-navin}:${MONGO_INITDB_ROOT_PASSWORD:-navin-dev-password}@mongo:27017/navin_dev?authSource=admin
   REDIS_URL: redis://redis:6379
   JWT_SECRET: ${JWT_SECRET:-dev-secret-key-replace-in-prod-min-32-chars}
   STELLAR_NETWORK: testnet
 
 services:
   mongo:
+    <<: [*resource-limits, *logging]
     image: mongo:6.0
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME:-navin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD:-navin-dev-password}
     ports:
       - "127.0.0.1:27017:27017"
     volumes:
       - mongo_data:/data/db
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      # Authenticated probe: fails if auth is misconfigured, not just if mongod is down.
+      test: ["CMD-SHELL", "mongosh --quiet -u \"$$MONGO_INITDB_ROOT_USERNAME\" -p \"$$MONGO_INITDB_ROOT_PASSWORD\" --authenticationDatabase admin --eval \"db.adminCommand('ping').ok\" | grep -q 1"]
       interval: 10s
       timeout: 5s
       retries: 5
       start_period: 20s
 
   redis:
+    <<: [*resource-limits, *logging]
     image: redis:7-alpine
     # Durability (H2.4): AOF persistence + named volume so BullMQ jobs
     # (transaction_queue anchors, alert_queue alerts) survive container restarts.
@@ -45,6 +76,7 @@ services:
   # on compose versions that don't auto-resolve profiled dependencies, and
   # `required: false` would silently skip migrations — the drift this prevents.
   migrate:
+    <<: [*resource-limits, *logging]
     build: .
     image: navin-backend:local
     command: ["npm", "run", "migrate:up"]
@@ -52,7 +84,7 @@ services:
       - path: .env
         required: false
     environment:
-      - MONGO_URI=mongodb://mongo:27017/navin_dev
+      MONGO_URI: mongodb://${MONGO_INITDB_ROOT_USERNAME:-navin}:${MONGO_INITDB_ROOT_PASSWORD:-navin-dev-password}@mongo:27017/navin_dev?authSource=admin
     depends_on:
       mongo:
         condition: service_healthy
@@ -62,6 +94,7 @@ services:
       disable: true
 
   app:
+    <<: [*resource-limits, *logging]
     build: .
     image: navin-backend:local
     ports:
@@ -92,6 +125,7 @@ services:
   # Dedicated Stellar anchor worker (see docs/adr-worker-topology.md).
   # No ports published — communicates with infra over the compose network only.
   stellar-worker:
+    <<: [*resource-limits, *logging]
     build: .
     image: navin-backend-worker:local
     command: ["node", "dist/src/workers/stellar.worker.js"]
@@ -116,6 +150,7 @@ services:
   # Dedicated Stellar confirmation indexer worker (see docs/adr-worker-topology.md).
   # No ports published — communicates with infra over the compose network only.
   stellar-indexer:
+    <<: [*resource-limits, *logging]
     build: .
     image: navin-backend-indexer:local
     command: ["node", "dist/src/workers/stellar-indexer.worker.js"]

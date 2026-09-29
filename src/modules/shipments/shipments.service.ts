@@ -627,7 +627,12 @@ export const updateShipmentStatusService = async (
   await invalidateAnalyticsPerformanceCache();
   await invalidateShipmentEtaCache(id);
 
-  // Write ledger block for every status change
+  // Write ledger block for every status change.
+  // transactionHash is intentionally omitted here: the only on-chain tx we have
+  // at this point is the tokenization tx recorded at creation time (stellarTxHash),
+  // which is completely unrelated to a status update.  Citing it would create a
+  // false chain-of-custody link.  Per-event anchoring will populate this field
+  // once real Soroban integration lands (see TODO Part 3 / #358).
   try {
     const canonical = buildCanonicalShipmentPayload({
       shipmentId: id,
@@ -639,10 +644,9 @@ export const updateShipmentStatusService = async (
     await createLedgerBlockService({
       shipmentId: id,
       eventType: status as unknown as MilestoneEvent,
-      transactionHash: shipment.stellarTxHash ?? undefined,
-      dataHash: generateDataHash(canonical),
       actor: actor?.userId,
-      metadata: { previousStatus, canonical },
+      metadata: { previousStatus, simulated: true, canonical },
+      dataHash: generateDataHash(canonical),
     });
   } catch (ledgerErr) {
     logger.warn(
@@ -746,7 +750,7 @@ type BulkUpdateResult = {
 /**
  * Updates multiple shipments' status in bulk. Returns partial results — failures for
  * one shipment never roll back successful updates already applied to others.
- * Each successful update emits a `status_update` WebSocket event.
+ * Each successful update emits a `shipment:status` WebSocket event.
  * @param {BulkStatusUpdateInput} input - Bulk update payload (`shipmentIds`, `status`).
  * @param {string} organizationId - Caller's organization id for ownership validation.
  * @param {{ userId?: string }=} actor - Optional actor metadata for audit/milestone attribution.

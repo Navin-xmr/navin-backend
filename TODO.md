@@ -1,6 +1,6 @@
 # navin-backend — Project TODO
 
-Last updated: 2026-09-28 · branch `main` @ `d1b4c4d`
+Last updated: 2026-09-29 · branch `main` @ `3fb3dd3`
 
 ## Contents
 
@@ -159,17 +159,21 @@ Tests use `jest.unstable_mockModule()`; merged source now imports symbols the mo
 
 ## I. Interface spec — co-designed artifact (freeze before any chain code)
 
-- [ ] **I1. Write `docs/chain-interface.md`** — single source of truth, versioned:
+- [x] **I1. Write `docs/chain-interface.md`** — single source of truth, versioned:
       · Functions: `anchor(shipment_id: Symbol, data_hash: BytesN<32>, actor: Address)`, `init_escrow(...)`, `release_escrow(payment_id, proof_hash)` + authorization rules per function
       · Events: topic names + data tuples (e.g. `topic: ["anchor", shipment_id]`, `data: (data_hash, ledger)`)
       · Error taxonomy mapped to backend `ERR_CHAIN_*` codes (register in src/shared/http/errors.ts)
-- [ ] **I2. Mirror spec as TS** — `src/shared/types/chain.ts`; both repos PR against the doc, changes bump spec version. Backend touches chain shapes ONLY through this file
+      ✅ DONE (#727 / #649): `docs/chain-interface.md` present (DRAFT v1); functions, events, error codes defined
+- [x] **I2. Mirror spec as TS** — `src/shared/types/chain.ts`; both repos PR against the doc, changes bump spec version. Backend touches chain shapes ONLY through this file
+      ✅ DONE (#651): `src/shared/types/chain.ts` live with Zod schemas, `CHAIN_SPEC_VERSION`, error map, `parseChainEvent`; `tests/fixtures/chain/` golden vectors present
 
 ## J. Port / adapter layer (backend builds before contracts exist)
 
-- [ ] **J1. Define `ChainAdapter` port** — `src/services/chain/types.ts`:
+- [x] **J1. Define `ChainAdapter` port** — `src/services/chain/types.ts`:
       `anchorEvent(input): Promise<{txHash, ledger}>` · `releaseEscrow(input): Promise<EscrowResult>` (throws AppError on failure — replaces silent `{success:false}` at stellar.service.ts:157–160) · `streamEvents(cursor?): AsyncIterable<ChainEvent>`
-- [ ] **J2. `SimulatedAdapter`** — wraps current manage-data behavior behind the port; responses flagged `"simulated": true` so demos don't imply real escrow
+      ✅ DONE (#650): `src/services/chain/types.ts` live with `ChainAdapter` interface, `AnchorResult`, `EscrowResult`, `ChainTxReceipt`; all methods reject with `AppError`
+- [x] **J2. `SimulatedAdapter`** — wraps current manage-data behavior behind the port; responses flagged `"simulated": true` so demos don't imply real escrow
+      ✅ DONE (#650): `src/services/chain/simulated.adapter.ts` live; Horizon manage-data behind port, `simulated: true` on all receipts, `tx_bad_seq` retry, per-account serializer (J4 partially addressed)
 - [ ] **J3. Config-selected factory** — call sites (telemetry.service.ts:239 anchor job, shipments.service.ts:624 settlement) depend only on the port; `SOROBAN_ADAPTER=simulated|soroban` flips implementations
 - [ ] **J4. Signing safety from day one** — serialize submissions per account or use channel accounts inside the adapter (current stellar.worker concurrency:5 against one keypair will `tx_bad_seq` under load)
 

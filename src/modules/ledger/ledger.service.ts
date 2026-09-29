@@ -7,7 +7,7 @@ import { logger } from '../../shared/logger/logger.js';
 export async function createLedgerBlockService(input: LedgerBlockInput) {
   const block = await ledgerRepo.createLedgerBlock(input);
   logger.info(
-    { blockId: block._id, shipmentId: input.shipmentId, eventType: input.eventType },
+    { blockId: block._id, shipmentId: input.shipmentId, milestoneEvent: block.milestoneEvent },
     'Ledger block created'
   );
   return block;
