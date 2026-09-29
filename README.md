@@ -613,3 +613,8 @@ If you discover a security vulnerability, email [navinxmr@gmail.com](mailto:navi
 ---
 
 **Built on the Stellar ecosystem.**
+
+## Handsoff notes
+
+<!-- handsoff-issue-752 -->
+- #752: [Mock drift] Standardize ESM mock registration in users invitation tests
