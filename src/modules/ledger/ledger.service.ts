@@ -29,3 +29,14 @@ export async function getLedgerBlockByIdService(id: string) {
   }
   return block;
 }
+
+export async function getLedgerBlockVerificationService(id: string) {
+  const block = await getLedgerBlockByIdService(id);
+  return {
+    canonicalPayload: (block as unknown as { canonicalPayload?: unknown }).canonicalPayload ?? null,
+    dataHash: block.dataHash ?? null,
+    txHash: block.transactionHash ?? null,
+    transactionHash: block.transactionHash ?? null,
+    ledger: block.ledger,
+  };
+}

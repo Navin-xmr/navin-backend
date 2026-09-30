@@ -5,7 +5,7 @@ import { requireAuth } from '../../shared/middleware/requireAuth.js';
 import { requireRole } from '../../shared/middleware/requireRole.js';
 import { UserRole } from '../../shared/constants/index.js';
 import { GetLedgerBlocksQuerySchema, LedgerBlockIdParamSchema } from './ledger.validation.js';
-import { getLedgerBlocks, getLedgerBlockById } from './ledger.controller.js';
+import { getLedgerBlocks, getLedgerBlockById, getLedgerBlockVerification } from './ledger.controller.js';
 
 export const ledgerRouter = Router();
 
@@ -23,4 +23,11 @@ ledgerRouter.get(
   requireRole(UserRole.ADMIN, UserRole.MANAGER, UserRole.VIEWER),
   validateRequest({ params: LedgerBlockIdParamSchema }),
   asyncHandler(getLedgerBlockById)
+);
+
+ledgerRouter.get(
+  '/blocks/:id/verification',
+  requireRole(UserRole.ADMIN, UserRole.MANAGER, UserRole.VIEWER),
+  validateRequest({ params: LedgerBlockIdParamSchema }),
+  asyncHandler(getLedgerBlockVerification)
 );

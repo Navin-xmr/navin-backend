@@ -14,6 +14,11 @@ export interface ILedgerBlock {
    * Allows independent verification that `transactionHash` covers the expected data.
    */
   dataHash?: string;
+  /**
+   * Exact deterministic payload that was hashed into `dataHash`.
+   * Persisted alongside every dataHash so verifiers never re-guess bytes.
+   */
+  canonicalPayload?: Record<string, unknown>;
   transactionHash?: string;
   ledger: number;
   verified: boolean;
@@ -59,6 +64,7 @@ const LedgerBlockSchema = new Schema(
     },
     transactionHash: { type: String },
     dataHash: { type: String },
+    canonicalPayload: { type: Schema.Types.Mixed },
     ledger: {
       type: Number,
       required: true,

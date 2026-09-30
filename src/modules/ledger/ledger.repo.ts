@@ -13,6 +13,8 @@ export interface LedgerBlockInput {
   shipmentReference?: string;
   /** SHA-256 hex digest of the payload committed by the on-chain transaction. */
   dataHash?: string;
+  /** Exact payload hashed into dataHash. Persisted alongside every dataHash. */
+  canonicalPayload?: Record<string, unknown>;
   transactionHash?: string;
   ledger?: number;
   verified?: boolean;
@@ -35,6 +37,7 @@ export async function createLedgerBlock(input: LedgerBlockInput): Promise<ILedge
     eventType: input.eventType,
     ...(input.transactionHash && { transactionHash: input.transactionHash }),
     ...(input.dataHash && { dataHash: input.dataHash }),
+    ...(input.canonicalPayload && { canonicalPayload: input.canonicalPayload }),
     ledger: input.ledger ?? input.blockNumber ?? 0,
     verified: input.verified ?? false,
     ...(input.actor && { actor: input.actor }),
