@@ -1,4 +1,4 @@
-import { describe, it, expect } from '@jest/globals';
+import { describe, it, expect, jest } from '@jest/globals';
 import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
@@ -105,5 +105,60 @@ describe('env validation', () => {
   it('rejects an invalid HORIZON_URL', async () => {
     const { code } = await runWithEnv({ HORIZON_URL: 'not-a-url' });
     expect(code).not.toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Email-service mock factory import-surface check (issue #751)
+//
+// Shared factory: createEmailServiceMock in tests/helpers/mocks.ts. It must
+// expose every named export that tested consumers import from the production
+// email module. A missing export
+// (e.g. `resetPasswordEmailHtml`) previously only surfaced when the full suite
+// tried to import the service, producing a confusing failure far from the
+// cause. This check fails fast with a clear message instead.
+//
+// It runs entirely in-process against the factory module: no email is sent and
+// no secrets are read.
+//
+// Supported override pattern for tests:
+//   const email = createEmailServiceMock({ sendEmail: jest.fn() });
+//   // any named export can be overridden by passing it in the overrides object;
+//   // unspecified exports fall back to the factory defaults.
+// ---------------------------------------------------------------------------
+
+describe('email-service mock factory import surface', () => {
+  it('exposes every runtime export of the production email module', async () => {
+    // Compare the factory against the real module runtime exports so a renamed
+    // or added production export fails here with a clear message instead of
+    // surfacing later as a confusing ESM import error in a consumer suite.
+    // Fully in-process: no email is sent and no secrets are read.
+    const [production, helpers] = await Promise.all([
+      import('../services/email.service.js'),
+      import('../../tests/helpers/mocks.js'),
+    ]);
+
+    const mock = helpers.createEmailServiceMock() as unknown as Record<string, unknown>;
+    const missing = Object.keys(production).filter(name => !(name in mock));
+
+    expect(missing).toEqual([]);
+    if (missing.length > 0) {
+      throw new Error(
+        `email-service mock factory is missing named export(s): ${missing.join(
+          ', '
+        )}. Add them to createEmailServiceMock in tests/helpers/mocks.ts.`
+      );
+    }
+  });
+
+  it('supports overriding named exports for tests', async () => {
+    const { createEmailServiceMock } = await import('../../tests/helpers/mocks.js');
+
+    expect(typeof createEmailServiceMock).toBe('function');
+
+    const override = jest.fn(() => 'overridden');
+    const mock = createEmailServiceMock({ sendEmail: override });
+
+    expect(mock.sendEmail).toBe(override);
   });
 });
