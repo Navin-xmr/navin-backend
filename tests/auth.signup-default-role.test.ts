@@ -83,7 +83,10 @@ describe('Issue #147 - Auto-assign default user role during manual signup', () =
       expect(res.body.data.user.role).toBe('VIEWER');
     });
 
-    it('should allow explicit role assignment when provided', async () => {
+    // Explicit roles in the signup body are ignored (#147 Option A, #756):
+    // unauthenticated signup can never escalate; elevation is
+    // invitation/administration-only.
+    it('should ignore an explicit role in the signup body and assign VIEWER', async () => {
       const res = await request(app)
         .post('/api/auth/signup')
         .send({
@@ -95,7 +98,7 @@ describe('Issue #147 - Auto-assign default user role during manual signup', () =
         });
 
       expect(res.status).toBe(201);
-      expect(res.body.data.user.role).toBe('MANAGER');
+      expect(res.body.data.user.role).toBe('VIEWER');
     });
 
     it('should handle edge case: missing organizationId gracefully', async () => {
