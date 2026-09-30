@@ -118,6 +118,6 @@ export function expectSettlementPayload(value: unknown): SettlementStatusPayload
 }
 
 /** The canonical telemetry event name consumers must subscribe to. */
-export const TELEMETRY_EVENT = SOCKET_EVENTS.TELEMETRY_UPDATE;
+export const TELEMETRY_EVENT = SOCKET_EVENTS.LOCATION_UPDATE;
 /** The canonical settlement event name consumers must subscribe to. */
 export const SETTLEMENT_EVENT = SOCKET_EVENTS.SETTLEMENT_STATUS;

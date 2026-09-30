@@ -3,6 +3,7 @@ import { io, Socket } from 'socket.io-client';
 import { createServer, Server } from 'http';
 import { signToken } from './fixtures/factories.js';
 import { randomUUID } from 'crypto';
+import { joinShipmentRoom, listenOnEphemeralPort, teardownSocketSuite, waitForSocketEvent } from './helpers/flush.js';
 import { listenOnEphemeralPort, waitForSocketEvent } from './helpers/flush.js';
 import { expectSettlementPayload } from './helpers/socketContract.js';
 import { SOCKET_EVENTS } from '../src/shared/types/socketEvents.js';
@@ -67,18 +68,24 @@ describe('settlement:status socket event', () => {
       auth: { token },
     });
 
-    await new Promise<void>(resolve => {
-      socketClient.on('connect', () => resolve());
+    await new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(
+        () => reject(new Error('Socket client did not connect within 10 s')),
+        10_000
+      );
+      socketClient.on('connect', () => {
+        clearTimeout(timer);
+        resolve();
+      });
+      socketClient.on('connect_error', err => {
+        clearTimeout(timer);
+        reject(err);
+      });
     });
   }, 30_000);
 
   afterAll(async () => {
-    if (socketClient?.connected) socketClient.disconnect();
-    const { closeSocketIO } = await import('../src/infra/socket/io.js');
-    await closeSocketIO();
-    if (httpServer) {
-      await new Promise<void>(resolve => httpServer.close(() => resolve()));
-    }
+    await teardownSocketSuite({ socketClient, httpServer });
   });
 
   it('subscribes the client to the shipment room named shipment_<id>', async () => {
@@ -99,6 +106,11 @@ describe('settlement:status socket event', () => {
     const { emitPaymentStatusChange } = await import('../src/infra/socket/io.js');
     emitPaymentStatusChange(SHIPMENT_ID, settlementPayload());
 
+    const eventPromise = waitForSocketEvent<Record<string, unknown>>(
+      socketClient,
+      'payment_status_changed',
+      10_000
+    );
     const received: SettlementStatusPayload = expectSettlementPayload(await eventPromise);
 
     // Full equality, not objectContaining: a dropped or renamed field fails here.

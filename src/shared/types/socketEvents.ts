@@ -121,14 +121,21 @@ export type SocketEventName = keyof SocketEventMap;
 export type SocketEventPayload<T extends SocketEventName> = SocketEventMap[T];
 
 /**
- * Canonical event names emitted by the server, as runtime constants.
+ * Canonical event-name constants for all live Socket.IO / SSE events.
+ *
+ * Always reference these constants instead of inline string literals so that
+ * a rename requires an intentional, grep-visible update to both the constant
+ * and any test / client that references it.
  *
  * `satisfies` keeps these literals in lock-step with `SocketEventMap`, so an
  * emitter, the SSE fan-out and any test suite that imports the constant cannot
  * drift onto a stale (or invented) event name.
+ *
+ * Dead names (telemetry_update, payment_status_changed) are NOT included here
+ * and must never be reintroduced.
  */
 export const SOCKET_EVENTS = {
-  TELEMETRY_UPDATE: 'location:update',
+  LOCATION_UPDATE: 'location:update',
   ANOMALY_DETECTED: 'anomaly:detected',
   SHIPMENT_STATUS: 'shipment:status',
   SETTLEMENT_STATUS: 'settlement:status',

@@ -90,8 +90,8 @@ export function closeSocketIO(): Promise<void> {
   shipmentId: string,
   telemetry: TelemetryUpdatePayload
 ): void {
-  getIO().to(shipmentRoomName(shipmentId)).emit(SOCKET_EVENTS.TELEMETRY_UPDATE, telemetry);
-  void safeFanout(SOCKET_EVENTS.TELEMETRY_UPDATE, shipmentId, () =>
+  getIO().to(shipmentRoomName(shipmentId)).emit(SOCKET_EVENTS.LOCATION_UPDATE, telemetry);
+  void safeFanout(SOCKET_EVENTS.LOCATION_UPDATE, shipmentId, () =>
     fanoutLocationUpdate(shipmentId, telemetry)
   );
 }

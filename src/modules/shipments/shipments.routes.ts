@@ -39,6 +39,24 @@ import {
 import { UserRole } from '../../shared/constants/index.js';
 
 export const shipmentsRouter = Router();
+
+/**
+ * Route-role metadata for the shipments module.
+ * Single source of truth — imported by tests/rbac.matrix.test.ts so the
+ * matrix never drifts from what requireRole() actually enforces (TODO G6).
+ */
+export const routeRoles = {
+  'GET /api/shipments': [UserRole.ADMIN, UserRole.MANAGER, UserRole.VIEWER],
+  'GET /api/shipments/:id': [
+    UserRole.SUPER_ADMIN,
+    UserRole.ADMIN,
+    UserRole.MANAGER,
+    UserRole.VIEWER,
+  ],
+  'POST /api/shipments': [UserRole.ADMIN, UserRole.MANAGER],
+  'PATCH /api/shipments/:id': [UserRole.ADMIN, UserRole.MANAGER],
+  'DELETE /api/shipments/:id': [UserRole.ADMIN, UserRole.MANAGER],
+} as const;
 const upload = multer({ storage: multer.memoryStorage() });
 
 const DOCUMENT_MIME_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'];

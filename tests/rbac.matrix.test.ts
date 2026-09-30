@@ -5,14 +5,11 @@ import { randomUUID } from 'crypto';
 import mongoose from 'mongoose';
 import type { Application } from 'express';
 import { env } from '../src/env.js';
-
-const UserRole = {
-  SUPER_ADMIN: 'SUPER_ADMIN',
-  ADMIN: 'ADMIN',
-  MANAGER: 'MANAGER',
-  VIEWER: 'VIEWER',
-  CUSTOMER: 'CUSTOMER',
-} as const;
+import { UserRole } from '../src/shared/constants/index.js';
+import { routeRoles as shipmentRoles } from '../src/modules/shipments/shipments.routes.js';
+import { routeRoles as userRoles } from '../src/modules/users/users.routes.js';
+import { routeRoles as analyticsRoles } from '../src/modules/analytics/analytics.routes.js';
+import { routeRoles as anomalyRoles } from '../src/modules/anomaly/anomaly.routes.js';
 
 // Role definitions for the matrix
 const ROLES = [
@@ -25,40 +22,25 @@ const ROLES = [
 
 type Role = (typeof ROLES)[number];
 
-// Define which roles can access which endpoints
+/**
+ * RBAC_MATRIX is derived from the routeRoles exports of each route module —
+ * single source of truth, zero drift from requireRole() (TODO G6).
+ * Special sentinels: 'PUBLIC' = no auth required; 'API_KEY' = API-key auth.
+ */
 const RBAC_MATRIX: Record<string, Role[]> = {
-  // Users - only admins can manage users (GET route not implemented)
-  'POST /api/users': [UserRole.SUPER_ADMIN, UserRole.ADMIN],
-  'DELETE /api/users/:id': [UserRole.SUPER_ADMIN, UserRole.ADMIN],
+  // Derived from route modules
+  ...userRoles,
+  ...shipmentRoles,
+  ...analyticsRoles,
+  ...anomalyRoles,
 
-  // Shipments - managers+ can modify, viewers can read
-  'GET /api/shipments': [
-    UserRole.SUPER_ADMIN,
-    UserRole.ADMIN,
-    UserRole.MANAGER,
-    UserRole.VIEWER,
-    UserRole.CUSTOMER,
-  ],
-  'GET /api/shipments/:id': [UserRole.SUPER_ADMIN, UserRole.ADMIN, UserRole.MANAGER, UserRole.VIEWER],
-  'POST /api/shipments': [UserRole.ADMIN, UserRole.MANAGER],
-  'PATCH /api/shipments/:id': [UserRole.ADMIN, UserRole.MANAGER],
-  'DELETE /api/shipments/:id': [UserRole.SUPER_ADMIN, UserRole.ADMIN],
-
-  // Analytics - managers+ can access
-  'GET /api/analytics/performance': [UserRole.ADMIN, UserRole.MANAGER],
-
-  // Anomalies - admins and managers only
-  'GET /api/anomalies': [UserRole.ADMIN, UserRole.MANAGER],
-  'PATCH /api/anomalies/:id/resolve': [UserRole.ADMIN, UserRole.MANAGER],
-
-  // Telemetry - public read endpoint
+  // Telemetry GET has no requireRole — all authenticated roles may access.
   'GET /api/telemetry': [
     UserRole.SUPER_ADMIN,
     UserRole.ADMIN,
     UserRole.MANAGER,
     UserRole.VIEWER,
     UserRole.CUSTOMER,
-    'PUBLIC' as Role,
   ],
 
   // Health - public

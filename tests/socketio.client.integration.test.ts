@@ -10,6 +10,7 @@ import {
   flushUntilIdle,
   joinShipmentRoom,
   listenOnEphemeralPort,
+  teardownSocketSuite,
   waitForSocketEvent,
 } from './helpers/flush.js';
 import { expectTelemetryPayload } from './helpers/socketContract.js';
@@ -200,23 +201,25 @@ describe('Socket.io Client Integration Tests', () => {
     });
 
     // Wait for connection
-    await new Promise<void>(resolve => {
+    await new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(
+        () => reject(new Error('Socket client did not connect within 10 s')),
+        10_000
+      );
       socketClient.on('connect', () => {
+        clearTimeout(timer);
         console.log('[Socket Client] Connected');
         resolve();
+      });
+      socketClient.on('connect_error', (err: Error) => {
+        clearTimeout(timer);
+        reject(err);
       });
     });
   }, 60_000);
 
   afterAll(async () => {
-    if (socketClient?.connected) {
-      socketClient.disconnect();
-    }
-    if (httpServer) {
-      await new Promise<void>(resolve => {
-        httpServer.close(() => resolve());
-      });
-    }
+    await teardownSocketSuite({ socketClient, httpServer });
   });
 
   describe('HTTP-to-WebSocket Pipeline', () => {
@@ -224,6 +227,12 @@ describe('Socket.io Client Integration Tests', () => {
       // Step 1: Join the shipment room
       await joinShipmentRoom(socketClient, TEST_SHIPMENT_ID);
 
+      // Step 2: Set up event listener for telemetry_update (with timeout so a
+      // missed event fails fast instead of hanging until the Jest global timeout)
+      const telemetryUpdatePromise = waitForSocketEvent<unknown>(
+        socketClient,
+        'telemetry_update',
+        10_000
       // Step 2: Subscribe to the canonical telemetry event before it is emitted
       const telemetryUpdatePromise = waitForSocketEvent<unknown>(
         socketClient,

@@ -14,6 +14,15 @@ import { UserRole } from '../../shared/constants/index.js';
 
 export const anomaliesRouter = Router();
 
+/**
+ * Route-role metadata for the anomaly module.
+ * Single source of truth — imported by tests/rbac.matrix.test.ts (TODO G6).
+ */
+export const routeRoles = {
+  'GET /api/anomalies': [UserRole.ADMIN, UserRole.MANAGER],
+  'PATCH /api/anomalies/:id/resolve': [UserRole.ADMIN, UserRole.MANAGER],
+} as const;
+
 anomaliesRouter.get(
   '/stats',
   requireAuth,
