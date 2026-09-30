@@ -22,7 +22,7 @@ type WithPublishedAt = { publishedAt: number };
  * away from the names the Socket.io/SSE emitters actually publish.
  */
 export type RealtimeEvent =
-  | ({ type: typeof SOCKET_EVENTS.TELEMETRY_UPDATE } & TelemetryUpdatePayload & WithPublishedAt)
+  | ({ type: typeof SOCKET_EVENTS.LOCATION_UPDATE } & TelemetryUpdatePayload & WithPublishedAt)
   | ({ type: typeof SOCKET_EVENTS.ANOMALY_DETECTED } & AnomalyAlertPayload & WithPublishedAt)
   | ({ type: typeof SOCKET_EVENTS.SHIPMENT_STATUS } & StatusUpdatePayload & WithPublishedAt)
   | ({ type: typeof SOCKET_EVENTS.SETTLEMENT_STATUS } & SettlementStatusPayload & WithPublishedAt);
