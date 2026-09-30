@@ -4,7 +4,6 @@ import { createServer, Server } from 'http';
 import { signToken } from './fixtures/factories.js';
 import { randomUUID } from 'crypto';
 import { joinShipmentRoom, listenOnEphemeralPort, teardownSocketSuite, waitForSocketEvent } from './helpers/flush.js';
-import { listenOnEphemeralPort, waitForSocketEvent } from './helpers/flush.js';
 import { expectSettlementPayload } from './helpers/socketContract.js';
 import { SOCKET_EVENTS } from '../src/shared/types/socketEvents.js';
 import type { SettlementStatusPayload } from '../src/shared/types/socketEvents.js';
@@ -106,23 +105,14 @@ describe('settlement:status socket event', () => {
     const { emitPaymentStatusChange } = await import('../src/infra/socket/io.js');
     emitPaymentStatusChange(SHIPMENT_ID, settlementPayload());
 
-    const eventPromise = waitForSocketEvent<Record<string, unknown>>(
-      socketClient,
-      'payment_status_changed',
-      10_000
-    );
     const received: SettlementStatusPayload = expectSettlementPayload(await eventPromise);
 
-    // Full equality, not objectContaining: a dropped or renamed field fails here.
+    // Full equality against the exact payload passed to the emitter, not
+    // objectContaining: a dropped, renamed or mutated field fails here.
     expect(received).toEqual(settlementPayload());
-    expect(received.paymentId).toBe('pay-1');
     expect(received.shipmentId).toBe(SHIPMENT_ID);
-    expect(received.oldStatus).toBe('PENDING');
-    expect(received.newStatus).toBe('RELEASED');
-    expect(received.amount).toBe(AMOUNT);
     // Guard against a regression that stops propagating the Stellar tx hash.
     expect(received.txHash).toBe(TX_HASH);
-    expect(received.timestamp).toBe('2026-07-24T21:00:00.000Z');
   }, 30_000);
 
   it('keeps txHash propagation covered when the transition is on-chain', async () => {

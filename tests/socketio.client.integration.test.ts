@@ -208,7 +208,6 @@ describe('Socket.io Client Integration Tests', () => {
       );
       socketClient.on('connect', () => {
         clearTimeout(timer);
-        console.log('[Socket Client] Connected');
         resolve();
       });
       socketClient.on('connect_error', (err: Error) => {
@@ -227,16 +226,14 @@ describe('Socket.io Client Integration Tests', () => {
       // Step 1: Join the shipment room
       await joinShipmentRoom(socketClient, TEST_SHIPMENT_ID);
 
-      // Step 2: Set up event listener for telemetry_update (with timeout so a
-      // missed event fails fast instead of hanging until the Jest global timeout)
-      const telemetryUpdatePromise = waitForSocketEvent<unknown>(
-        socketClient,
-        'telemetry_update',
-        10_000
       // Step 2: Subscribe to the canonical telemetry event before it is emitted
+      // (with timeout so a missed event fails fast instead of hanging until the
+      // Jest global timeout). The live event name constant is `location:update` —
+      // retired event-name literals must never reappear here (#757).
       const telemetryUpdatePromise = waitForSocketEvent<unknown>(
         socketClient,
-        SOCKET_EVENTS.TELEMETRY_UPDATE
+        SOCKET_EVENTS.LOCATION_UPDATE,
+        10_000
       );
 
       // Step 3: Trigger the IoT webhook HTTP endpoint
@@ -288,7 +285,7 @@ describe('Socket.io Client Integration Tests', () => {
       };
 
       // Don't join this shipment room
-      socketClient.on(SOCKET_EVENTS.TELEMETRY_UPDATE, listener);
+      socketClient.on(SOCKET_EVENTS.LOCATION_UPDATE, listener);
 
       const body = {
         sensorId: 'sensor-abc-002',
@@ -311,7 +308,7 @@ describe('Socket.io Client Integration Tests', () => {
         socketClient.emit('leave_shipment', differentShipmentId);
         await left;
       } finally {
-        socketClient.off(SOCKET_EVENTS.TELEMETRY_UPDATE, listener);
+        socketClient.off(SOCKET_EVENTS.LOCATION_UPDATE, listener);
       }
 
       expect(received.filter(entry => entry.shipmentId === differentShipmentId)).toEqual([]);
