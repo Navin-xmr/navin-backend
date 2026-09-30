@@ -1,5 +1,5 @@
 import { jest, describe, it, expect, beforeEach } from '@jest/globals';
-import { redisMock } from './fixtures/factories.js';
+import { redisMock, signToken } from './fixtures/factories.js';
 
 /** @see issue-#290 */
 

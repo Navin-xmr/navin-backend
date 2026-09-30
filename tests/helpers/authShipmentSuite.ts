@@ -1,6 +1,6 @@
 /**
  * Shared Mongo-backed setup for the auth/shipment integration suites split
- * out of the former `issues-147-150-154-155.test.ts` bundle (#615).
+ * out of the former `issues-147-150-154-155` bundle (deleted in commit 7e89b83).
  */
 import type { Application } from 'express';
 import { UserModel, OrganizationModel } from '../../src/modules/users/users.model.js';

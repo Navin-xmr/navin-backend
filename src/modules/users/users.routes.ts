@@ -28,6 +28,15 @@ import { UserRole } from '../../shared/constants/index.js';
 
 export const usersRouter = Router();
 
+/**
+ * Route-role metadata for the users module.
+ * Single source of truth — imported by tests/rbac.matrix.test.ts (TODO G6).
+ */
+export const routeRoles = {
+  'POST /api/users': [UserRole.ADMIN, UserRole.SUPER_ADMIN],
+  'DELETE /api/users/:id': [UserRole.ADMIN, UserRole.SUPER_ADMIN],
+} as const;
+
 usersRouter.get('/me', requireAuth, asyncHandler(getCurrentUserController));
 
 usersRouter.patch(

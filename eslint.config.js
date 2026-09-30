@@ -44,10 +44,15 @@ export default [
       'prettier/prettier': ['error', { endOfLine: 'auto' }],
       'no-unused-vars': 'off',
       'no-undef': 'off',
-      'no-console': 'error',
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
       '@typescript-eslint/explicit-function-return-type': 'off',
       '@typescript-eslint/no-explicit-any': 'warn',
+    },
+  },
+  {
+    files: ['src/**/*.ts'],
+    rules: {
+      'no-console': 'error',
     },
   },
   // P7-22 / #700: seed (and other CLI scripts) use colored console.* for human-readable

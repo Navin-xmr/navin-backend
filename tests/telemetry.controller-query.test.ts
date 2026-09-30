@@ -4,7 +4,7 @@ import request from 'supertest';
 import { signToken } from './fixtures/factories.js';
 import type { Application } from 'express';
 
-/** @see telemetry-improvements spec */
+/** @see docs/telemetry-pipeline.md */
 // Relative specifier (not file://) so jest.unstable_mockModule resolves like production imports
 const socketIoPath = '../src/infra/socket/io.js';
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from '@jest/globals';
 import { Telemetry } from '../src/modules/telemetry/telemetry.model.js';
 
-/** @see telemetry-improvements spec */
+/** @see docs/telemetry-pipeline.md */
 /**
  * Schema-inspection tests for TelemetrySchema indexes.
  * Validates Requirements 1.1, 1.2, 1.3, 1.4.
