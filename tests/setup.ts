@@ -55,7 +55,25 @@ beforeAll(async () => {
   }
 }, 180_000);
 
+/**
+ * Global test teardown - runs after each test file completes.
+ * Clears all collections to prevent data bleeding, then disconnects
+ * from MongoDB and releases shared infrastructure handles.
+ */
 afterAll(async () => {
+  // 1. Clear collections before disconnecting
+  if (mongoReady && mongoose.connection.readyState === 1) {
+    const collections = mongoose.connection.collections;
+    for (const collection of Object.values(collections)) {
+      try {
+        await collection.deleteMany({});
+      } catch {
+        // Collection may not exist yet, skip
+      }
+    }
+  }
+
+  // 2. Disconnect MongoDB
   if (mongoose.connection.readyState === 1) {
     await mongoose.disconnect();
   }
@@ -63,7 +81,8 @@ afterAll(async () => {
     await mongoServer.stop();
     mongoServer = null;
   }
-  // Release shared infrastructure handles so `jest --runInBand` exits
+
+  // 3. Release shared infrastructure handles so `jest --runInBand` exits
   // naturally without `--forceExit` and never depends on a live Redis.
   try {
     const { disconnectRedis } = await import('../src/infra/redis/connection.js');
@@ -89,23 +108,7 @@ afterAll(async () => {
   } catch {
     // Ignore — suite may never have touched the queue module.
   }
-}, 60_000);
-
-/**
- * Clear all collections between test files to prevent data bleeding
- */
-afterAll(async () => {
-  if (mongoReady && mongoose.connection.readyState === 1) {
-    const collections = mongoose.connection.collections;
-    for (const collection of Object.values(collections)) {
-      try {
-        await collection.deleteMany({});
-      } catch {
-        // Collection may not exist yet, skip
-      }
-    }
-  }
-}, 30_000);
+}, 90_000);
 
 // Reset all mocks between tests
 afterEach(() => {

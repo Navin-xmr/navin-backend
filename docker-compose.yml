@@ -29,7 +29,6 @@ x-worker-env: &worker-env
   MONGO_URI: mongodb://${MONGO_INITDB_ROOT_USERNAME:-navin}:${MONGO_INITDB_ROOT_PASSWORD:-navin-dev-password}@mongo:27017/navin_dev?authSource=admin
   REDIS_URL: redis://redis:6379
   JWT_SECRET: ${JWT_SECRET:-dev-secret-key-replace-in-prod-min-32-chars}
-  STELLAR_NETWORK: testnet
 
 services:
   mongo:
@@ -81,7 +80,7 @@ services:
     image: navin-backend:local
     command: ["npm", "run", "migrate:up"]
     env_file:
-      - path: .env
+      - path: .env.docker
         required: false
     environment:
       MONGO_URI: mongodb://${MONGO_INITDB_ROOT_USERNAME:-navin}:${MONGO_INITDB_ROOT_PASSWORD:-navin-dev-password}@mongo:27017/navin_dev?authSource=admin
@@ -99,10 +98,10 @@ services:
     image: navin-backend:local
     ports:
       - "3000:3000"
-    # Optional: copy .env.example to .env and override secrets locally.
+    # Optional: copy .env.docker.example to .env.docker and override secrets locally.
     # Compose does not set NODE_ENV — the image defaults to production (#499).
     env_file:
-      - path: .env
+      - path: .env.docker
         required: false
     environment:
       <<: *worker-env
@@ -130,7 +129,7 @@ services:
     image: navin-backend-worker:local
     command: ["node", "dist/src/workers/stellar.worker.js"]
     env_file:
-      - path: .env
+      - path: .env.docker
         required: false
     environment:
       <<: *worker-env
@@ -155,7 +154,7 @@ services:
     image: navin-backend-indexer:local
     command: ["node", "dist/src/workers/stellar-indexer.worker.js"]
     env_file:
-      - path: .env
+      - path: .env.docker
         required: false
     environment:
       <<: *worker-env

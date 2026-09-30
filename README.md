@@ -36,11 +36,11 @@ cd navin-backend
 **2. Create the Compose environment file**
 
 ```bash
-cp .env.example .env
+cp .env.docker.example .env.docker
 # Replace development secrets before using this stack outside a local machine.
 ```
 
-On Windows PowerShell: `Copy-Item .env.example .env`
+On Windows PowerShell: `Copy-Item .env.docker.example .env.docker`
 
 **3. Build and start the production image and dependencies**
 
@@ -63,9 +63,9 @@ On Windows PowerShell: `curl.exe http://localhost:3000/api/health`
 
 The health request should return `success: true` and `data.status: "active"`.
 
-The Compose file reads `.env` when it exists. It supplies the internal
+The Compose file reads `.env.docker` when it exists. It supplies the internal
 container addresses for MongoDB and Redis, so `MONGO_URI` and `REDIS_URL` in
-`.env` do not need to be changed for this workflow. The API is available at
+`.env.docker` do not need to be changed for this workflow. The API is available at
 `http://localhost:3000/api`.
 
 ### Service topology
@@ -559,10 +559,10 @@ Configuration is validated at boot with Zod (`src/env.ts`) — the process **exi
 
 **Core variables:**
 
-| Variable | Required | Default | Description |
+| Variable | Required (Local / Docker) | Default | Description |
 |---|---|---|---|
-| `MONGO_URI` | ✅ Yes | — | MongoDB connection string (`mongodb://…`) |
-| `JWT_SECRET` | ✅ Yes | — | JWT signing secret (**min 32 characters**) |
+| `MONGO_URI` | ✅ Yes / ❌ No | — | MongoDB connection string (`mongodb://…`) |
+| `JWT_SECRET` | ✅ Yes / ❌ No | — | JWT signing secret (**min 32 characters**) |
 | `PORT` | No | `3000` | HTTP listen port |
 | `NODE_ENV` | No | `development` | `development` \| `test` \| `production` |
 | `REDIS_URL` | No | `redis://127.0.0.1:6379` | Redis (BullMQ queues, SSE, caches) |

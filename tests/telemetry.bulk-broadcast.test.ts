@@ -12,7 +12,7 @@ import {
 } from './helpers/socketContract.js';
 import type { TelemetryUpdatePayload } from '../src/shared/types/socketEvents.js';
 
-/** @see telemetry-improvements spec */
+/** @see docs/telemetry-pipeline.md */
 // Relative specifier (not file://) so jest.unstable_mockModule resolves like production imports
 const socketIoPath = '../src/infra/socket/io.js';
 
@@ -221,12 +221,12 @@ describe('POST /api/telemetry/bulk — Socket.io broadcast (example-based)', () 
 
 /**
  * 6.2 Property-based test: emit count equals item count.
- * // Feature: telemetry-improvements, Property 1: Bulk ingest emit count equals item count
+ * // Feature: docs/telemetry-pipeline.md, Property 1: Bulk ingest emit count equals item count
  * Validates: Requirements 4.4
  */
 describe('bulkIngestTelemetry — Property 1: emit count equals item count', () => {
   it('emitTelemetryUpdate is called exactly N times for N items (Req 4.4)', async () => {
-    // Feature: telemetry-improvements, Property 1: Bulk ingest emit count equals item count
+    // Feature: docs/telemetry-pipeline.md, Property 1: Bulk ingest emit count equals item count
     jest.resetModules();
 
     const mockEmit = telemetryEmitterMock();
@@ -309,12 +309,12 @@ describe('bulkIngestTelemetry — Property 1: emit count equals item count', () 
 
 /**
  * 6.3 Property-based test: emit payload shape invariant.
- * // Feature: telemetry-improvements, Property 2: Emit payload contains all required TelemetryUpdatePayload fields
+ * // Feature: docs/telemetry-pipeline.md, Property 2: Emit payload contains all required TelemetryUpdatePayload fields
  * Validates: Requirements 4.3
  */
 describe('bulkIngestTelemetry — Property 2: emit payload contains all required TelemetryUpdatePayload fields', () => {
   it('second argument to emitTelemetryUpdate always contains all required TelemetryUpdatePayload fields (Req 4.3)', async () => {
-    // Feature: telemetry-improvements, Property 2: Emit payload contains all required TelemetryUpdatePayload fields
+    // Feature: docs/telemetry-pipeline.md, Property 2: Emit payload contains all required TelemetryUpdatePayload fields
     jest.resetModules();
 
     const mockEmit = telemetryEmitterMock();
