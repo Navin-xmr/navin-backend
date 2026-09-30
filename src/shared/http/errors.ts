@@ -94,6 +94,13 @@ export const ErrorCodes = {
   TOTP_ALREADY_ENABLED: 'ERR_AUTH_2FA_ALREADY_ENABLED',
   TOTP_NOT_ENABLED: 'ERR_AUTH_2FA_NOT_ENABLED',
   TOTP_INVALID_BACKUP_CODE: 'ERR_AUTH_2FA_INVALID_BACKUP_CODE',
+  // #702 — malformed AES-256-GCM TOTP secret payload.
+  TOTP_INVALID_SECRET_FORMAT: 'ERR_AUTH_2FA_INVALID_SECRET_FORMAT',
+  // #703 — token blocklist received a `jti` that is not a UUID v4.
+  TOKEN_INVALID_IDENTIFIER: 'ERR_AUTH_INVALID_TOKEN_IDENTIFIER',
+  // #701 — Cloudinary upload/delete rejected or returned no result.
+  FILE_UPLOAD_FAILED: 'ERR_FILE_UPLOAD_FAILED',
+  FILE_DELETE_FAILED: 'ERR_FILE_DELETE_FAILED',
 } as const;
 
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes];

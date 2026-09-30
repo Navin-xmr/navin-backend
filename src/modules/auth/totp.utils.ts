@@ -13,6 +13,7 @@
 
 import { createCipheriv, createDecipheriv, randomBytes, createHash } from 'crypto';
 import { env } from '../../env.js';
+import { AppError, ErrorCodes } from '../../shared/http/errors.js';
 
 const ALGORITHM = 'aes-256-gcm';
 const IV_BYTES = 12; // 96-bit IV recommended for GCM
@@ -44,26 +45,33 @@ export function encryptSecret(plaintext: string): string {
 
 /**
  * Decrypts a TOTP secret previously encrypted by `encryptSecret`.
- * @throws {Error} When the payload is malformed or authentication fails (tampered data).
+ *
+ * Both malformed-shape rejections — a wrong number of colon-delimited parts,
+ * and an IV or auth tag of the wrong byte length — funnel through a single
+ * throw site, so the error carries one registered code.
+ *
+ * @throws {AppError} `ERR_AUTH_2FA_INVALID_SECRET_FORMAT` when the payload is
+ *   malformed (wrong part count, or IV/auth-tag lengths that do not match
+ *   AES-256-GCM). Tampered ciphertext is rejected by GCM itself and surfaces as
+ *   the underlying `Error` from `decipher.final()`.
  */
 export function decryptSecret(payload: string): string {
   const parts = payload.split(':');
-  if (parts.length !== 3) {
-    throw new Error('Invalid encrypted secret format');
+
+  if (parts.length === 3) {
+    const [ivHex, tagHex, ctHex] = parts;
+    const iv = Buffer.from(ivHex, 'hex');
+    const tag = Buffer.from(tagHex, 'hex');
+
+    if (iv.length === IV_BYTES && tag.length === TAG_BYTES) {
+      const key = getEncryptionKey();
+      const ciphertext = Buffer.from(ctHex, 'hex');
+      const decipher = createDecipheriv(ALGORITHM, key, iv);
+      decipher.setAuthTag(tag);
+
+      return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString('utf8');
+    }
   }
 
-  const [ivHex, tagHex, ctHex] = parts;
-  const key = getEncryptionKey();
-  const iv = Buffer.from(ivHex, 'hex');
-  const tag = Buffer.from(tagHex, 'hex');
-  const ciphertext = Buffer.from(ctHex, 'hex');
-
-  if (iv.length !== IV_BYTES || tag.length !== TAG_BYTES) {
-    throw new Error('Invalid encrypted secret format');
-  }
-
-  const decipher = createDecipheriv(ALGORITHM, key, iv);
-  decipher.setAuthTag(tag);
-
-  return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString('utf8');
+  throw new AppError(500, 'Invalid encrypted secret format', ErrorCodes.TOTP_INVALID_SECRET_FORMAT);
 }

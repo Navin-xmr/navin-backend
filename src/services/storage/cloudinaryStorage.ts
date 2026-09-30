@@ -12,6 +12,7 @@
 
 import { StorageAdapter, StorageUploadResult, StorageError } from './types.js';
 import { logger } from '../../shared/logger/logger.js';
+import { ErrorCodes } from '../../shared/http/errors.js';
 
 /**
  * Dynamic import to avoid requiring cloudinary at build time.
@@ -108,14 +109,32 @@ export class CloudinaryStorageAdapter implements StorageAdapter {
           },
           (error: unknown, result?: CloudinaryUploadResult) => {
             if (error) {
-              reject(error instanceof Error ? error : new Error(String(error)));
+              reject(
+                new StorageError(
+                  `Cloudinary upload failed: ${
+                    error instanceof Error ? error.message : String(error)
+                  }`,
+                  'cloudinary',
+                  502,
+                  error instanceof Error ? error : undefined,
+                  ErrorCodes.FILE_UPLOAD_FAILED
+                )
+              );
             } else if (result) {
               resolve({
                 url: result.secure_url,
                 key: result.public_id,
               });
             } else {
-              reject(new Error('Cloudinary upload returned no result'));
+              reject(
+                new StorageError(
+                  'Cloudinary upload returned no result',
+                  'cloudinary',
+                  502,
+                  undefined,
+                  ErrorCodes.FILE_UPLOAD_FAILED
+                )
+              );
             }
           }
         );
@@ -148,7 +167,17 @@ export class CloudinaryStorageAdapter implements StorageAdapter {
       return new Promise<void>((resolve, reject) => {
         uploader.destroy(key, (error: unknown, _result?: unknown) => {
           if (error) {
-            reject(error instanceof Error ? error : new Error(String(error)));
+            reject(
+              new StorageError(
+                `Cloudinary delete failed: ${
+                  error instanceof Error ? error.message : String(error)
+                }`,
+                'cloudinary',
+                502,
+                error instanceof Error ? error : undefined,
+                ErrorCodes.FILE_DELETE_FAILED
+              )
+            );
           } else {
             logger.debug(`File deleted from Cloudinary: ${key}`);
             resolve();

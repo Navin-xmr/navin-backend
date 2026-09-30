@@ -18,13 +18,16 @@ import { offsetSkip, paginateCursor } from '../../shared/utils/pagination.js';
 import { auditLog } from '../../shared/utils/auditLog.js';
 
 /**
- * Finds the active (IN_TRANSIT) shipment linked to a given sensorId.
- * The sensorId is stored in offChainMetadata.sensorId on the Shipment document.
- */
-/**
  * Finds the active shipment associated with a sensor ID.
+ *
+ * Only shipments in {@link ShipmentStatus.IN_TRANSIT} are considered, so a
+ * shipment that has already been delivered or cancelled is never matched.
+ * The sensorId is stored in `offChainMetadata.sensorId` on the Shipment
+ * document.
+ *
  * @param {string} sensorId - Sensor identifier from IoT telemetry.
- * @returns {Promise<unknown>} Active shipment document or null.
+ * @returns {Promise<object | null>} The lean shipment document, or `null`
+ *   when no in-transit shipment carries this sensorId.
  */
 export async function findActiveShipmentBySensorId(sensorId: string) {
   return Shipment.findOne({
