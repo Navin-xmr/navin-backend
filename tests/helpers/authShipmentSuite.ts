@@ -12,6 +12,8 @@ export interface AuthShipmentSuite {
   testOrgId: string;
   adminToken: string;
   managerToken: string;
+  /** Only SUPER_ADMIN may invite ADMIN-role members (invitations.service allowedByRole). */
+  superAdminToken: string;
 }
 
 export async function seedAuthShipmentSuite(): Promise<AuthShipmentSuite> {
@@ -40,11 +42,26 @@ export async function seedAuthShipmentSuite(): Promise<AuthShipmentSuite> {
     organizationId: testOrgId,
   });
 
+  // Create super-admin inviter — elevation is invitation-only (#147/#755), and
+  // only SUPER_ADMIN is allowed to invite ADMIN-role members.
+  const superAdminUser = await UserModel.create({
+    email: 'superadmin@navin.io',
+    name: 'Super Admin User',
+    passwordHash: 'hashedpassword',
+    role: 'SUPER_ADMIN',
+    organizationId: testOrgId,
+  });
+
   return {
     app,
     testOrgId,
     adminToken: signToken({ userId: adminUser._id.toString(), role: 'ADMIN', organizationId: testOrgId }),
     managerToken: signToken({ userId: managerUser._id.toString(), role: 'MANAGER', organizationId: testOrgId }),
+    superAdminToken: signToken({
+      userId: superAdminUser._id.toString(),
+      role: 'SUPER_ADMIN',
+      organizationId: testOrgId,
+    }),
   };
 }
 
