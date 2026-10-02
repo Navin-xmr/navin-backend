@@ -74,6 +74,27 @@ Content-Type: application/json
 - `ERR_AUTH_TOKEN_REVOKED` (401) — JWT revoked (user logged out; Redis blocklist hit)
 - `ERR_PERMISSION_DENIED` (403) — User lacks required role
 
+### Two-Factor Authentication (2FA) Errors
+`ERR_AUTH_2FA_*` — raised by the auth module's TOTP helpers. Clients should not prompt for re-entry on these; the stored secret is unreadable and the user must re-enrol.
+- `ERR_AUTH_2FA_INVALID_CODE` (401) — Submitted TOTP code did not match
+- `ERR_AUTH_2FA_NOT_SETUP` (400) — TOTP is not configured for this account
+- `ERR_AUTH_2FA_ALREADY_ENABLED` (409) — TOTP already enabled
+- `ERR_AUTH_2FA_NOT_ENABLED` (400) — Operation requires TOTP to be enabled
+- `ERR_AUTH_2FA_INVALID_BACKUP_CODE` (401) — Backup code did not match
+- `ERR_AUTH_2FA_INVALID_SECRET_FORMAT` (500) — Stored TOTP secret is malformed: wrong part count, or an IV/auth tag that does not match AES-256-GCM (#702). Internal integrity failure, not client-fixable.
+
+### Token Blocklist Errors
+- `ERR_AUTH_INVALID_TOKEN_IDENTIFIER` (400) — Token `jti` is not a UUID v4, so it cannot be blocklisted (#703). Thrown as an `AppError` instead of a bare `Error` from `blocklistKey()`.
+
+### File / Storage Errors
+`ERR_FILE_*` — carried on `StorageError.code` by the storage adapters in `src/services/storage/`. `StorageError` also exposes `provider`, `statusCode`, and `originalError`.
+- `ERR_FILE_UPLOAD_FAILED` (502) — Provider rejected the upload, or returned neither an error nor a result (#701)
+- `ERR_FILE_DELETE_FAILED` (502) — Provider rejected the delete (#701)
+- `ERR_FILE_TOO_LARGE` (413) — Upload exceeds the configured size cap
+- `ERR_INVALID_MIME_TYPE` (415) — Upload MIME type is not accepted
+- `ERR_INVALID_DOCUMENT_TYPE` (415) — Uploaded document type is not accepted
+- `ERR_PHOTO_LIMIT_EXCEEDED` (400) — Photo count limit reached for this resource
+
 ### Resource Errors
 - `ERR_NOT_FOUND` (404) — Generic resource not found
 - `ERR_SHIPMENT_NOT_FOUND` (404) — Specific shipment not found

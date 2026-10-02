@@ -1,4 +1,5 @@
 import { getRedisClient } from './connection.js';
+import { AppError, ErrorCodes } from '../../shared/http/errors.js';
 
 /** Strict UUID v4 prefix for O(1) Redis key lookups during auth checks. */
 export const BLOCKLIST_PREFIX = 'blocklist:uuid:';
@@ -9,9 +10,20 @@ export function isValidJti(jti: string): boolean {
   return UUID_V4_REGEX.test(jti);
 }
 
+/**
+ * Builds the Redis key for a token identifier.
+ *
+ * @throws {AppError} `ERR_AUTH_INVALID_TOKEN_IDENTIFIER` when `jti` is not a
+ *   UUID v4. Surfacing a registered code lets `errorMiddleware` and clients
+ *   branch on the cause instead of matching on message text.
+ */
 function blocklistKey(jti: string): string {
   if (!isValidJti(jti)) {
-    throw new Error('Invalid token identifier: expected UUID v4');
+    throw new AppError(
+      400,
+      'Invalid token identifier: expected UUID v4',
+      ErrorCodes.TOKEN_INVALID_IDENTIFIER
+    );
   }
   return `${BLOCKLIST_PREFIX}${jti.toLowerCase()}`;
 }
