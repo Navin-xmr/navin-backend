@@ -3,8 +3,10 @@ import { isoDatePlugin } from '../../shared/plugins/isoDatePlugin.js';
 
 export enum PaymentStatus {
   PENDING = 'Pending',
+  PROCESSING = 'Processing',
   ESCROWED = 'Escrowed',
   RELEASED = 'Released',
+  COMPLETED = 'Completed',
   FAILED = 'Failed',
   DISPUTED = 'Disputed',
 }
@@ -30,6 +32,7 @@ export interface IPayment {
   payeeAddress?: string;
   status: PaymentStatus;
   stellarTxHash?: string;
+  confirmations?: number;
   escrowRelease?: IEscrowRelease;
   createdAt: Date;
   updatedAt: Date;
@@ -86,6 +89,7 @@ const PaymentSchema = new Schema<IPayment>(
       default: PaymentStatus.PENDING,
     },
     stellarTxHash: { type: String },
+    confirmations: { type: Number, default: 0 },
     escrowRelease: { type: EscrowReleaseSchema },
     deletedAt: { type: Date, default: null },
   },

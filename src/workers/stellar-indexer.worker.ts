@@ -5,7 +5,11 @@ import mongoose, { Schema } from 'mongoose';
 import { connectMongo } from '../infra/mongo/connection.js';
 import { config } from '../config/index.js';
 import { getBullMQConnection } from '../infra/redis/connection.js';
+import { StrKey } from '@stellar/stellar-sdk';
 import { LedgerBlock } from '../modules/ledger/ledger.model.js';
+import { PaymentModel, PaymentStatus, type IPayment } from '../modules/payments/payments.model.js';
+import { emitPaymentStatusChange } from '../infra/socket/io.js';
+import type { SettlementStatusPayload } from '../shared/types/socketEvents.js';
 import { MilestoneEvent } from '../shared/types/shipment.js';
 import { CHAIN_EVENT_NAMES } from '../shared/types/chain.js';
 import type { ChainAdapter } from '../services/chain/types.js';
@@ -14,6 +18,9 @@ import { logger } from '../shared/logger/logger.js';
 
 export const STELLAR_INDEXER_QUEUE = 'stellar_indexer_queue';
 export const STELLAR_INDEXER_JOB = 'poll_stellar_transactions';
+export const DEFAULT_CONFIRMATIONS = 3;
+
+const SIMULATED_CONTRACT_ID = StrKey.encodeContract(Buffer.alloc(32));
 
 const IndexerStateSchema = new Schema(
   {
@@ -49,9 +56,16 @@ export async function saveStoredCursor(cursor: string, key = 'stellar_indexer'):
   }
 }
 
+export interface IndexerOptions {
+  latestLedger?: number;
+  minConfirmations?: number;
+  simulated?: boolean;
+}
+
 export interface IndexerSummary {
   processed: number;
   upserted: number;
+  verified?: number;
   lastCursor?: string;
 }
 
@@ -61,15 +75,41 @@ export interface IndexerSummary {
  */
 export async function indexStellarTransactions(
   adapter: ChainAdapter = getChainAdapter(),
-  initialCursor?: string
+  initialCursorOrOptions?: string | number | IndexerOptions,
+  optionsOrMinConfirmations?: number | IndexerOptions
 ): Promise<IndexerSummary> {
+  const initialCursor =
+    typeof initialCursorOrOptions === 'string' ? initialCursorOrOptions : undefined;
+  const resolvedOptions: IndexerOptions =
+    typeof initialCursorOrOptions === 'object' && initialCursorOrOptions !== null
+      ? initialCursorOrOptions
+      : typeof optionsOrMinConfirmations === 'object' && optionsOrMinConfirmations !== null
+        ? optionsOrMinConfirmations
+        : {};
+  const minConfirmations =
+    typeof initialCursorOrOptions === 'number'
+      ? initialCursorOrOptions
+      : typeof optionsOrMinConfirmations === 'number'
+        ? optionsOrMinConfirmations
+        : (resolvedOptions.minConfirmations ?? DEFAULT_CONFIRMATIONS);
+
+  const adapterWithLatestLedger = adapter as ChainAdapter & {
+    getLatestLedger?: () => Promise<number>;
+  };
+  const adapterLatestLedger =
+    resolvedOptions.latestLedger === undefined &&
+    typeof adapterWithLatestLedger.getLatestLedger === 'function'
+      ? await adapterWithLatestLedger.getLatestLedger()
+      : undefined;
+  const latestLedger = resolvedOptions.latestLedger ?? adapterLatestLedger;
+
   let cursor = initialCursor ?? (await getStoredCursor());
   let processed = 0;
   let upserted = 0;
+  let verified = 0;
 
   for await (const event of adapter.streamEvents(cursor)) {
     processed += 1;
-    cursor = event.id;
 
     let milestoneEvent: MilestoneEvent;
     let shipmentId: string;
@@ -95,14 +135,85 @@ export async function indexStellarTransactions(
       metadata.amount = event.data[4];
     } else if (event.name === CHAIN_EVENT_NAMES.ESCROW_RELEASE) {
       milestoneEvent = MilestoneEvent.SETTLEMENT_COMPLETED;
-      shipmentId = event.topic[1];
-      metadata.paymentId = event.topic[1];
+      const paymentId = event.topic[1];
+      shipmentId = paymentId;
+      metadata.paymentId = paymentId;
       metadata.proofHash = event.data[0];
       metadata.payee = event.data[1];
       metadata.amount = event.data[2];
+
+      const isSimulated = resolvedOptions.simulated ?? event.contract_id === SIMULATED_CONTRACT_ID;
+      const confirmations =
+        latestLedger !== undefined
+          ? Math.max(0, latestLedger - event.ledger)
+          : isSimulated
+            ? minConfirmations
+            : 0;
+      const isConfirmed = isSimulated || confirmations >= minConfirmations;
+
+      metadata.confirmations = confirmations;
+      metadata.verified = isConfirmed;
+
+      if (isConfirmed) {
+        verified += 1;
+      }
+
+      const existingPayment =
+        typeof PaymentModel.findOne === 'function'
+          ? await PaymentModel.findOne({
+              $or: [{ _id: paymentId }, { stellarTxHash: event.tx_hash }],
+            })
+              .lean<IPayment>()
+              .catch(() => null)
+          : null;
+
+      if (existingPayment?.shipmentId) {
+        shipmentId = String(existingPayment.shipmentId);
+      }
+
+      if (typeof PaymentModel.updateOne === 'function') {
+        await PaymentModel.updateOne(
+          {
+            $or: [{ _id: paymentId }, { stellarTxHash: event.tx_hash }],
+            status: { $ne: PaymentStatus.COMPLETED },
+          },
+          {
+            $set: {
+              confirmations,
+              stellarTxHash: event.tx_hash,
+              ...(isConfirmed ? { status: PaymentStatus.COMPLETED } : {}),
+            },
+          }
+        );
+      }
+
+      if (!isConfirmed) {
+        continue;
+      }
+
+      const settlementPayload: SettlementStatusPayload = {
+        paymentId: existingPayment?._id ? String(existingPayment._id) : paymentId,
+        shipmentId,
+        oldStatus: existingPayment?.status ?? PaymentStatus.PROCESSING,
+        newStatus: PaymentStatus.COMPLETED,
+        amount: existingPayment?.amount ?? Number(event.data[2]),
+        txHash: event.tx_hash,
+        timestamp: new Date().toISOString(),
+      };
+
+      try {
+        emitPaymentStatusChange(shipmentId, settlementPayload);
+      } catch (err) {
+        logger.debug(
+          { err, shipmentId, paymentId },
+          'Socket.io not initialized; skipping realtime settlement status emission'
+        );
+      }
     } else {
       continue;
     }
+
+    cursor = event.id;
 
     const res = await LedgerBlock.updateOne(
       { transactionHash: event.tx_hash },
@@ -127,7 +238,7 @@ export async function indexStellarTransactions(
     }
   }
 
-  return { processed, upserted, lastCursor: cursor };
+  return { processed, upserted, verified, lastCursor: cursor };
 }
 
 async function processIndexerJob(_job: Job): Promise<IndexerSummary> {
