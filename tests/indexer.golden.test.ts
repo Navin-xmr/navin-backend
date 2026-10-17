@@ -57,7 +57,7 @@ describe('Event-driven indexer golden fixtures replay', () => {
       {
         $setOnInsert: {
           shipmentId: '65f1a2b3c4d5e6f708192a3b',
-          eventType: 'IN_TRANSIT',
+          milestoneEvent: 'IN_TRANSIT',
           transactionHash: events[0].tx_hash,
           actor: 'stellar-indexer',
         },
@@ -82,7 +82,7 @@ describe('Event-driven indexer golden fixtures replay', () => {
       {
         $setOnInsert: {
           shipmentId: '65f1a2b3c4d5e6f708192a3b',
-          eventType: 'SETTLEMENT_INITIATED',
+          milestoneEvent: 'SETTLEMENT_INITIATED',
           transactionHash: events[1].tx_hash,
           actor: 'stellar-indexer',
         },
@@ -111,7 +111,7 @@ describe('Event-driven indexer golden fixtures replay', () => {
       {
         $setOnInsert: {
           shipmentId: '66a0b1c2d3e4f50617283940',
-          eventType: 'SETTLEMENT_COMPLETED',
+          milestoneEvent: 'SETTLEMENT_COMPLETED',
           transactionHash: events[2].tx_hash,
           actor: 'stellar-indexer',
         },
