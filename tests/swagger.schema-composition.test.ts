@@ -2,6 +2,7 @@ import { describe, expect, it } from '@jest/globals';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import YAML from 'yamljs';
+import { ErrorCodes } from '../src/shared/http/errors.js';
 
 /**
  * Regression guard for the Redocly schema-composition rules (issue #635).
@@ -142,4 +143,35 @@ describe('docs/swagger.yaml schema composition', () => {
       expect(sharedNotInTransit.nullable).toBe(true);
     });
   });
+
+  describe('ErrorCode and ErrorResponse.error.code', () => {
+    const errorCodeSchema = getIn(document, ['components', 'schemas', 'ErrorCode']) as JsonNode;
+    const errorResponseCode = getIn(document, [
+      'components',
+      'schemas',
+      'ErrorResponse',
+      'properties',
+      'error',
+      'properties',
+      'code',
+    ]) as JsonNode;
+
+    it('references #/components/schemas/ErrorCode from ErrorResponse.error.code', () => {
+      expect(errorResponseCode).toEqual({ $ref: '#/components/schemas/ErrorCode' });
+    });
+
+    it('enumerates all unique ErrorCodes values plus VALIDATION_ERROR without duplicates', () => {
+      const enumValues = errorCodeSchema.enum as string[];
+      expect(errorCodeSchema.type).toBe('string');
+      expect(Array.isArray(enumValues)).toBe(true);
+      expect(new Set(enumValues).size).toBe(enumValues.length);
+
+      const expectedCodes = new Set<string>([...Object.values(ErrorCodes), 'VALIDATION_ERROR']);
+      for (const code of expectedCodes) {
+        expect(enumValues).toContain(code);
+      }
+      expect(new Set(enumValues)).toEqual(expectedCodes);
+    });
+  });
 });
+
