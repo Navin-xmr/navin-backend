@@ -105,6 +105,44 @@ describe('createLedgerBlock — dataHash persistence (issue #660)', () => {
       }),
     );
   });
+
+  it('persists top-level canonicalPayload alongside dataHash for settlement ledger blocks (#834)', async () => {
+    const { buildCanonicalShipmentPayload, generateDataHash } = await import(
+      '../src/shared/utils/crypto.js'
+    );
+    const canonical = buildCanonicalShipmentPayload({
+      shipmentId,
+      event: 'SETTLEMENT_INITIATED',
+      actor: 'user-1',
+      timestamp: new Date('2026-01-01T00:00:00.000Z'),
+      metadata: { paymentId: 'pay-1' },
+    });
+    const hash = generateDataHash(canonical);
+
+    createMock.mockResolvedValueOnce({
+      _id: new Types.ObjectId().toHexString(),
+      milestoneEvent: 'SETTLEMENT_INITIATED',
+      dataHash: hash,
+      canonicalPayload: canonical,
+    });
+
+    await createLedgerBlock({
+      shipmentId,
+      milestoneEvent: 'SETTLEMENT_INITIATED' as never,
+      transactionHash: 'stellar-tx-settlement',
+      dataHash: hash,
+      canonicalPayload: canonical,
+    });
+
+    expect(createMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        milestoneEvent: 'SETTLEMENT_INITIATED',
+        dataHash: hash,
+        canonicalPayload: canonical,
+      }),
+    );
+    expect(generateDataHash(canonical)).toBe(hash);
+  });
 });
 
 // ─── Migration smoke tests ────────────────────────────────────────────────────

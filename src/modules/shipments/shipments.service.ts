@@ -683,6 +683,7 @@ export const updateShipmentStatusService = async (
             eventType: MilestoneEvent.SETTLEMENT_INITIATED,
             transactionHash: released.txHash,
             dataHash: generateDataHash(canonical),
+            canonicalPayload: canonical,
             actor: actor?.userId,
             metadata: {
               paymentId: payment._id.toString(),
