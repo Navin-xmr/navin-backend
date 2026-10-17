@@ -185,25 +185,7 @@ export const loginLimiter = rateLimit({
   legacyHeaders: false,
   skipSuccessfulRequests: true,
   store: new RedisRateLimitStore(loginWindowMs, 'rl:login:'),
-  handler: (req: Request, res: Response) => {
-    const rateLimitState = (req as Request & { rateLimit?: { resetTime?: Date } }).rateLimit;
-    const retryAfter = rateLimitState?.resetTime
-      ? Math.max(1, Math.ceil((rateLimitState.resetTime.getTime() - Date.now()) / 1000))
-      : Math.ceil(15 * 60);
-
-    res.setHeader('Retry-After', String(retryAfter));
-    sendResponse(
-      res,
-      429,
-      false,
-      'Too many login attempts, please try again later.',
-      null,
-      undefined,
-      {
-        retryAfter,
-      }
-    );
-  },
+  handler: createRateLimitHandler('Too many login attempts, please try again later.'),
 });
 
 /** OTP / password-reset endpoints — tight limit: 5 req/15 min */
