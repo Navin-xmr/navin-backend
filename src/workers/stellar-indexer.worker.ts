@@ -6,6 +6,7 @@ import { connectMongo } from '../infra/mongo/connection.js';
 import { config } from '../config/index.js';
 import { getBullMQConnection } from '../infra/redis/connection.js';
 import { LedgerBlock } from '../modules/ledger/ledger.model.js';
+import { Telemetry, TelemetryAnchorStatus } from '../modules/telemetry/telemetry.model.js';
 import { MilestoneEvent } from '../shared/types/shipment.js';
 import { CHAIN_EVENT_NAMES } from '../shared/types/chain.js';
 import type { ChainAdapter } from '../services/chain/types.js';
@@ -85,6 +86,38 @@ export async function indexStellarTransactions(
       milestoneEvent = MilestoneEvent.IN_TRANSIT;
       shipmentId = event.topic[1];
       metadata.dataHash = event.data[0];
+
+      const telemetryRes = await Telemetry.updateMany(
+        {
+          stellarTxHash: event.tx_hash,
+          anchorStatus: TelemetryAnchorStatus.ANCHORED,
+        },
+        {
+          $set: {
+            anchorStatus: TelemetryAnchorStatus.VERIFIED,
+            verified: true,
+            confirmationMetadata: {
+              ledger: event.ledger,
+              ledgerClosedAt: event.ledger_closed_at,
+              eventId: event.id,
+            },
+          },
+        }
+      );
+
+      const verifiedCount =
+        (telemetryRes as { modifiedCount?: number } | undefined)?.modifiedCount ?? 0;
+      if (verifiedCount > 0) {
+        logger.info(
+          {
+            shipmentId,
+            txHash: event.tx_hash,
+            ledger: event.ledger,
+            verifiedCount,
+          },
+          'Telemetry anchor verified on-chain'
+        );
+      }
     } else if (event.name === CHAIN_EVENT_NAMES.ESCROW_INIT) {
       milestoneEvent = MilestoneEvent.SETTLEMENT_INITIATED;
       shipmentId = event.data[0];
