@@ -57,7 +57,7 @@ export const getLedgerBlockById = async (req: Request, res: Response) => {
  * Requires auth and ADMIN / MANAGER / VIEWER.
  *
  * @param req.params.id - Ledger block id.
- * @returns HTTP 200 with `{ canonicalPayload, dataHash, txHash, ledger }`.
+ * @returns HTTP 200 with `{ canonicalPayload, dataHash, txHash, transactionHash, ledger, network }`.
  */
 export const getLedgerBlockVerification = async (req: Request, res: Response) => {
   const params = req.params as unknown as LedgerBlockIdParam;
