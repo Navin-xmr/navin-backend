@@ -1,4 +1,5 @@
 import { jest, describe, it, expect, beforeEach } from '@jest/globals';
+import { createChainAdapterMock, createChainFactoryMock } from './helpers/mocks.js';
 
 await jest.unstable_mockModule('../src/modules/shipments/shipments.model.js', () => ({
   Shipment: {
@@ -47,10 +48,10 @@ await jest.unstable_mockModule('../src/infra/socket/io.js', () => ({
   emitPaymentStatusChange: jest.fn(),
 }));
 
-await jest.unstable_mockModule('../src/services/stellar.service.js', () => ({
-  tokenizeShipment: jest.fn(),
-  releaseEscrow: jest.fn(),
-}));
+const chainAdapter = createChainAdapterMock();
+await jest.unstable_mockModule('../src/services/chain/factory.js', () =>
+  createChainFactoryMock(chainAdapter)
+);
 
 await jest.unstable_mockModule('../src/modules/ledger/ledger.service.js', () => ({
   createLedgerBlockService: jest.fn(),
