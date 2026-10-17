@@ -16,6 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Added Phase 6 Hash-and-Emit blockchain architecture (`ChainAdapter` port in `src/services/chain/types.ts`, `SimulatedAdapter`, `SorobanAdapter`, and `createChainAdapter` factory) (#651, #652, #653, #656)
+- Added `GET /api/ledger/blocks/:id/verification` endpoint returning `{ canonicalPayload, dataHash, txHash, transactionHash, ledger, network }` for trustless client-side payload hash verification (#655, #665)
+- Added cross-repo chain golden test vectors (`tests/fixtures/chain/`) and event-driven indexer replay coverage (`tests/indexer.golden.test.ts`, `tests/chain.adapter.contract.test.ts`) (#662, #666, #671)
 - Added Docker Compose quickstart, service topology, environment-matrix pointer, and troubleshooting guidance to the README
 - Added integration contract tests for implemented routes, authentication, role guards, and response envelopes (#385)
 - Added test-runner documentation for the backend integration contract suite (#385)
@@ -29,11 +32,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Delegated `releaseEscrow()` in `src/services/stellar.service.ts` and `stellar-indexer.worker.ts` event ingestion to the `ChainAdapter` port and canonical `milestoneEvent` / `dataHash` fields (#657, #660, #661, #662, #663)
 - Added canonical `dataHash` persistence for shipment status, settlement, and proof ledger events (#654)
 - Corrected `docs/PAGINATION.md` pagination strategy table: users dual-mode is live, documented the payments `total` meta variance, added shipment timeline to the cursor list (#576)
-
-### Changed
-
 - Documented Horizon escrow fallback and Soroban integration plan in `docs/blockchain.md` (#395)
 - Documented storage adapter contract in `docs/storage-adapter.md` and expanded JSDoc on `mockStorageService` (#397)
 - Added `reports/generate-coverage.js` and `reports/API_SURFACE_COVERAGE.html` to detect swagger.yaml vs Express route drift (#399)
