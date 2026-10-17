@@ -1,11 +1,12 @@
 import { jest, describe, it, expect, beforeAll } from '@jest/globals';
+import { createEmailServiceMock } from './helpers/mocks.js';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mockBlockToken = jest.fn() as any;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mockIsTokenBlocked = jest.fn() as any;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const mockSendEmail = jest.fn() as any;
+const emailServiceMock = createEmailServiceMock();
+const mockSendEmail = emailServiceMock.sendEmail;
 
 await jest.unstable_mockModule('../src/modules/users/users.model.js', () => {
   const users: Record<string, unknown>[] = [];
@@ -44,11 +45,7 @@ await jest.unstable_mockModule('../src/infra/redis/connection.js', () => ({
   connectRedis: jest.fn(),
 }));
 
-await jest.unstable_mockModule('../src/services/email.service.js', () => ({
-  sendEmail: mockSendEmail,
-  resetPasswordEmailHtml: (link: string) => `<html>Reset: ${link}</html>`,
-  invitationEmailHtml: (link: string) => `<html>Invite: ${link}</html>`,
-}));
+await jest.unstable_mockModule('../src/services/email.service.js', () => emailServiceMock);
 
 const jwt = await import('jsonwebtoken');
 const { forgotPassword, resetPassword } = await import('../src/modules/auth/auth.service.js');
