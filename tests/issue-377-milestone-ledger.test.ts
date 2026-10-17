@@ -1,5 +1,6 @@
 import { jest, describe, it, expect, beforeEach } from '@jest/globals';
 import { createChainAdapterMock, createChainFactoryMock } from './helpers/mocks.js';
+import { generateDataHash } from '../src/shared/utils/crypto.js';
 
 const createLedgerBlockMock = jest.fn<(...args: unknown[]) => Promise<unknown>>();
 
@@ -134,9 +135,19 @@ describe('Ledger block creation on lifecycle events', () => {
         shipmentId: 'ship-1',
         eventType: 'IN_TRANSIT',
         dataHash: expect.stringMatching(/^[0-9a-f]{64}$/),
+        canonicalPayload: expect.objectContaining({
+          shipmentId: 'ship-1',
+          event: 'IN_TRANSIT',
+          actor: 'user-1',
+        }),
         actor: 'user-1',
       })
     );
+    const callArg = createLedgerBlockMock.mock.calls[0]?.[0] as {
+      canonicalPayload: Record<string, unknown>;
+      dataHash: string;
+    };
+    expect(generateDataHash(callArg.canonicalPayload)).toBe(callArg.dataHash);
   });
 
   it('status-change ledger block carries no transactionHash (simulated placeholder, not stale creation tx)', async () => {

@@ -645,6 +645,7 @@ export const updateShipmentStatusService = async (
       shipmentId: id,
       eventType: status as unknown as MilestoneEvent,
       actor: actor?.userId,
+      canonicalPayload: canonical,
       metadata: { previousStatus, simulated: true, canonical },
       dataHash: generateDataHash(canonical),
     });
