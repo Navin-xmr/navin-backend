@@ -6375,6 +6375,63 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /api/ledger/blocks/{id}/verification:
+    get:
+      operationId: ledger_get_ledger_blocks_id_verification
+      x-required-role: [ADMIN, MANAGER, VIEWER]
+      summary: Get ledger block verification bundle
+      description: Returns off-chain and on-chain verification material for a ledger block so clients can independently verify payload hashes.
+      tags:
+        - Ledger
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Ledger block ObjectId
+      responses:
+        '200':
+          description: Ledger block verification retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Ledger block verification retrieved
+                  data:
+                    $ref: '#/components/schemas/LedgerVerificationBundle'
+        '400':
+          description: Invalid ledger block ID parameter
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden - insufficient role
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Ledger block not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /api/events/poll:
     get:
@@ -7544,6 +7601,54 @@ components:
         updatedAt:
           type: string
           format: date-time
+    LedgerVerificationBundle:
+      type: object
+      description: Verification bundle returned by GET /api/ledger/blocks/{id}/verification for trustless client-side payload hash verification.
+      properties:
+        blockId:
+          type: string
+          description: Ledger block ObjectId
+        shipmentId:
+          type: string
+          description: Associated shipment ObjectId
+        milestoneEvent:
+          $ref: '#/components/schemas/MilestoneEvent'
+        canonicalPayload:
+          type: object
+          nullable: true
+          additionalProperties: true
+          description: Exact deterministic payload hashed into dataHash.
+        dataHash:
+          type: string
+          nullable: true
+          description: SHA-256 hex digest of the canonical payload.
+        txHash:
+          type: string
+          nullable: true
+          description: Stellar transaction hash anchoring the payload on-chain.
+        transactionHash:
+          type: string
+          nullable: true
+          description: Stellar transaction hash alias for backward compatibility.
+        ledger:
+          type: integer
+          description: Stellar ledger sequence number where the transaction was included.
+        ledgerSequence:
+          type: integer
+          description: Stellar ledger sequence number.
+        contractId:
+          type: string
+          nullable: true
+          description: Soroban contract address that emitted the anchor event, if applicable.
+        network:
+          type: string
+          enum: [testnet, public, simulated]
+          description: Target Stellar network or adapter mode to query when verifying txHash.
+        anchoredAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: ISO 8601 timestamp when the block was anchored.
     Notification:
       type: object
       description: A notification entry for a user.
