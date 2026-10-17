@@ -171,38 +171,35 @@ export async function closeSseHub(): Promise<void> {
   redisPubSubReady = false;
 }
 
-/** @internal Exposed for unit tests */
-export function getSseClientCount(userId?: string): number {
-  if (userId) {
-    return clientsByUser.get(userId)?.size ?? 0;
-  }
+const SSE_HUB_TEST_HOOKS_SYMBOL = Symbol.for('navin.sseHub.testHooks');
 
-  let total = 0;
-  for (const clients of clientsByUser.values()) {
-    total += clients.size;
-  }
-  return total;
-}
-
-/** @internal Exposed for unit tests */
-export function deliverToUserForTest(userId: string, event: RealtimeEvent): void {
-  deliverToLocalClients(userId, event);
-}
-
-/** @internal Exposed for unit tests */
-export function isRedisPubSubReady(): boolean {
-  return redisPubSubReady;
-}
-
-/** @internal Exposed for unit tests — bypasses Redis for direct local writes */
-export function resetSseHubForTest(): void {
-  for (const clients of clientsByUser.values()) {
-    for (const client of clients) {
-      clearInterval(client.heartbeatTimer);
+(globalThis as Record<symbol, unknown>)[SSE_HUB_TEST_HOOKS_SYMBOL] = {
+  getSseClientCount(userId?: string): number {
+    if (userId) {
+      return clientsByUser.get(userId)?.size ?? 0;
     }
-  }
-  clientsByUser.clear();
-  redisPubSubReady = false;
-  subscriber = null;
-  publisher = null;
-}
+
+    let total = 0;
+    for (const clients of clientsByUser.values()) {
+      total += clients.size;
+    }
+    return total;
+  },
+  deliverToUserForTest(userId: string, event: RealtimeEvent): void {
+    deliverToLocalClients(userId, event);
+  },
+  isRedisPubSubReady(): boolean {
+    return redisPubSubReady;
+  },
+  resetSseHubForTest(): void {
+    for (const clients of clientsByUser.values()) {
+      for (const client of clients) {
+        clearInterval(client.heartbeatTimer);
+      }
+    }
+    clientsByUser.clear();
+    redisPubSubReady = false;
+    subscriber = null;
+    publisher = null;
+  },
+};
