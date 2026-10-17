@@ -173,6 +173,12 @@ await jest.unstable_mockModule('../src/modules/users/users.model.js', () => {
   return { UserModel, UserRole, OrganizationType, OrganizationModel };
 });
 
+const { createChainAdapterMock, createChainFactoryMock } = await import('./helpers/mocks.js');
+const chainAdapter = createChainAdapterMock();
+await jest.unstable_mockModule('../src/services/chain/factory.js', () =>
+  createChainFactoryMock(chainAdapter)
+);
+
 await jest.unstable_mockModule('../src/services/stellar.service.js', () => ({
   tokenizeShipment: jest.fn(),
   anchorTelemetryHash: jest.fn(),
@@ -379,6 +385,13 @@ describe('Shipments API (mocked DB)', () => {
       });
     expect(res.status).toBe(201);
     expect(res.body.data.trackingNumber).toBe('TN-NEW-1');
+    expect(chainAdapter.anchorEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        shipment_id: expect.any(String),
+        data_hash: expect.stringMatching(/^[0-9a-f]{64}$/),
+        actor: expect.any(String),
+      })
+    );
   });
   // --- New Tests for Unauthorized Route Access---
 
