@@ -1,6 +1,7 @@
 import { describe, expect, beforeEach, it, jest } from '@jest/globals';
 import request from 'supertest';
 import { signToken } from './fixtures/factories.js';
+import { createEmailServiceMock, createUsersRepoMock } from './helpers/mocks.js';
 import type { Application } from 'express';
 
 type UserRecord = { _id: string; email: string; organizationId: string; role: string };
@@ -36,12 +37,13 @@ function makePage(
 describe('GET /api/users', () => {
   let app: Application;
   const orgUsers: UserRecord[] = [];
-  const findUsersByOrganizationId = jest.fn<
-    (
-      organizationId: string,
-      filters?: { limit?: number; cursor?: string }
-    ) => Promise<ReturnType<typeof makePage>>
-  >();
+  const findUsersByOrganizationId =
+    jest.fn<
+      (
+        organizationId: string,
+        filters?: { limit?: number; cursor?: string }
+      ) => Promise<ReturnType<typeof makePage>>
+    >();
 
   beforeEach(async () => {
     jest.resetModules();
@@ -63,12 +65,17 @@ describe('GET /api/users', () => {
       return makePage(orgUsers, filters);
     });
 
-    await jest.unstable_mockModule('../src/modules/users/users.repo.js', () => ({
-      createUser: jest.fn(),
-      findUserByEmail: jest.fn(),
-      findUserById: jest.fn(),
-      findUsersByOrganizationId,
-    }));
+    await jest.unstable_mockModule('../src/services/email.service.js', () =>
+      createEmailServiceMock()
+    );
+
+    await jest.unstable_mockModule('../src/modules/users/users.repo.js', () =>
+      createUsersRepoMock({
+        findUsersByOrganizationId: findUsersByOrganizationId as unknown as ReturnType<
+          typeof createUsersRepoMock
+        >['findUsersByOrganizationId'],
+      })
+    );
 
     const appModule = await import('../src/app.js');
     app = appModule.buildApp();
@@ -87,7 +94,10 @@ describe('GET /api/users', () => {
       hasMore: false,
       nextCursor: null,
     });
-    expect(findUsersByOrganizationId).toHaveBeenCalledWith('org-a', { limit: 20, cursor: undefined });
+    expect(findUsersByOrganizationId).toHaveBeenCalledWith('org-a', {
+      limit: 20,
+      cursor: undefined,
+    });
   });
 
   it('returns paginated results without duplicates across pages', async () => {

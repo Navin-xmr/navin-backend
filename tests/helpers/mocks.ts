@@ -250,7 +250,9 @@ export function createSocketIoMock(overrides: Partial<SocketIoMock> = {}): Socke
   };
 }
 
-export type EmailServiceMock = Omit<typeof emailService, 'sendEmail'> & {
+export type EmailServiceMock = {
+  [K in keyof typeof emailService]: jest.Mock<(typeof emailService)[K]> | (typeof emailService)[K];
+} & {
   sendEmail: jest.Mock<typeof sendEmail>;
 };
 
@@ -262,8 +264,16 @@ export function createEmailServiceMock(
 ): EmailServiceMock {
   return {
     sendEmail: jest.fn<typeof sendEmail>().mockResolvedValue(undefined),
-    resetPasswordEmailHtml: (link: string) => `<html>Reset: ${link}</html>`,
-    invitationEmailHtml: (link: string) => `<html>Invite: ${link}</html>`,
+    resetPasswordEmailHtml: jest
+      .fn<typeof emailService.resetPasswordEmailHtml>()
+      .mockImplementation((link: string) => `<html>Reset: ${link}</html>`),
+    invitationEmailHtml: jest
+      .fn<typeof emailService.invitationEmailHtml>()
+      .mockImplementation((link: string, inviterName?: string) =>
+        inviterName
+          ? `<html>Invite: ${link} from ${inviterName}</html>`
+          : `<html>Invite: ${link}</html>`
+      ),
     ...overrides,
   };
 }
