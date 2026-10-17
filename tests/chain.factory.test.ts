@@ -38,20 +38,17 @@ describe('ChainAdapter factory — SOROBAN_ADAPTER env matrix', () => {
     expect(factory.getChainAdapter()).not.toBe(first);
   });
 
-  it('soroban → fails fast with ERR_CHAIN_UNKNOWN until SorobanAdapter lands', async () => {
-    const { config, factory, AppError, ErrorCodes } = await loadFactory({
+  it('soroban → SorobanAdapter singleton, memoized until reset', async () => {
+    const { factory } = await loadFactory({
       SOROBAN_ADAPTER: 'soroban',
+      SOROBAN_RPC_URL: 'https://soroban-testnet.stellar.org',
+      ESCROW_CONTRACT_ID: 'CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC',
     });
-    expect(config.chainAdapter).toBe('soroban');
-
-    let thrown: unknown;
-    try {
-      factory.getChainAdapter();
-    } catch (err) {
-      thrown = err;
-    }
-    expect(thrown).toBeInstanceOf(AppError);
-    expect(thrown).toMatchObject({ statusCode: 500, code: ErrorCodes.CHAIN_UNKNOWN });
+    const { SorobanAdapter } = await import('../src/services/chain/soroban.adapter.js');
+    expect(factory.createChainAdapter('soroban')).toBeInstanceOf(SorobanAdapter);
+    const first = factory.getChainAdapter();
+    expect(first).toBeInstanceOf(SorobanAdapter);
+    expect(factory.getChainAdapter()).toBe(first);
   });
 
   it('unknown value → rejected at boot by env validation', async () => {
@@ -63,7 +60,11 @@ describe('ChainAdapter factory — SOROBAN_ADAPTER env matrix', () => {
   });
 
   it('explicit kind overrides config', async () => {
-    const { factory, SimulatedAdapter } = await loadFactory({ SOROBAN_ADAPTER: 'soroban' });
+    const { factory, SimulatedAdapter } = await loadFactory({
+      SOROBAN_ADAPTER: 'soroban',
+      SOROBAN_RPC_URL: 'https://soroban-testnet.stellar.org',
+      ESCROW_CONTRACT_ID: 'CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC',
+    });
     expect(factory.createChainAdapter('simulated')).toBeInstanceOf(SimulatedAdapter);
   });
 });

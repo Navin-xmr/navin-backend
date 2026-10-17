@@ -27,8 +27,37 @@ const ROOT = join(__dirname, '..');
 const SRC_DIR = join(ROOT, 'src');
 const PKG_PATH = join(ROOT, 'package.json');
 
-// ── Load declared dependencies ────────────────────────────────────────────────
-const pkg = JSON.parse(readFileSync(PKG_PATH, 'utf8'));
+// ── Load & validate package.json ──────────────────────────────────────────────
+const rawPkg = readFileSync(PKG_PATH, 'utf8');
+const pkg = JSON.parse(rawPkg);
+
+const scriptsBlockMatch = rawPkg.match(/"scripts"\s*:\s*\{([\s\S]*?)\}/);
+if (scriptsBlockMatch) {
+  const scriptKeys = [...scriptsBlockMatch[1].matchAll(/^\s*"([^"]+)"\s*:/gm)].map((m) => m[1]);
+  const seenKeys = new Set();
+  const duplicateKeys = new Set();
+  for (const key of scriptKeys) {
+    if (seenKeys.has(key)) duplicateKeys.add(key);
+    seenKeys.add(key);
+  }
+  if (duplicateKeys.size > 0) {
+    console.error(
+      `\n✖ Duplicate script key(s) in package.json: ${[...duplicateKeys].map((k) => `"${k}"`).join(', ')}\n`
+    );
+    process.exit(1);
+  }
+}
+
+for (const scriptName of ['test', 'test:watch']) {
+  const cmd = pkg.scripts?.[scriptName] ?? '';
+  if (!cmd.includes('--max-old-space-size=4096')) {
+    console.error(
+      `\n✖ package.json scripts["${scriptName}"] is missing "--max-old-space-size=4096".\n`
+    );
+    process.exit(1);
+  }
+}
+
 const declared = new Set([
   ...Object.keys(pkg.dependencies ?? {}),
   // devDependencies intentionally excluded — runtime imports must be in dependencies
