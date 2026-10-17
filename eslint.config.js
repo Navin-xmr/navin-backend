@@ -70,7 +70,31 @@ export default [
       'no-console': 'off',
     },
   },
+  // P6-22 / #809: enforce port-only chain mocking in tests — disallow direct stellar.service.js imports.
+  {
+    files: ['tests/**/*.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: '../src/services/stellar.service.js',
+              message:
+                'Do not import stellar.service.js directly in tests; use createChainAdapterMock() / createChainFactoryMock() from tests/helpers/mocks.ts instead.',
+            },
+            {
+              name: '../../src/services/stellar.service.js',
+              message:
+                'Do not import stellar.service.js directly in tests; use createChainAdapterMock() / createChainFactoryMock() from tests/helpers/mocks.ts instead.',
+            },
+          ],
+        },
+      ],
+    },
+  },
   {
     ignores: ['dist', 'node_modules', 'coverage', 'migrations'],
   },
 ];
+
