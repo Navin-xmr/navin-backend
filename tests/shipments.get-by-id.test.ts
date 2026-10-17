@@ -1,9 +1,9 @@
 import { jest, describe, beforeAll, beforeEach, it, expect } from '@jest/globals';
+import { createChainAdapterMock, createChainFactoryMock } from './helpers/mocks.js';
 import request from 'supertest';
 import { signToken } from './fixtures/factories.js';
 import { randomUUID } from 'crypto';
 import type { Application } from 'express';
-import { env } from '../src/env.js';
 import { UserRole } from '../src/shared/constants/index.js';
 
 type ShipmentRecord = {
@@ -70,17 +70,16 @@ await jest.unstable_mockModule('../src/infra/redis/tokenBlocklist.js', () => ({
   blockToken: jest.fn(),
 }));
 
-await jest.unstable_mockModule('../src/services/stellar.service.js', () => ({
-  tokenizeShipment: jest.fn(),
-  releaseEscrow: jest.fn(),
-  getStellarExplorerUrl: jest.fn(() => 'https://stellar.expert/explorer/testnet/tx/mock'),
-}));
+const chainAdapter = createChainAdapterMock();
+await jest.unstable_mockModule('../src/services/chain/factory.js', () =>
+  createChainFactoryMock(chainAdapter)
+);
 
 await jest.unstable_mockModule('../src/infra/socket/io.js', () => ({
   emitStatusUpdate: jest.fn(),
   emitAnomalyDetected: jest.fn(),
   emitTelemetryUpdate: jest.fn(),
-      emitPaymentStatusChange: jest.fn(),
+  emitPaymentStatusChange: jest.fn(),
   initSocketIO: jest.fn(),
   getIO: jest.fn(),
 }));
@@ -88,7 +87,10 @@ await jest.unstable_mockModule('../src/infra/socket/io.js', () => ({
 const { buildApp } = await import('../src/app.js');
 
 function tokenFor(role: string, organizationId: string) {
-  return signToken({ userId: 'user-1', role, organizationId, jti: randomUUID() }, { expiresIn: '1h' });
+  return signToken(
+    { userId: 'user-1', role, organizationId, jti: randomUUID() },
+    { expiresIn: '1h' }
+  );
 }
 
 describe('GET /api/shipments/:id', () => {

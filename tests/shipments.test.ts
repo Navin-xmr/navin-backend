@@ -1,4 +1,5 @@
 import { jest, describe, beforeAll, beforeEach, it, expect } from '@jest/globals';
+import { createChainAdapterMock, createChainFactoryMock } from './helpers/mocks.js';
 import request from 'supertest';
 import { signToken } from './fixtures/factories.js';
 import process from 'process';
@@ -153,7 +154,7 @@ await jest.unstable_mockModule('../src/modules/users/users.model.js', () => {
     },
     findById: (id: PrimitiveId) =>
       Promise.resolve(usersData.find(u => String(u._id) === String(id)) || null),
-    findOne: (query: Record<string, any>) =>
+    findOne: (query: Record<string, unknown>) =>
       Promise.resolve(usersData.find(u => u.email === query.email) || null),
   };
   const UserRole = {
@@ -173,12 +174,10 @@ await jest.unstable_mockModule('../src/modules/users/users.model.js', () => {
   return { UserModel, UserRole, OrganizationType, OrganizationModel };
 });
 
-await jest.unstable_mockModule('../src/services/stellar.service.js', () => ({
-  tokenizeShipment: jest.fn(),
-  anchorTelemetryHash: jest.fn(),
-  releaseEscrow: jest.fn(),
-  getStellarExplorerUrl: jest.fn(() => 'https://stellar.expert/explorer/testnet/tx/mock'),
-}));
+const chainAdapter = createChainAdapterMock();
+await jest.unstable_mockModule('../src/services/chain/factory.js', () =>
+  createChainFactoryMock(chainAdapter)
+);
 
 await jest.unstable_mockModule('../src/infra/socket/io.js', () => {
   return {
@@ -186,10 +185,8 @@ await jest.unstable_mockModule('../src/infra/socket/io.js', () => {
     getIO: jest.fn(),
     emitAnomalyDetected: jest.fn(),
     emitTelemetryUpdate: jest.fn(),
-      emitPaymentStatusChange: jest.fn(),
     emitStatusUpdate: jest.fn(),
- emitPaymentStatusChange: jest.fn(),
-  emitPaymentStatusChange: jest.fn(),
+    emitPaymentStatusChange: jest.fn(),
   };
 });
 
@@ -424,7 +421,9 @@ describe('Shipments API (mocked DB)', () => {
     });
 
     const tokenPayload = { userId: String(user._id), role: user.role };
-    const { default: { sign } } = await import('jsonwebtoken');
+    const {
+      default: { sign },
+    } = await import('jsonwebtoken');
     const token = sign(tokenPayload, process.env.JWT_SECRET!);
 
     const res = await request(app)
@@ -457,7 +456,9 @@ describe('Shipments API (mocked DB)', () => {
     });
 
     const tokenPayload = { userId: String(user._id), role: user.role };
-    const { default: { sign } } = await import('jsonwebtoken');
+    const {
+      default: { sign },
+    } = await import('jsonwebtoken');
     const token = sign(tokenPayload, process.env.JWT_SECRET!);
 
     const res = await request(app)
