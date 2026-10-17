@@ -1,17 +1,18 @@
+# syntax=docker/dockerfile:1
 # ── Stage 1: production dependencies only ─────────────────────────────────────
 FROM node:20-alpine AS deps
 WORKDIR /app
 # Skip husky git-hooks init (no .git in image; husky is a devDependency)
 ENV HUSKY=0
 COPY package*.json ./
-RUN npm ci --omit=dev
+RUN --mount=type=cache,target=/root/.npm npm ci --omit=dev
 
 # ── Stage 2: build (TypeScript compilation) ───────────────────────────────────
 FROM node:20-alpine AS builder
 WORKDIR /app
 ENV HUSKY=0
 COPY package*.json ./
-RUN npm ci
+RUN --mount=type=cache,target=/root/.npm npm ci
 COPY . .
 RUN npm run build
 
@@ -26,7 +27,7 @@ ENV HUSKY=0
 # Must be development BEFORE `npm ci` so devDependencies (tsx) are installed.
 ENV NODE_ENV=development
 COPY package*.json ./
-RUN npm ci
+RUN --mount=type=cache,target=/root/.npm npm ci
 COPY . .
 EXPOSE 3000
 CMD ["npm", "run", "dev"]
