@@ -62,6 +62,7 @@ describe('Event-driven indexer golden fixtures replay', () => {
           actor: 'stellar-indexer',
         },
         $set: {
+          dataHash: events[0].data[0],
           metadata: {
             blockNumber: 512345,
             ledger: 512345,

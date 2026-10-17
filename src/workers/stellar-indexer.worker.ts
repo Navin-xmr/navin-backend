@@ -73,6 +73,7 @@ export async function indexStellarTransactions(
 
     let milestoneEvent: MilestoneEvent;
     let shipmentId: string;
+    let dataHash: string | undefined;
     const metadata: Record<string, unknown> = {
       blockNumber: event.ledger,
       ledger: event.ledger,
@@ -84,7 +85,8 @@ export async function indexStellarTransactions(
     if (event.name === CHAIN_EVENT_NAMES.ANCHOR) {
       milestoneEvent = MilestoneEvent.IN_TRANSIT;
       shipmentId = event.topic[1];
-      metadata.dataHash = event.data[0];
+      dataHash = event.data[0];
+      metadata.dataHash = dataHash;
     } else if (event.name === CHAIN_EVENT_NAMES.ESCROW_INIT) {
       milestoneEvent = MilestoneEvent.SETTLEMENT_INITIATED;
       shipmentId = event.data[0];
@@ -113,7 +115,10 @@ export async function indexStellarTransactions(
           transactionHash: event.tx_hash,
           actor: 'stellar-indexer',
         },
-        $set: { metadata },
+        $set: {
+          metadata,
+          ...(dataHash && { dataHash }),
+        },
       },
       { upsert: true }
     );
