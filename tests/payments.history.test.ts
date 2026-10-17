@@ -1,6 +1,6 @@
 import { jest, describe, it, beforeEach, expect } from '@jest/globals';
 import type { Request, Response } from 'express';
-import { createStellarServiceMock } from './helpers/mocks.js';
+import { createChainAdapterMock, createChainFactoryMock } from './helpers/mocks.js';
 
 // ── Repo mock ────────────────────────────────────────────────────────────────
 const getPaymentsByOrganizationMock =
@@ -16,7 +16,10 @@ await jest.unstable_mockModule('../src/modules/payments/payments.repo.js', () =>
   deletePayment: jest.fn(),
 }));
 
-await jest.unstable_mockModule('../src/services/stellar.service.js', () => createStellarServiceMock());
+const chainAdapter = createChainAdapterMock();
+await jest.unstable_mockModule('../src/services/chain/factory.js', () =>
+  createChainFactoryMock(chainAdapter)
+);
 
 const { getPaymentsService, getPaymentByIdService } =
   await import('../src/modules/payments/payments.service.js');
