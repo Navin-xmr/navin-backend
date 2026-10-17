@@ -3,6 +3,7 @@ import * as ledgerRepo from './ledger.repo.js';
 import type { LedgerBlockInput } from './ledger.repo.js';
 import { MilestoneEvent } from '../../shared/types/shipment.js';
 import { logger } from '../../shared/logger/logger.js';
+import { config } from '../../config/index.js';
 
 export async function createLedgerBlockService(input: LedgerBlockInput) {
   const block = await ledgerRepo.createLedgerBlock(input);
@@ -32,11 +33,13 @@ export async function getLedgerBlockByIdService(id: string) {
 
 export async function getLedgerBlockVerificationService(id: string) {
   const block = await getLedgerBlockByIdService(id);
+  const network = config.chainAdapter === 'simulated' ? 'simulated' : config.stellarNetwork;
   return {
     canonicalPayload: (block as unknown as { canonicalPayload?: unknown }).canonicalPayload ?? null,
     dataHash: block.dataHash ?? null,
     txHash: block.transactionHash ?? null,
     transactionHash: block.transactionHash ?? null,
     ledger: block.ledger,
+    network,
   };
 }

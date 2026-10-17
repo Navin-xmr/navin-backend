@@ -2,15 +2,21 @@ import { describe, expect, it, jest, beforeEach } from '@jest/globals';
 import { AppError } from '../src/shared/http/errors.js';
 import { createLedgerBlock } from '../src/modules/ledger/ledger.repo.js';
 
+const actualLedgerService = await import('../src/modules/ledger/ledger.service.js');
+
 const getLedgerBlocksServiceMock = jest.fn();
 const getLedgerBlockByIdServiceMock = jest.fn();
+const getLedgerBlockVerificationServiceMock = jest.fn(
+  actualLedgerService.getLedgerBlockVerificationService,
+);
 
 await jest.unstable_mockModule('../src/modules/ledger/ledger.service.js', () => ({
   getLedgerBlocksService: getLedgerBlocksServiceMock,
   getLedgerBlockByIdService: getLedgerBlockByIdServiceMock,
+  getLedgerBlockVerificationService: getLedgerBlockVerificationServiceMock,
 }));
 
-const { getLedgerBlocks, getLedgerBlockById } = await import(
+const { getLedgerBlocks, getLedgerBlockById, getLedgerBlockVerification } = await import(
   '../src/modules/ledger/ledger.controller.js',
 );
 
@@ -18,6 +24,10 @@ describe('GET /api/ledger/blocks controller', () => {
   beforeEach(() => {
     getLedgerBlocksServiceMock.mockReset();
     getLedgerBlockByIdServiceMock.mockReset();
+    getLedgerBlockVerificationServiceMock.mockReset();
+    getLedgerBlockVerificationServiceMock.mockImplementation(
+      actualLedgerService.getLedgerBlockVerificationService,
+    );
   });
 
   it('passes the validated ledger block id parameter to the service', async () => {
@@ -230,4 +240,40 @@ describe('GET /api/ledger/blocks controller', () => {
     const payload = (res.json as jest.Mock).mock.calls[0][0];
     expect(payload.data[0]).toHaveProperty('dataHash', hash);
   });
+
+  it('getLedgerBlockVerification includes data.network in the verification bundle response', async () => {
+    const hash = 'c'.repeat(64);
+    const created = await createLedgerBlock({
+      shipmentId: '507f1f77bcf86cd799439015',
+      milestoneEvent: 'DELIVERED' as any,
+      blockNumber: 42,
+      ledger: 42,
+      transactionHash: 'stellar-tx-verify-1',
+      dataHash: hash,
+      canonicalPayload: { shipmentId: '507f1f77bcf86cd799439015', milestone: 'DELIVERED' },
+    });
+
+    const req = { params: { id: String(created._id) } } as any;
+    const res = {
+      status: jest.fn().mockReturnThis(),
+      json: jest.fn(),
+    } as any;
+
+    await getLedgerBlockVerification(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith({
+      success: true,
+      message: 'Ledger block verification retrieved',
+      data: {
+        canonicalPayload: { shipmentId: '507f1f77bcf86cd799439015', milestone: 'DELIVERED' },
+        dataHash: hash,
+        txHash: 'stellar-tx-verify-1',
+        transactionHash: 'stellar-tx-verify-1',
+        ledger: 42,
+        network: expect.stringMatching(/^(testnet|public|simulated)$/),
+      },
+    });
+  });
 });
+
