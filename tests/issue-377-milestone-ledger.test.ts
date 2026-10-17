@@ -271,6 +271,11 @@ describe('Ledger block creation on lifecycle events', () => {
         eventType: 'SETTLEMENT_INITIATED',
         transactionHash: 'stellar-tx-hash-abc',
         dataHash: expect.stringMatching(/^[0-9a-f]{64}$/),
+        canonicalPayload: expect.objectContaining({
+          shipmentId: 'ship-1',
+          event: 'SETTLEMENT_INITIATED',
+          actor: 'user-1',
+        }),
         metadata: expect.objectContaining({ paymentId: 'pay-1', simulated: true }),
       })
     );
