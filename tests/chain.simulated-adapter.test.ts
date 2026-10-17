@@ -2,12 +2,9 @@ import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { Account, Keypair, Networks, StrKey } from '@stellar/stellar-sdk';
 import type { Transaction } from '@stellar/stellar-sdk';
 
-import {
-  SIMULATED_CONTRACT_ID,
-  SimulatedAdapter,
-  toTokenizeAnchorInput,
-} from '../src/services/chain/simulated.adapter.js';
-import type { HorizonClient, HorizonTxRecord } from '../src/services/chain/simulated.adapter.js';
+import { SimulatedAdapter } from '../src/services/chain/simulated.adapter.js';
+import { SIMULATED_CONTRACT_ID, toTokenizeAnchorInput } from './helpers/mocks.js';
+import type { HorizonClient, HorizonTxRecord } from './helpers/mocks.js';
 import { AppError, ErrorCodes } from '../src/shared/http/errors.js';
 import { ChainEventSchema } from '../src/shared/types/chain.js';
 import type { ChainEvent } from '../src/shared/types/chain.js';

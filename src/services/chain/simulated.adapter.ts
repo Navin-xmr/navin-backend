@@ -42,7 +42,6 @@ import {
   parseChainEvent,
 } from '../../shared/types/chain.js';
 import type { ChainEvent } from '../../shared/types/chain.js';
-import { generateDataHash } from '../../shared/utils/crypto.js';
 
 import { KeyedSerializer } from './serializer.js';
 import type {
@@ -56,7 +55,7 @@ import type {
 } from './types.js';
 
 /** Sentinel contract id for simulated events (all-zero contract strkey) — no contract exists. */
-export const SIMULATED_CONTRACT_ID = StrKey.encodeContract(Buffer.alloc(32));
+const SIMULATED_CONTRACT_ID = StrKey.encodeContract(Buffer.alloc(32));
 
 const ANCHOR_KEY_PREFIX = 'telemetry:';
 const RELEASE_KEY_PREFIX = 'release:';
@@ -67,14 +66,14 @@ const MAX_BAD_SEQ_RETRIES = 2;
 const accountSerializer = new KeyedSerializer();
 
 /** Horizon rejects a stale sequence with `extras.result_codes.transaction === 'tx_bad_seq'`. */
-export function isBadSequence(err: unknown): boolean {
+function isBadSequence(err: unknown): boolean {
   const data = (err as { response?: { data?: unknown } } | null)?.response?.data as
     { extras?: { result_codes?: { transaction?: string } } } | undefined;
   return data?.extras?.result_codes?.transaction === 'tx_bad_seq';
 }
 
 /** Horizon transaction record fields the adapter reads. */
-export interface HorizonTxRecord {
+interface HorizonTxRecord {
   paging_token: string;
   hash: string;
   ledger_attr: number;
@@ -84,7 +83,7 @@ export interface HorizonTxRecord {
 }
 
 /** Narrow Horizon surface — injectable for tests. */
-export interface HorizonClient {
+interface HorizonClient {
   loadAccount(publicKey: string): Promise<Account>;
   submitTransaction(tx: Transaction): Promise<{ hash: string; ledger: number }>;
   /** Ascending, successful-only transactions for `publicKey`, strictly after `cursor`. */
@@ -95,13 +94,13 @@ export interface HorizonClient {
   ): Promise<HorizonTxRecord[]>;
 }
 
-export interface SimulatedAdapterOptions {
+interface SimulatedAdapterOptions {
   horizon?: HorizonClient;
   secretKey?: string;
   networkPassphrase?: string;
 }
 
-export function createHorizonClient(horizonUrl: string = config.horizonUrl): HorizonClient {
+function createHorizonClient(horizonUrl: string = config.horizonUrl): HorizonClient {
   const server = new Horizon.Server(horizonUrl);
   return {
     loadAccount: publicKey => server.loadAccount(publicKey),
@@ -112,26 +111,6 @@ export function createHorizonClient(horizonUrl: string = config.horizonUrl): Hor
       const page = await query.call();
       return page.records;
     },
-  };
-}
-
-/**
- * Map legacy `tokenizeShipment` data onto `anchorEvent`: the tokenized fields are
- * anchored as a deterministic SHA-256 (hash-and-emit) instead of raw manage-data values.
- */
-export function toTokenizeAnchorInput(
-  shipment: { shipmentId: string; trackingNumber: string; origin: string; destination: string },
-  actor: string
-): AnchorEventInput {
-  return {
-    shipment_id: shipment.shipmentId,
-    data_hash: generateDataHash({
-      shipmentId: shipment.shipmentId,
-      trackingNumber: shipment.trackingNumber,
-      origin: shipment.origin,
-      destination: shipment.destination,
-    }),
-    actor,
   };
 }
 
