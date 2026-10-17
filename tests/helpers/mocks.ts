@@ -267,3 +267,58 @@ export function createEmailServiceMock(
     ...overrides,
   };
 }
+
+import { StrKey } from '@stellar/stellar-sdk';
+import type { Account, Transaction } from '@stellar/stellar-sdk';
+import { generateDataHash } from '../../src/shared/utils/crypto.js';
+import type { AnchorEventInput } from '../../src/services/chain/types.js';
+
+/** Sentinel contract id for simulated events (all-zero contract strkey) — no contract exists. */
+export const SIMULATED_CONTRACT_ID = StrKey.encodeContract(Buffer.alloc(32));
+
+/** Horizon transaction record fields read by SimulatedAdapter in tests. */
+export interface HorizonTxRecord {
+  paging_token: string;
+  hash: string;
+  ledger_attr: number;
+  created_at: string;
+  envelope_xdr: string;
+  successful: boolean;
+}
+
+/** Narrow Horizon client surface used by SimulatedAdapter tests. */
+export interface HorizonClient {
+  loadAccount(publicKey: string): Promise<Account>;
+  submitTransaction(tx: Transaction): Promise<{ hash: string; ledger: number }>;
+  listTransactions(
+    publicKey: string,
+    cursor: string | undefined,
+    limit: number
+  ): Promise<HorizonTxRecord[]>;
+}
+
+/** Horizon rejects a stale sequence with `extras.result_codes.transaction === 'tx_bad_seq'`. */
+export function isBadSequence(err: unknown): boolean {
+  const data = (err as { response?: { data?: unknown } } | null)?.response?.data as
+    | { extras?: { result_codes?: { transaction?: string } } }
+    | undefined;
+  return data?.extras?.result_codes?.transaction === 'tx_bad_seq';
+}
+
+/** Map legacy `tokenizeShipment` data onto `anchorEvent` for test fixtures. */
+export function toTokenizeAnchorInput(
+  shipment: { shipmentId: string; trackingNumber: string; origin: string; destination: string },
+  actor: string
+): AnchorEventInput {
+  return {
+    shipment_id: shipment.shipmentId,
+    data_hash: generateDataHash({
+      shipmentId: shipment.shipmentId,
+      trackingNumber: shipment.trackingNumber,
+      origin: shipment.origin,
+      destination: shipment.destination,
+    }),
+    actor,
+  };
+}
+

@@ -19,8 +19,9 @@ import {
 import type { Transaction } from '@stellar/stellar-sdk';
 
 import { KeyedSerializer } from '../src/services/chain/serializer.js';
-import { SimulatedAdapter, isBadSequence } from '../src/services/chain/simulated.adapter.js';
-import type { HorizonClient } from '../src/services/chain/simulated.adapter.js';
+import { SimulatedAdapter } from '../src/services/chain/simulated.adapter.js';
+import { isBadSequence } from './helpers/mocks.js';
+import type { HorizonClient } from './helpers/mocks.js';
 import { ErrorCodes } from '../src/shared/http/errors.js';
 import { generateDataHash } from '../src/shared/utils/crypto.js';
 
