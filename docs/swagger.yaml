@@ -5148,7 +5148,7 @@ paths:
                 message: Validation failed - limit must be between 1 and 100
                 data: null
                 error:
-                  code: ERR_VALIDATION_FAILED
+                  code: VALIDATION_ERROR
                 details:
                   - path: limit
                     message: limit must be between 1 and 100
@@ -7028,13 +7028,10 @@ components:
             - code
           properties:
             code:
-              type: string
-              example: ERR_VALIDATION_FAILED
+              $ref: '#/components/schemas/ErrorCode'
               description: |
                 Machine-readable error code for programmatic handling.
                 See docs/ERROR_CODES.md for the complete registry.
-                Common codes: ERR_AUTH_INVALID, ERR_PERMISSION_DENIED, ERR_NOT_FOUND,
-                ERR_VALIDATION_FAILED, ERR_DUPLICATE_KEY, ERR_INTERNAL_SERVER_ERROR
           description: Error details container with machine-readable code
         details:
           type: array
@@ -7060,7 +7057,7 @@ components:
         message: Validation failed - email must be a valid email address
         data: null
         error:
-          code: ERR_VALIDATION_FAILED
+          code: VALIDATION_ERROR
         details:
           - path: email
             message: Invalid email format
@@ -7388,9 +7385,10 @@ components:
         updatedAt:
           type: string
           format: date-time
-    ErrorCodes:
+    ErrorCode:
       type: string
       enum:
+        - VALIDATION_ERROR
         - ERR_AUTH_INVALID
         - ERR_PERMISSION_DENIED
         - ERR_NOT_FOUND
@@ -7398,21 +7396,94 @@ components:
         - ERR_VALIDATION_FAILED
         - ERR_INTERNAL_SERVER_ERROR
         - ERR_SHIPMENT_NOT_FOUND
+        - ERR_SHIPMENT_INVALID_TRANSITION
         - ERR_PAYMENT_NOT_FOUND
+        - ERR_SETTLEMENT_NOT_FOUND
+        - ERR_SETTLEMENT_ALREADY_DISPUTED
+        - ERR_ORGANIZATION_NOT_FOUND
+        - ERR_TEMPLATE_NOT_FOUND
         - ERR_DUPLICATE_KEY
+        - ERR_AUTH_INVALID_RESET_TOKEN
+        - ERR_STELLAR_CONFIG
+        - ERR_STELLAR_INVALID_HASH
+        - ERR_CHAIN_UNAUTHORIZED
+        - ERR_CHAIN_INVALID_HASH
+        - ERR_CHAIN_ALREADY_ANCHORED
+        - ERR_CHAIN_ESCROW_EXISTS
+        - ERR_CHAIN_ESCROW_NOT_FOUND
+        - ERR_CHAIN_ESCROW_ALREADY_RELEASED
+        - ERR_CHAIN_INVALID_AMOUNT
+        - ERR_CHAIN_INVALID_PROOF
+        - ERR_CHAIN_UNKNOWN
+        - ERR_CHAIN_INVALID_EVENT
+        - ERR_RATE_LIMIT_EXCEEDED
         - ERR_LEDGER_BLOCK_NOT_FOUND
+        - ERR_FILE_TOO_LARGE
+        - ERR_INVALID_MIME_TYPE
+        - ERR_INVALID_DOCUMENT_TYPE
+        - ERR_PHOTO_LIMIT_EXCEEDED
+        - ERR_EVENTS_POLL_FAILED
+        - ERR_AUTH_TOKEN_REVOKED
+        - ERR_NOTIFICATION_NOT_FOUND
+        - ERR_AUTH_2FA_INVALID_CODE
+        - ERR_AUTH_2FA_NOT_SETUP
+        - ERR_AUTH_2FA_ALREADY_ENABLED
+        - ERR_AUTH_2FA_NOT_ENABLED
+        - ERR_AUTH_2FA_INVALID_BACKUP_CODE
+        - ERR_AUTH_2FA_INVALID_SECRET_FORMAT
+        - ERR_AUTH_INVALID_TOKEN_IDENTIFIER
+        - ERR_FILE_UPLOAD_FAILED
+        - ERR_FILE_DELETE_FAILED
       description: |
-        Standard error codes returned by the API. See docs/ERROR_CODES.md for details.
+        Standard error codes returned by the API (all values from
+        `ErrorCodes` in src/shared/http/errors.ts, plus VALIDATION_ERROR).
+        See docs/ERROR_CODES.md for details.
+        - VALIDATION_ERROR: Schema validation failed (400)
         - ERR_AUTH_INVALID: Invalid or missing authentication token (401)
         - ERR_PERMISSION_DENIED: Insufficient role permissions (403)
         - ERR_NOT_FOUND: Generic resource not found (404)
         - ERR_BAD_REQUEST: Malformed request (400)
-        - ERR_VALIDATION_FAILED: Schema validation failed (400)
+        - ERR_VALIDATION_FAILED: Schema validation failed (400, legacy alias of VALIDATION_ERROR)
         - ERR_INTERNAL_SERVER_ERROR: Unhandled server error (500)
         - ERR_SHIPMENT_NOT_FOUND: Specific shipment not found (404)
+        - ERR_SHIPMENT_INVALID_TRANSITION: Shipment status transition not allowed (400)
         - ERR_PAYMENT_NOT_FOUND: Specific payment not found (404)
+        - ERR_SETTLEMENT_NOT_FOUND: Settlement not found (404)
+        - ERR_SETTLEMENT_ALREADY_DISPUTED: Settlement already disputed (409)
+        - ERR_ORGANIZATION_NOT_FOUND: Organization not found (404)
+        - ERR_TEMPLATE_NOT_FOUND: Shipment template not found (404)
         - ERR_DUPLICATE_KEY: Unique constraint violation (409)
+        - ERR_AUTH_INVALID_RESET_TOKEN: Invalid or expired reset token (400)
+        - ERR_STELLAR_CONFIG: Stellar server configuration missing (500)
+        - ERR_STELLAR_INVALID_HASH: Invalid Stellar data hash (400)
+        - ERR_CHAIN_UNAUTHORIZED: Contract NotAuthorized (403)
+        - ERR_CHAIN_INVALID_HASH: Contract InvalidHash (422)
+        - ERR_CHAIN_ALREADY_ANCHORED: Contract AlreadyAnchored (409)
+        - ERR_CHAIN_ESCROW_EXISTS: Contract EscrowExists (409)
+        - ERR_CHAIN_ESCROW_NOT_FOUND: Contract EscrowNotFound (404)
+        - ERR_CHAIN_ESCROW_ALREADY_RELEASED: Contract EscrowAlreadyReleased (409)
+        - ERR_CHAIN_INVALID_AMOUNT: Contract InvalidAmount (422)
+        - ERR_CHAIN_INVALID_PROOF: Contract InvalidProof (422)
+        - ERR_CHAIN_UNKNOWN: Unmapped contract error (502)
+        - ERR_CHAIN_INVALID_EVENT: Indexed event failed spec validation (502)
+        - ERR_RATE_LIMIT_EXCEEDED: Too many requests (429)
         - ERR_LEDGER_BLOCK_NOT_FOUND: Ledger block not found (404)
+        - ERR_FILE_TOO_LARGE: Upload exceeds size cap (413)
+        - ERR_INVALID_MIME_TYPE: Upload MIME type not accepted (415)
+        - ERR_INVALID_DOCUMENT_TYPE: Uploaded document type not accepted (415)
+        - ERR_PHOTO_LIMIT_EXCEEDED: Photo count limit reached (400)
+        - ERR_EVENTS_POLL_FAILED: Redis event store unavailable (502)
+        - ERR_AUTH_TOKEN_REVOKED: JWT revoked (401)
+        - ERR_NOTIFICATION_NOT_FOUND: Notification not found (404)
+        - ERR_AUTH_2FA_INVALID_CODE: TOTP code did not match (401)
+        - ERR_AUTH_2FA_NOT_SETUP: TOTP not configured (400)
+        - ERR_AUTH_2FA_ALREADY_ENABLED: TOTP already enabled (409)
+        - ERR_AUTH_2FA_NOT_ENABLED: Operation requires TOTP (400)
+        - ERR_AUTH_2FA_INVALID_BACKUP_CODE: Backup code did not match (401)
+        - ERR_AUTH_2FA_INVALID_SECRET_FORMAT: Stored TOTP secret unreadable (500)
+        - ERR_AUTH_INVALID_TOKEN_IDENTIFIER: Token jti is not a UUID v4 (400)
+        - ERR_FILE_UPLOAD_FAILED: Provider rejected the upload (502)
+        - ERR_FILE_DELETE_FAILED: Provider rejected the delete (502)
 
     ShipmentTimelineEventType:
       type: string

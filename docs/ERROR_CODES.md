@@ -11,14 +11,22 @@ All error codes follow the naming convention: `ERR_<DOMAIN>_<DESCRIPTION>` or `E
 | HTTP Status | Error Code | Description | Example Endpoints | When Returned |
 |---|---|---|---|---|
 | **400** | `ERR_BAD_REQUEST` | Invalid request syntax or parameters | All endpoints | Malformed JSON body, invalid query parameters |
-| **400** | `ERR_VALIDATION_FAILED` | Request validation failed (Zod schema) | All endpoints | Missing required fields, invalid field types, constraints violated |
+| **400** | `VALIDATION_ERROR` | Request validation failed (Zod schema) | All endpoints | Missing required fields, invalid field types, constraints violated |
 | **401** | `ERR_AUTH_INVALID` | Missing or invalid authentication token | All protected endpoints | Missing `Authorization` header, malformed JWT, expired token |
 | **401** | `ERR_AUTH_TOKEN_REVOKED` | JWT has been explicitly revoked | All protected endpoints, `GET /api/events` | User logged out; token blocklisted in Redis before natural expiry |
 | **403** | `ERR_PERMISSION_DENIED` | Insufficient role permissions | All role-restricted endpoints | User role not authorized for this endpoint |
 | **404** | `ERR_NOT_FOUND` | Resource not found | `GET /api/*/:id`, `PATCH /api/*/:id`, `DELETE /api/*/:id` | Resource ID does not exist or has been deleted |
 | **404** | `ERR_SHIPMENT_NOT_FOUND` | Shipment resource not found | `GET /api/shipments/:id`, `PATCH /api/shipments/:id` | Shipment ID does not exist |
 | **404** | `ERR_PAYMENT_NOT_FOUND` | Payment resource not found | `GET /api/payments/:id` | Payment ID does not exist |
+| **400** | `ERR_SHIPMENT_INVALID_TRANSITION` | Shipment status transition not allowed | `PATCH /api/shipments/:id/status`, bulk status endpoints | Transition violates the shipment state machine |
+| **404** | `ERR_ORGANIZATION_NOT_FOUND` | Organization resource not found | `GET /api/organizations/:id` and nested org routes | Organization ID does not exist |
+| **404** | `ERR_SETTLEMENT_NOT_FOUND` | Settlement resource not found | Settlement / dispute endpoints | Settlement ID does not exist |
+| **409** | `ERR_SETTLEMENT_ALREADY_DISPUTED` | Settlement already under dispute | Settlement dispute endpoints | A dispute is already open for this settlement |
+| **500** | `ERR_STELLAR_CONFIG` | Stellar server-side configuration missing | Anchor / webhook / signing endpoints | `STELLAR_SECRET_KEY` or webhook secret not configured |
+| **400** | `ERR_STELLAR_INVALID_HASH` | Invalid Stellar data hash | Anchor / memo verification endpoints | Empty or malformed hash payload |
+| **404** | `ERR_LEDGER_BLOCK_NOT_FOUND` | Ledger block not found | `GET /api/ledger/blocks/:id` | Block height/hash does not exist |
 | **409** | `ERR_DUPLICATE_KEY` | Unique constraint violation | `POST /api/auth/signup`, `POST /api/users` | Email already registered, duplicate field value |
+| **429** | `ERR_RATE_LIMIT_EXCEEDED` | Too many requests (rate limit exceeded) | OTP / SMS endpoints (e.g. resend), throttled routes | Retry only after the delay indicated by the `Retry-After` response header |
 | **500** | `ERR_INTERNAL_SERVER_ERROR` | Unhandled server error | All endpoints | Unexpected error in backend processing |
 | **502** | `ERR_EVENTS_POLL_FAILED` | Redis event store unavailable | `GET /api/events/poll` | Redis read failure during polling fallback |
 
@@ -53,7 +61,7 @@ Content-Type: application/json
   "success": false,
   "message": "Validation failed: email must be a valid email address",
   "data": null,
-  "code": "ERR_VALIDATION_FAILED"
+  "code": "VALIDATION_ERROR"
 }
 ```
 
@@ -98,16 +106,34 @@ Content-Type: application/json
 ### Resource Errors
 - `ERR_NOT_FOUND` (404) — Generic resource not found
 - `ERR_SHIPMENT_NOT_FOUND` (404) — Specific shipment not found
+- `ERR_SHIPMENT_INVALID_TRANSITION` (400) — Shipment status transition not allowed by the state machine
+- `ERR_ORGANIZATION_NOT_FOUND` (404) — Specific organization not found
 - `ERR_PAYMENT_NOT_FOUND` (404) — Specific payment not found
 - `ERR_DUPLICATE_KEY` (409) — Unique constraint violation
 
+### Settlement Errors
+- `ERR_SETTLEMENT_NOT_FOUND` (404) — Settlement resource not found
+- `ERR_SETTLEMENT_ALREADY_DISPUTED` (409) — Settlement already has an open dispute
+
+### Stellar Errors
+- `ERR_STELLAR_CONFIG` (500) — Stellar server-side configuration missing (keys, webhook secrets)
+- `ERR_STELLAR_INVALID_HASH` (400) — Empty or malformed hash in anchor/verification payloads
+
+### Ledger Errors
+- `ERR_LEDGER_BLOCK_NOT_FOUND` (404) — Ledger block height/hash does not exist
+
 ### Validation Errors
 - `ERR_BAD_REQUEST` (400) — Malformed request
-- `ERR_VALIDATION_FAILED` (400) — Zod schema validation failure
+- `VALIDATION_ERROR` (400) — Zod schema validation failure
+
+### Rate Limiting
+- `ERR_RATE_LIMIT_EXCEEDED` (429) — Too many requests. Clients must back off
+  and retry only after the delay indicated by the `Retry-After` response
+  header (e.g. OTP resend throttling).
 
 ### Events / Real-time Errors
 - `ERR_EVENTS_POLL_FAILED` (502) — Redis event store unavailable; polling fallback could not retrieve recent events
-- `ERR_VALIDATION_FAILED` (400) — Schema validation failed
+- `VALIDATION_ERROR` (400) — Schema validation failed
 
 ### Chain Errors
 Mapped from Soroban contract errors by `chainErrorToAppError()` in `src/shared/types/chain.ts` (spec: `docs/chain-interface.md`). Not yet returned by any endpoint — reserved for the `ChainAdapter` layer (TODO Part 3).
@@ -167,7 +193,7 @@ client.interceptors.response.use(
     } else if (error.response?.data?.code === 'ERR_PERMISSION_DENIED') {
       // Handle permission error
       console.error('Access denied:', error.response.data.message);
-    } else if (error.response?.data?.code === 'ERR_VALIDATION_FAILED') {
+    } else if (error.response?.data?.code === 'VALIDATION_ERROR') {
       // Handle validation error
       console.error('Validation error:', error.response.data.message);
     }
@@ -196,13 +222,13 @@ curl -X GET http://localhost:3000/api/shipments \
 curl -X POST http://localhost:3000/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"email":"invalid"}'
-# Response: {"success":false,"message":"Validation failed: password is required","data":null,"code":"ERR_VALIDATION_FAILED"}
+# Response: {"success":false,"message":"Validation failed: password is required","data":null,"code":"VALIDATION_ERROR"}
 ```
 
 ## FAQ
 
 **Q: How do I distinguish between different types of 400 errors?**  
-A: Check the `code` field. `ERR_BAD_REQUEST` indicates malformed syntax, while `ERR_VALIDATION_FAILED` indicates schema violations.
+A: Check the `code` field. `ERR_BAD_REQUEST` indicates malformed syntax, while `VALIDATION_ERROR` indicates schema violations.
 
 **Q: What should I do when I receive a 500 error?**  
 A: Implement exponential backoff retry logic. The error is transient and the backend team has been notified.
@@ -214,6 +240,11 @@ A: No. Always check the `code` field for precise error type identification, as m
 A: No. Error messages are currently English only. Frontend teams should map error codes to localized messages.
 
 ## Changelog
+
+### Version 1.3.0
+- Documented domain codes: `ERR_SHIPMENT_INVALID_TRANSITION`, `ERR_ORGANIZATION_NOT_FOUND`, `ERR_SETTLEMENT_NOT_FOUND`, `ERR_SETTLEMENT_ALREADY_DISPUTED`, `ERR_STELLAR_CONFIG`, `ERR_STELLAR_INVALID_HASH`, `ERR_LEDGER_BLOCK_NOT_FOUND`
+- Renamed the documented validation code from `ERR_VALIDATION_FAILED` to `VALIDATION_ERROR`
+- Added the 429 `ERR_RATE_LIMIT_EXCEEDED` section with `Retry-After` guidance
 
 ### Version 1.2.0
 - Added `ERR_CHAIN_*` codes — chain spec error taxonomy (#650)
