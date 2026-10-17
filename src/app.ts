@@ -72,7 +72,9 @@ export function buildApp() {
   // Stricter limiter for public tracking endpoint
   app.use('/api/public/tracking', strictLimiter);
 
+  // PUBLIC: Liveness and readiness probes for load balancers and uptime monitors
   app.use('/api/health', healthRouter);
+  // PUBLIC: Unauthenticated login/signup/password-reset entrypoints (protected sub-routes enforce requireAuth)
   app.use('/api/auth', authRouter);
   app.use('/api/users', usersRouter);
   app.use('/api/organizations', organizationsRouter);
@@ -81,7 +83,9 @@ export function buildApp() {
   app.use('/api/shipments', shipmentsRouter);
   app.use('/api/payments', paymentsRouter);
   app.use('/api/settlements', paymentsRouter);
+  // PUBLIC: Customer-facing shipment tracking lookup by tracking number
   app.use('/api/public/tracking', publicTrackingRouter);
+  // PUBLIC: External IoT and Stellar webhook receivers authenticated via API key / HMAC signature
   app.use('/api/webhooks', webhooksRouter);
   app.use('/api/analytics', analyticsRouter);
   app.use('/api/anomalies', anomaliesRouter);
@@ -95,6 +99,7 @@ export function buildApp() {
 
   if (process.env.NODE_ENV !== 'production') {
     const swaggerDocument = YAML.load(swaggerDocumentPath) as Record<string, unknown>;
+    // PUBLIC: Interactive OpenAPI documentation exposed only outside production
     app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
   }
 
