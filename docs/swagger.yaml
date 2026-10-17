@@ -4638,240 +4638,240 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
   /api/organizations:
-     post:
-       operationId: organizations_post_organizations
-       tags:
-         - Organizations
-       x-required-role: [SUPER_ADMIN]
-       summary: Create an organization
-       description: Creates a new organization. Requires SUPER_ADMIN role.
-       security:
-         - bearerAuth: []
-       requestBody:
-         required: true
-         content:
-           application/json:
-             schema:
-               type: object
-               required: [name, type]
-               properties:
-                 name:
-                   type: string
-                   description: Organization name
-                 type:
-                   type: string
-                   enum: [ENTERPRISE, LOGISTICS]
-                   description: Organization type
-                 settings:
-                   type: object
-                   description: Optional organization settings
-       responses:
-         '201':
-           description: Organization created successfully
-           content:
-             application/json:
-               schema:
-                 $ref: '#/components/schemas/Organization'
-         '401':
-           description: Unauthorized
-           content:
-             application/json:
-               schema:
-                 $ref: '#/components/schemas/ErrorResponse'
-         '403':
-           description: Forbidden - not SUPER_ADMIN
-           content:
-             application/json:
-               schema:
-                 $ref: '#/components/schemas/ErrorResponse'
-         '409':
-           description: Organization already exists
-           content:
-             application/json:
-               schema:
-                 $ref: '#/components/schemas/ErrorResponse'
-     get:
-       operationId: organizations_get_organizations
-       tags:
-         - Organizations
-       x-required-role: [SUPER_ADMIN]
-       summary: List all organizations
-       description: Lists all organizations. Requires SUPER_ADMIN role.
-       security:
-         - bearerAuth: []
-       responses:
-         '200':
-           description: Organizations retrieved successfully
-           content:
-             application/json:
-               schema:
-                 type: object
-                 properties:
-                   success:
-                     type: boolean
-                   message:
-                     type: string
-                   data:
-                     type: array
-                     items:
-                       $ref: '#/components/schemas/Organization'
-         '401':
-           description: Unauthorized
-           content:
-             application/json:
-               schema:
-                 $ref: '#/components/schemas/ErrorResponse'
-         '403':
-           description: Forbidden - not SUPER_ADMIN
-           content:
-             application/json:
-               schema:
-                 $ref: '#/components/schemas/ErrorResponse'
+    post:
+      operationId: organizations_post_organizations
+      tags:
+        - Organizations
+      x-required-role: [SUPER_ADMIN]
+      summary: Create an organization
+      description: Creates a new organization. Requires SUPER_ADMIN role.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, type]
+              properties:
+                name:
+                  type: string
+                  description: Organization name
+                type:
+                  type: string
+                  enum: [ENTERPRISE, LOGISTICS]
+                  description: Organization type
+                settings:
+                  type: object
+                  description: Optional organization settings
+      responses:
+        '201':
+          description: Organization created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden - not SUPER_ADMIN
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Organization already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    get:
+      operationId: organizations_get_organizations
+      tags:
+        - Organizations
+      x-required-role: [SUPER_ADMIN]
+      summary: List all organizations
+      description: Lists all organizations. Requires SUPER_ADMIN role.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Organizations retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Organization'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden - not SUPER_ADMIN
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/organizations/{id}:
-     get:
-       operationId: organizations_get_organizations_id
-       tags:
-         - Organizations
-       x-required-role: [ADMIN, SUPER_ADMIN]
-       summary: Get organization by ID
-       description: Get a single organization. ADMIN can read own; SUPER_ADMIN can read any.
-       security:
-         - bearerAuth: []
-       parameters:
-         - in: path
-           name: id
-           required: true
-           schema:
-             type: string
-       responses:
-         '200':
-           description: Organization retrieved successfully
-           content:
-             application/json:
-               schema:
-                 $ref: '#/components/schemas/Organization'
-         '401':
-           description: Unauthorized
-           content:
-             application/json:
-               schema:
-                 $ref: '#/components/schemas/ErrorResponse'
-         '403':
-           description: Forbidden - insufficient role or cross-org access
-           content:
-             application/json:
-               schema:
-                 $ref: '#/components/schemas/ErrorResponse'
-         '404':
-           description: Organization not found
-           content:
-             application/json:
-               schema:
-                 $ref: '#/components/schemas/ErrorResponse'
-     patch:
-       operationId: organizations_patch_organizations_id
-       tags:
-         - Organizations
-       x-required-role: [ADMIN, SUPER_ADMIN]
-       summary: Update organization
-       description: Update organization details. ADMIN can update own; SUPER_ADMIN can update any. ADMIN cannot modify type.
-       security:
-         - bearerAuth: []
-       parameters:
-         - in: path
-           name: id
-           required: true
-           schema:
-             type: string
-       requestBody:
-         required: true
-         content:
-           application/json:
-             schema:
-               type: object
-               properties:
-                 name:
-                   type: string
-                 settings:
-                   type: object
-       responses:
-         '200':
-           description: Organization updated successfully
-           content:
-             application/json:
-               schema:
-                 $ref: '#/components/schemas/Organization'
-         '400':
-           description: Validation error
-           content:
-             application/json:
-               schema:
-                 $ref: '#/components/schemas/ErrorResponse'
-         '401':
-           description: Unauthorized
-           content:
-             application/json:
-               schema:
-                 $ref: '#/components/schemas/ErrorResponse'
-         '403':
-           description: Forbidden - insufficient role or cross-org access
-           content:
-             application/json:
-               schema:
-                 $ref: '#/components/schemas/ErrorResponse'
-         '404':
-           description: Organization not found
-           content:
-             application/json:
-               schema:
-                 $ref: '#/components/schemas/ErrorResponse'
-     delete:
-       operationId: organizations_delete_organizations_id
-       tags:
-         - Organizations
-       x-required-role: [SUPER_ADMIN]
-       summary: Delete an organization
-       description: Soft-delete an organization. Requires SUPER_ADMIN role.
-       security:
-         - bearerAuth: []
-       parameters:
-         - in: path
-           name: id
-           required: true
-           schema:
-             type: string
-       responses:
-         '200':
-           description: Organization deleted successfully
-           content:
-             application/json:
-               schema:
-                 type: object
-                 properties:
-                   success:
-                     type: boolean
-                   message:
-                     type: string
-                   data:
-                     $ref: '#/components/schemas/Organization'
-         '401':
-           description: Unauthorized
-           content:
-             application/json:
-               schema:
-                 $ref: '#/components/schemas/ErrorResponse'
-         '403':
-           description: Forbidden - not SUPER_ADMIN
-           content:
-             application/json:
-               schema:
-                 $ref: '#/components/schemas/ErrorResponse'
-         '404':
-           description: Organization not found
-           content:
-             application/json:
-               schema:
-                 $ref: '#/components/schemas/ErrorResponse'
+    get:
+      operationId: organizations_get_organizations_id
+      tags:
+        - Organizations
+      x-required-role: [ADMIN, SUPER_ADMIN]
+      summary: Get organization by ID
+      description: Get a single organization. ADMIN can read own; SUPER_ADMIN can read any.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Organization retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden - insufficient role or cross-org access
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Organization not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    patch:
+      operationId: organizations_patch_organizations_id
+      tags:
+        - Organizations
+      x-required-role: [ADMIN, SUPER_ADMIN]
+      summary: Update organization
+      description: Update organization details. ADMIN can update own; SUPER_ADMIN can update any. ADMIN cannot modify type.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                settings:
+                  type: object
+      responses:
+        '200':
+          description: Organization updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden - insufficient role or cross-org access
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Organization not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      operationId: organizations_delete_organizations_id
+      tags:
+        - Organizations
+      x-required-role: [admin]
+      summary: Delete an organization
+      description: Soft-delete an organization and return 200 confirmation.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Organization deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: '#/components/schemas/Organization'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden - insufficient role
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Organization not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/shipments/export:
     get:
       operationId: shipments_get_shipments_export

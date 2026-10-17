@@ -142,4 +142,24 @@ describe('docs/swagger.yaml schema composition', () => {
       expect(sharedNotInTransit.nullable).toBe(true);
     });
   });
+
+  describe('DELETE /api/organizations/{id}', () => {
+    const deleteOp = getIn(document, [
+      'paths',
+      '/api/organizations/{id}',
+      'delete',
+    ]) as JsonNode;
+
+    it('documents operationId, x-required-role, and 200/401/403/404 responses', () => {
+      expect(deleteOp).toBeDefined();
+      expect(deleteOp.operationId).toBe('organizations_delete_organizations_id');
+      expect(deleteOp['x-required-role']).toEqual(['admin']);
+
+      const responses = deleteOp.responses as JsonNode;
+      expect(Object.keys(responses)).toEqual(
+        expect.arrayContaining(['200', '401', '403', '404'])
+      );
+    });
+  });
 });
+
