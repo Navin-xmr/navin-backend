@@ -29,4 +29,18 @@ describe('LedgerBlockSchema — dataHash index (issue #660)', () => {
     const [, options] = match as [unknown, Record<string, unknown>];
     expect(options).toMatchObject({ sparse: true });
   });
+
+  it('defines { milestoneEvent: 1, createdAt: -1 } and omits stale { eventType: 1, createdAt: -1 }', () => {
+    const fieldSpecs = LedgerBlock.schema
+      .indexes()
+      .map(([fields]: [Record<string, unknown>]) => fields);
+
+    expect(fieldSpecs).toEqual(
+      expect.arrayContaining([{ milestoneEvent: 1, createdAt: -1 }]),
+    );
+    expect(fieldSpecs).not.toEqual(
+      expect.arrayContaining([{ eventType: 1, createdAt: -1 }]),
+    );
+    expect(fieldSpecs.some(fields => 'eventType' in fields)).toBe(false);
+  });
 });
