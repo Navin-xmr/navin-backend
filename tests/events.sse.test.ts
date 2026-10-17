@@ -95,15 +95,16 @@ describe('GET /api/events — SSE endpoint', () => {
     const blocklistModule = await import('../src/infra/redis/tokenBlocklist.js');
     const sseAuthModule = await import('../src/shared/middleware/requireSseAuth.js');
     const sseHubModule = await import('../src/infra/sse/sseHub.js');
+    const sseHubTestHelpers = await import('./helpers/sseHubTestHelpers.js');
     const factoriesModule = await import('./fixtures/factories.js');
 
     app = appModule.buildApp();
     blockToken = blocklistModule.blockToken as unknown as BlockToken;
     requireSseAuth = sseAuthModule.requireSseAuth as unknown as RequireSseAuth;
-    deliverToUserForTest = sseHubModule.deliverToUserForTest as unknown as DeliverToUserForTest;
-    getSseClientCount = sseHubModule.getSseClientCount as unknown as GetSseClientCount;
+    deliverToUserForTest = sseHubTestHelpers.deliverToUserForTest as unknown as DeliverToUserForTest;
+    getSseClientCount = sseHubTestHelpers.getSseClientCount as unknown as GetSseClientCount;
     registerSseClient = sseHubModule.registerSseClient as unknown as RegisterSseClient;
-    resetSseHubForTest = sseHubModule.resetSseHubForTest as unknown as ResetSseHubForTest;
+    resetSseHubForTest = sseHubTestHelpers.resetSseHubForTest as unknown as ResetSseHubForTest;
     signJwt = factoriesModule.signToken as unknown as SignToken;
 
     resetSseHubForTest();
@@ -262,5 +263,16 @@ describe('GET /api/events — SSE endpoint', () => {
       res.emit('close');
       expect(getSseClientCount('user-123')).toBe(0);
     });
+
+    it('exposes only production operations from src/infra/sse/sseHub.ts', async () => {
+      const sseHubModule = await import('../src/infra/sse/sseHub.js');
+      expect(Object.keys(sseHubModule).sort()).toEqual([
+        'closeSseHub',
+        'initSseHub',
+        'publishToUser',
+        'registerSseClient',
+      ]);
+    });
   });
 });
+

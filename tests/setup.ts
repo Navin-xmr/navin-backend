@@ -123,7 +123,7 @@ afterEach(() => {
 // intervals into the next file when running `--runInBand`.
 afterEach(async () => {
   try {
-    const { resetSseHubForTest } = await import('../src/infra/sse/sseHub.js');
+    const { resetSseHubForTest } = await import('./helpers/sseHubTestHelpers.js');
     resetSseHubForTest();
   } catch {
     // Ignore — module may be mocked in this suite.
