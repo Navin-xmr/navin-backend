@@ -142,4 +142,33 @@ describe('docs/swagger.yaml schema composition', () => {
       expect(sharedNotInTransit.nullable).toBe(true);
     });
   });
+
+  describe('LedgerBlock schema', () => {
+    const ledgerBlockProps = getIn(document, [
+      'components',
+      'schemas',
+      'LedgerBlock',
+      'properties',
+    ]) as JsonNode;
+
+    it('exposes milestoneEvent instead of legacy eventType', () => {
+      expect(ledgerBlockProps.eventType).toBeUndefined();
+      expect(ledgerBlockProps.milestoneEvent).toEqual({
+        $ref: '#/components/schemas/MilestoneEvent',
+      });
+    });
+
+    it('documents dataHash and canonicalPayload for client-side verification', () => {
+      expect(ledgerBlockProps.dataHash).toMatchObject({
+        type: 'string',
+        nullable: true,
+      });
+      expect(ledgerBlockProps.canonicalPayload).toMatchObject({
+        type: 'object',
+        nullable: true,
+        additionalProperties: true,
+      });
+    });
+  });
 });
+

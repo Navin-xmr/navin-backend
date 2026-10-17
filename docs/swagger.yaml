@@ -7519,7 +7519,7 @@ components:
         shipmentId:
           type: string
           description: Associated shipment ObjectId
-        eventType:
+        milestoneEvent:
           $ref: '#/components/schemas/MilestoneEvent'
         dataHash:
           type: string
@@ -7528,6 +7528,13 @@ components:
             SHA-256 hex digest of the payload committed by the on-chain transaction.
             Allows independent verification that `transactionHash` covers the expected data.
             Present only when the block was created with an associated on-chain anchor.
+        canonicalPayload:
+          type: object
+          nullable: true
+          additionalProperties: true
+          description: >
+            Exact payload snapshot used when computing `dataHash` for anchored blocks.
+            Enables deterministic client-side hash recomputation and verification.
         transactionHash:
           type: string
           nullable: true
