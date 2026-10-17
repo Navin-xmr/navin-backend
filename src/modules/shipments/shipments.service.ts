@@ -1,7 +1,6 @@
 import { Shipment } from './shipments.model.js';
 import type { FilterQuery, SortOrder } from 'mongoose';
-import { tokenizeShipment } from '../../services/stellar.service.js';
-import { getChainAdapter } from '../../services/chain/factory.js';
+import { getChainActorAddress, getChainAdapter } from '../../services/chain/factory.js';
 import type { EscrowResult } from '../../services/chain/types.js';
 import { generateDataHash, buildCanonicalShipmentPayload } from '../../shared/utils/crypto.js';
 import { uploadFileToStorage } from '../../services/storage/upload.js';
@@ -521,14 +520,25 @@ export const createShipmentService = async (data: {
   await shipment.save();
 
   try {
-    const stellar = await tokenizeShipment({
-      trackingNumber: shipment.trackingNumber,
-      origin: shipment.origin,
-      destination: shipment.destination,
-      shipmentId: shipment._id.toString(),
+    const shipmentId = shipment._id.toString();
+    const canonical = buildCanonicalShipmentPayload({
+      shipmentId,
+      event: MilestoneEvent.CREATED,
+      actor: actorUserId,
+      timestamp: new Date(),
+      metadata: {
+        trackingNumber: shipment.trackingNumber,
+        origin: shipment.origin,
+        destination: shipment.destination,
+      },
     });
-    shipment.stellarTokenId = stellar.stellarTokenId;
-    shipment.stellarTxHash = stellar.stellarTxHash;
+    const { txHash } = await getChainAdapter().anchorEvent({
+      shipment_id: shipmentId,
+      data_hash: generateDataHash(canonical),
+      actor: getChainActorAddress(),
+    });
+    shipment.stellarTokenId = `NAVIN-${shipmentId}`;
+    shipment.stellarTxHash = txHash;
     await shipment.save();
   } catch (err) {
     logger.warn({ err, shipmentId: shipment._id.toString() }, 'Stellar tokenization skipped');
