@@ -7,7 +7,7 @@
  * | SOROBAN_ADAPTER       | Adapter          | Notes                                        |
  * |-----------------------|------------------|----------------------------------------------|
  * | `simulated` (default) | SimulatedAdapter | Horizon manage-data; results `simulated: true` |
- * | `soroban`             | —                | Fails fast until SorobanAdapter lands (K2)   |
+ * | `soroban`             | SorobanAdapter   | Live Soroban RPC contract invocation           |
  */
 import { Keypair } from '@stellar/stellar-sdk';
 
@@ -15,20 +15,28 @@ import { config } from '../../config/index.js';
 import { AppError, ErrorCodes } from '../../shared/http/errors.js';
 
 import { SimulatedAdapter } from './simulated.adapter.js';
+import { SorobanAdapter, type SorobanAdapterOptions } from './soroban.adapter.js';
 import type { ChainAdapter } from './types.js';
 
 export type ChainAdapterKind = typeof config.chainAdapter;
 
-export function createChainAdapter(kind: ChainAdapterKind = config.chainAdapter): ChainAdapter {
+export function createChainAdapter(
+  kind: ChainAdapterKind = config.chainAdapter,
+  options: SorobanAdapterOptions = {}
+): ChainAdapter {
   switch (kind) {
     case 'simulated':
       return new SimulatedAdapter();
     case 'soroban':
-      throw new AppError(
-        500,
-        'SOROBAN_ADAPTER=soroban is not available yet (SorobanAdapter, TODO K2); use "simulated"',
-        ErrorCodes.CHAIN_UNKNOWN
-      );
+      return new SorobanAdapter({
+        sorobanRpcUrl: config.sorobanRpcUrl,
+        contractId: config.escrowContractId,
+        escrowContractId: config.escrowContractId,
+        secretKey: config.stellarSecretKey,
+        stellarSecretKey: config.stellarSecretKey,
+        stellarNetwork: config.stellarNetwork,
+        ...options,
+      });
     default: {
       const unsupported: never = kind;
       throw new AppError(
