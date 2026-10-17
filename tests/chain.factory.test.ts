@@ -12,9 +12,16 @@ async function loadFactory(overrides: Record<string, string | undefined>) {
   const { config } = await import('../src/config/index.js');
   const factory = await import('../src/services/chain/factory.js');
   const { SimulatedAdapter } = await import('../src/services/chain/simulated.adapter.js');
+  const { SorobanAdapter } = await import('../src/services/chain/soroban.adapter.js');
   const { AppError, ErrorCodes } = await import('../src/shared/http/errors.js');
-  return { config, factory, SimulatedAdapter, AppError, ErrorCodes };
+  return { config, factory, SimulatedAdapter, SorobanAdapter, AppError, ErrorCodes };
 }
+
+const SOROBAN_ENV = {
+  SOROBAN_ADAPTER: 'soroban',
+  SOROBAN_RPC_URL: 'https://soroban-testnet.stellar.org',
+  ESCROW_CONTRACT_ID: 'CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM',
+};
 
 describe('ChainAdapter factory — SOROBAN_ADAPTER env matrix', () => {
   afterEach(() => {
@@ -38,20 +45,17 @@ describe('ChainAdapter factory — SOROBAN_ADAPTER env matrix', () => {
     expect(factory.getChainAdapter()).not.toBe(first);
   });
 
-  it('soroban → fails fast with ERR_CHAIN_UNKNOWN until SorobanAdapter lands', async () => {
-    const { config, factory, AppError, ErrorCodes } = await loadFactory({
-      SOROBAN_ADAPTER: 'soroban',
-    });
+  it('soroban → SorobanAdapter, memoized until reset', async () => {
+    const { config, factory, SorobanAdapter } = await loadFactory(SOROBAN_ENV);
     expect(config.chainAdapter).toBe('soroban');
+    expect(factory.createChainAdapter('soroban')).toBeInstanceOf(SorobanAdapter);
 
-    let thrown: unknown;
-    try {
-      factory.getChainAdapter();
-    } catch (err) {
-      thrown = err;
-    }
-    expect(thrown).toBeInstanceOf(AppError);
-    expect(thrown).toMatchObject({ statusCode: 500, code: ErrorCodes.CHAIN_UNKNOWN });
+    const first = factory.getChainAdapter();
+    expect(first).toBeInstanceOf(SorobanAdapter);
+    expect(factory.getChainAdapter()).toBe(first);
+
+    factory.resetChainAdapter();
+    expect(factory.getChainAdapter()).not.toBe(first);
   });
 
   it('unknown value → rejected at boot by env validation', async () => {
@@ -63,8 +67,9 @@ describe('ChainAdapter factory — SOROBAN_ADAPTER env matrix', () => {
   });
 
   it('explicit kind overrides config', async () => {
-    const { factory, SimulatedAdapter } = await loadFactory({ SOROBAN_ADAPTER: 'soroban' });
+    const { factory, SimulatedAdapter, SorobanAdapter } = await loadFactory(SOROBAN_ENV);
     expect(factory.createChainAdapter('simulated')).toBeInstanceOf(SimulatedAdapter);
+    expect(factory.createChainAdapter('soroban')).toBeInstanceOf(SorobanAdapter);
   });
 });
 
