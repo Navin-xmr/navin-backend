@@ -183,3 +183,138 @@ UI / detail
 - Keep response envelopes unchanged; expose new on-chain fields only under
   documented shipment / payment / settlement schemas in `docs/swagger.yaml`.
 
+---
+
+## Client-Side Verification Flow
+
+Navin uses a **Hash-and-Emit** pattern for ledger blocks: off-chain milestone and settlement payloads are canonicalized via deterministic JSON serialization (`canonicalJson` in `src/shared/crypto/canonicalHash.ts`), hashed with SHA-256 (`dataHash`), and anchored on Stellar (Horizon `Memo.hash` / `manageData` in simulated mode, or Soroban contract event emission in `soroban` mode).
+
+Frontend clients can independently verify any `LedgerBlock` in three trustless steps without relying on backend database assertions:
+
+### 3-Step Verification Process
+
+1. **Fetch the Verification Bundle**: Request `GET /api/ledger/blocks/:id/verification` (with a valid `Bearer` JWT) to retrieve `{ blockId, shipmentId, milestoneEvent, txHash, dataHash, canonicalPayload, anchoredAt, network }`.
+2. **Recompute `sha256(canonicalPayload)` in the Browser**: Use the browser's native Web Crypto API (`crypto.subtle.digest('SHA-256', ...)`) on the UTF-8 bytes of `canonicalPayload` and verify that the resulting 64-character lowercase hex string equals `dataHash`.
+3. **Verify the On-Chain Transaction (`txHash`) on `network`**: Query Stellar Horizon (`https://horizon-testnet.stellar.org/transactions/:txHash` for `testnet` or `https://horizon.stellar.org/transactions/:txHash` for `public`) or Soroban RPC for `txHash` and compare the on-chain memo hash / contract event `dataHash` against `bundle.dataHash`.
+
+### Copy-Pasteable TypeScript / Web Crypto Snippet
+
+```typescript
+export interface LedgerBlockVerificationBundle {
+  blockId: string;
+  shipmentId: string;
+  milestoneEvent: string;
+  txHash: string;
+  dataHash: string | null;
+  canonicalPayload: string | null;
+  anchoredAt: string;
+  network?: 'testnet' | 'public';
+}
+
+export interface VerificationResult {
+  payloadMatchesHash: boolean;
+  chainMatchesHash: boolean;
+  recomputedHash: string | null;
+  onChainHash: string | null;
+  verified: boolean;
+}
+
+/**
+ * Compute lowercase hex SHA-256 digest of a UTF-8 string using Web Crypto API.
+ */
+export async function sha256HexBrowser(input: string): Promise<string> {
+  const bytes = new TextEncoder().encode(input);
+  const digestBuffer = await crypto.subtle.digest('SHA-256', bytes);
+  return Array.from(new Uint8Array(digestBuffer))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+/**
+ * Convert a base64-encoded 32-byte Stellar memo hash into lowercase hex.
+ */
+function base64ToHex(base64: string): string {
+  const binary = atob(base64);
+  return Array.from(binary, (char) => char.charCodeAt(0).toString(16).padStart(2, '0')).join('');
+}
+
+/**
+ * Full 3-step client-side verification for a Navin LedgerBlock.
+ */
+export async function verifyLedgerBlockClientSide(
+  apiBaseUrl: string,
+  blockId: string,
+  authToken: string
+): Promise<VerificationResult> {
+  // Step 1: Fetch the verification bundle from Navin Backend
+  const res = await fetch(
+    `${apiBaseUrl}/api/ledger/blocks/${encodeURIComponent(blockId)}/verification`,
+    {
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+        Accept: 'application/json',
+      },
+    }
+  );
+  if (!res.ok) {
+    throw new Error(`Failed to fetch verification bundle: HTTP ${res.status}`);
+  }
+  const envelope = (await res.json()) as { data: LedgerBlockVerificationBundle };
+  const bundle = envelope.data;
+
+  if (!bundle.canonicalPayload || !bundle.dataHash) {
+    return {
+      payloadMatchesHash: false,
+      chainMatchesHash: false,
+      recomputedHash: null,
+      onChainHash: null,
+      verified: false,
+    };
+  }
+
+  // Step 2: Recompute sha256(canonicalPayload) in the browser and compare with dataHash
+  const recomputedHash = await sha256HexBrowser(bundle.canonicalPayload);
+  const expectedHash = bundle.dataHash.toLowerCase();
+  const payloadMatchesHash = recomputedHash === expectedHash;
+
+  // Step 3: Query Stellar Horizon for txHash on bundle.network and compare on-chain hash
+  const horizonBaseUrl =
+    bundle.network === 'public'
+      ? 'https://horizon.stellar.org'
+      : 'https://horizon-testnet.stellar.org';
+
+  const txRes = await fetch(`${horizonBaseUrl}/transactions/${encodeURIComponent(bundle.txHash)}`);
+  if (!txRes.ok) {
+    return {
+      payloadMatchesHash,
+      chainMatchesHash: false,
+      recomputedHash,
+      onChainHash: null,
+      verified: false,
+    };
+  }
+
+  const txJson = (await txRes.json()) as {
+    successful?: boolean;
+    memo_type?: string;
+    memo?: string;
+  };
+
+  let onChainHash: string | null = null;
+  if (txJson.memo_type === 'hash' && typeof txJson.memo === 'string') {
+    onChainHash = base64ToHex(txJson.memo).toLowerCase();
+  }
+
+  const chainMatchesHash = Boolean(txJson.successful) && onChainHash === expectedHash;
+
+  return {
+    payloadMatchesHash,
+    chainMatchesHash,
+    recomputedHash,
+    onChainHash,
+    verified: payloadMatchesHash && chainMatchesHash,
+  };
+}
+```
+
+
