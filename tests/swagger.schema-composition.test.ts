@@ -142,4 +142,37 @@ describe('docs/swagger.yaml schema composition', () => {
       expect(sharedNotInTransit.nullable).toBe(true);
     });
   });
+
+  describe('GET /api/ledger/blocks/{id}/verification', () => {
+    const verificationGet = getIn(document, [
+      'paths',
+      '/api/ledger/blocks/{id}/verification',
+      'get',
+    ]) as JsonNode;
+
+    const bundleSchema = getIn(document, [
+      'components',
+      'schemas',
+      'LedgerVerificationBundle',
+    ]) as JsonNode;
+
+    it('documents 200, 400, 401, 403, and 404 responses on the verification endpoint', () => {
+      expect(verificationGet).toBeDefined();
+      const responses = verificationGet.responses as JsonNode;
+      expect(Object.keys(responses)).toEqual(
+        expect.arrayContaining(['200', '400', '401', '403', '404'])
+      );
+    });
+
+    it('defines LedgerVerificationBundle component schema with verification fields', () => {
+      expect(bundleSchema).toBeDefined();
+      const props = bundleSchema.properties as JsonNode;
+      expect(props).toHaveProperty('canonicalPayload');
+      expect(props).toHaveProperty('dataHash');
+      expect(props).toHaveProperty('txHash');
+      expect(props).toHaveProperty('ledger');
+      expect(props).toHaveProperty('network');
+    });
+  });
 });
+
