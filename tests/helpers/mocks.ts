@@ -108,11 +108,24 @@ export function createStellarServiceMock(
   };
 }
 
+import { AppError, ErrorCodes } from '../../src/shared/http/errors.js';
+import type { ChainEvent } from '../../src/shared/types/chain.js';
+import type { AnchorResult, EscrowResult } from '../../src/services/chain/types.js';
+
 export type ChainAdapterMock = {
   anchorEvent: MockFn;
   releaseEscrow: MockFn;
   streamEvents: MockFn;
 };
+
+export interface ChainAdapterMockOptions {
+  events?: readonly ChainEvent[];
+  malformedEvents?: readonly unknown[];
+  anchorResult?: Partial<AnchorResult>;
+  releaseResult?: Partial<EscrowResult>;
+  anchorFailures?: number;
+  releaseFailures?: number;
+}
 
 export type ChainFactoryMock = {
   createChainAdapter: MockFn;
@@ -125,20 +138,53 @@ const MOCK_TX_HASH = 'a'.repeat(64);
 
 /**
  * Port-shaped adapter: anchors/releases resolve a simulated receipt, the event
- * stream is empty. Override any method per test.
+ * stream yields injected events (or is empty by default). Supports scriptable
+ * results, transient failure counts, and per-method overrides.
  */
 export function createChainAdapterMock(
-  overrides: Partial<ChainAdapterMock> = {}
+  overrides: Partial<ChainAdapterMock> = {},
+  options: ChainAdapterMockOptions = {}
 ): ChainAdapterMock {
+  let anchorFailures = options.anchorFailures ?? 0;
+  let releaseFailures = options.releaseFailures ?? 0;
+
   return {
-    anchorEvent: jest.fn(async () => ({ txHash: MOCK_TX_HASH, ledger: 1, simulated: true })),
-    releaseEscrow: jest.fn(async (input: unknown) => ({
-      txHash: MOCK_TX_HASH,
-      ledger: 1,
-      simulated: true,
-      paymentId: (input as { payment_id: string }).payment_id,
-    })),
-    streamEvents: jest.fn(async function* () {}),
+    anchorEvent: jest.fn(async () => {
+      if (anchorFailures > 0) {
+        anchorFailures -= 1;
+        throw new AppError(502, 'Mock anchor failure', ErrorCodes.CHAIN_UNKNOWN);
+      }
+      return {
+        txHash: MOCK_TX_HASH,
+        ledger: 1,
+        simulated: true,
+        ...options.anchorResult,
+      };
+    }),
+    releaseEscrow: jest.fn(async (input: unknown) => {
+      if (releaseFailures > 0) {
+        releaseFailures -= 1;
+        throw new AppError(502, 'Mock escrow failure', ErrorCodes.CHAIN_UNKNOWN);
+      }
+      return {
+        txHash: MOCK_TX_HASH,
+        ledger: 1,
+        simulated: true,
+        paymentId: (input as { payment_id: string }).payment_id,
+        ...options.releaseResult,
+      };
+    }),
+    streamEvents: jest.fn(async function* (cursor?: unknown) {
+      let pastCursor = cursor === undefined;
+      for (const event of [...(options.events ?? []), ...(options.malformedEvents ?? [])]) {
+        const candidate = event as ChainEvent;
+        if (!pastCursor) {
+          if (candidate.id === cursor) pastCursor = true;
+          continue;
+        }
+        yield candidate;
+      }
+    }),
     ...overrides,
   };
 }
