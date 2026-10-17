@@ -176,10 +176,33 @@ UI / detail
 
 ---
 
+## End-to-End Acceptance Scripts (`scripts/acceptance/`)
+
+Two runnable acceptance scripts under `scripts/acceptance/` exercise the full **Hash-and-Emit** lifecycle (`create shipment → anchor milestone → index event → GET /api/ledger/blocks/:id/verification → recompute sha256(canonicalPayload) === dataHash`):
+
+1. **Simulated adapter (`SOROBAN_ADAPTER=simulated`):**
+   ```bash
+   node scripts/acceptance/run-simulated.mjs
+   ```
+2. **Soroban adapter (`SOROBAN_ADAPTER=soroban`):**
+   ```bash
+   node scripts/acceptance/run-soroban.mjs
+   ```
+
+### Behavior & Environment Variables
+
+- Each script prints every lifecycle step (`Step 0` through `Step 5`) and exits non-zero (`1`) if `sha256(canonicalPayload) !== dataHash` or if any step fails.
+- **Standalone mode (default):** When `API_BASE_URL` is omitted, each script boots an in-process acceptance harness and executes the full HTTP flow end-to-end.
+- **Live stack mode:** Set `API_BASE_URL` (e.g. `http://localhost:4000`) and `AUTH_TOKEN` (valid `ADMIN` or `MANAGER` bearer token) to run against a deployed or local Docker Compose backend.
+- **Failure probe:** Set `TAMPER_HASH=1` to simulate a corrupted `dataHash` and verify that the script fails with a non-zero exit code.
+
+---
+
 ## Operational notes
 
 - Use the `ChainAdapter` factory (`SimulatedAdapter` vs `SorobanAdapter`) to select runtime provider cleanly.
 - Never log `STELLAR_SECRET_KEY` or raw contract signing payloads.
 - Keep response envelopes unchanged; expose new on-chain fields only under
   documented shipment / payment / settlement schemas in `docs/swagger.yaml`.
+
 
