@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
-import { Keypair } from '@stellar/stellar-sdk';
+import { Keypair, Networks } from '@stellar/stellar-sdk';
 
 const ORIGINAL_ENV = { ...process.env };
 
@@ -12,8 +12,9 @@ async function loadFactory(overrides: Record<string, string | undefined>) {
   const { config } = await import('../src/config/index.js');
   const factory = await import('../src/services/chain/factory.js');
   const { SimulatedAdapter } = await import('../src/services/chain/simulated.adapter.js');
+  const { SorobanAdapter } = await import('../src/services/chain/soroban.adapter.js');
   const { AppError, ErrorCodes } = await import('../src/shared/http/errors.js');
-  return { config, factory, SimulatedAdapter, AppError, ErrorCodes };
+  return { config, factory, SimulatedAdapter, SorobanAdapter, AppError, ErrorCodes };
 }
 
 describe('ChainAdapter factory — SOROBAN_ADAPTER env matrix', () => {
@@ -38,20 +39,81 @@ describe('ChainAdapter factory — SOROBAN_ADAPTER env matrix', () => {
     expect(factory.getChainAdapter()).not.toBe(first);
   });
 
-  it('soroban → fails fast with ERR_CHAIN_UNKNOWN until SorobanAdapter lands', async () => {
-    const { config, factory, AppError, ErrorCodes } = await loadFactory({
+  it('soroban → configures SorobanAdapter with default config options', async () => {
+    const signer = Keypair.random();
+    const contractId = 'CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM';
+    const { config, factory, SorobanAdapter } = await loadFactory({
       SOROBAN_ADAPTER: 'soroban',
+      STELLAR_NETWORK: 'testnet',
+      SOROBAN_RPC_URL: 'https://soroban-testnet.stellar.org',
+      ESCROW_CONTRACT_ID: contractId,
+      STELLAR_SECRET_KEY: signer.secret(),
     });
     expect(config.chainAdapter).toBe('soroban');
 
-    let thrown: unknown;
-    try {
-      factory.getChainAdapter();
-    } catch (err) {
-      thrown = err;
-    }
-    expect(thrown).toBeInstanceOf(AppError);
-    expect(thrown).toMatchObject({ statusCode: 500, code: ErrorCodes.CHAIN_UNKNOWN });
+    const adapter = factory.getChainAdapter();
+    expect(adapter).toBeInstanceOf(SorobanAdapter);
+    expect(factory.getChainAdapter()).toBe(adapter);
+
+    const internal = adapter as unknown as {
+      server: { serverURL: { toString(): string } };
+      contractId: string;
+      secretKey: string;
+      networkPassphrase: string;
+    };
+    expect(internal.server.serverURL.toString()).toBe('https://soroban-testnet.stellar.org/');
+    expect(internal.contractId).toBe(contractId);
+    expect(internal.secretKey).toBe(signer.secret());
+    expect(internal.networkPassphrase).toBe(Networks.TESTNET);
+  });
+
+  it('soroban → forwards customized config and explicit option overrides to SorobanAdapter', async () => {
+    const envSigner = Keypair.random();
+    const overrideSigner = Keypair.random();
+    const envContractId = 'CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM';
+    const overrideContractId = 'CBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBMJ4A';
+
+    const { factory, SorobanAdapter } = await loadFactory({
+      SOROBAN_ADAPTER: 'soroban',
+      STELLAR_NETWORK: 'public',
+      SOROBAN_RPC_URL: 'https://custom-rpc.mainnet.stellar.org',
+      ESCROW_CONTRACT_ID: envContractId,
+      STELLAR_SECRET_KEY: envSigner.secret(),
+    });
+
+    const fromEnv = factory.createChainAdapter('soroban');
+    expect(fromEnv).toBeInstanceOf(SorobanAdapter);
+    const fromEnvInternal = fromEnv as unknown as {
+      server: { serverURL: { toString(): string } };
+      contractId: string;
+      secretKey: string;
+      networkPassphrase: string;
+    };
+    expect(fromEnvInternal.server.serverURL.toString()).toBe(
+      'https://custom-rpc.mainnet.stellar.org/'
+    );
+    expect(fromEnvInternal.contractId).toBe(envContractId);
+    expect(fromEnvInternal.secretKey).toBe(envSigner.secret());
+    expect(fromEnvInternal.networkPassphrase).toBe(Networks.PUBLIC);
+
+    const fromOverrides = factory.createChainAdapter('soroban', {
+      sorobanRpcUrl: 'https://override-rpc.testnet.stellar.org',
+      contractId: overrideContractId,
+      secretKey: overrideSigner.secret(),
+      stellarNetwork: 'testnet',
+    });
+    const fromOverridesInternal = fromOverrides as unknown as {
+      server: { serverURL: { toString(): string } };
+      contractId: string;
+      secretKey: string;
+      networkPassphrase: string;
+    };
+    expect(fromOverridesInternal.server.serverURL.toString()).toBe(
+      'https://override-rpc.testnet.stellar.org/'
+    );
+    expect(fromOverridesInternal.contractId).toBe(overrideContractId);
+    expect(fromOverridesInternal.secretKey).toBe(overrideSigner.secret());
+    expect(fromOverridesInternal.networkPassphrase).toBe(Networks.TESTNET);
   });
 
   it('unknown value → rejected at boot by env validation', async () => {
@@ -63,8 +125,13 @@ describe('ChainAdapter factory — SOROBAN_ADAPTER env matrix', () => {
   });
 
   it('explicit kind overrides config', async () => {
-    const { factory, SimulatedAdapter } = await loadFactory({ SOROBAN_ADAPTER: 'soroban' });
+    const { factory, SimulatedAdapter, SorobanAdapter } = await loadFactory({
+      SOROBAN_ADAPTER: 'soroban',
+      SOROBAN_RPC_URL: 'https://soroban-testnet.stellar.org',
+      ESCROW_CONTRACT_ID: 'CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM',
+    });
     expect(factory.createChainAdapter('simulated')).toBeInstanceOf(SimulatedAdapter);
+    expect(factory.createChainAdapter('soroban')).toBeInstanceOf(SorobanAdapter);
   });
 });
 

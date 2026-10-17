@@ -28,7 +28,10 @@ import type {
 export interface SorobanAdapterOptions {
   sorobanRpcUrl?: string;
   contractId?: string;
+  escrowContractId?: string;
   secretKey?: string;
+  stellarSecretKey?: string;
+  stellarNetwork?: 'testnet' | 'public';
   networkPassphrase?: string;
   rpcServer?: rpc.Server;
 }
@@ -42,11 +45,13 @@ export class SorobanAdapter implements ChainAdapter {
   constructor(options: SorobanAdapterOptions = {}) {
     const rpcUrl = options.sorobanRpcUrl ?? config.sorobanRpcUrl;
     this.server = options.rpcServer ?? new rpc.Server(rpcUrl);
-    this.contractId = options.contractId ?? config.escrowContractId ?? '';
-    this.secretKey = options.secretKey ?? config.stellarSecretKey;
+    this.contractId =
+      options.contractId ?? options.escrowContractId ?? config.escrowContractId ?? '';
+    this.secretKey = options.secretKey ?? options.stellarSecretKey ?? config.stellarSecretKey;
+    const stellarNetwork = options.stellarNetwork ?? config.stellarNetwork;
     this.networkPassphrase =
       options.networkPassphrase ??
-      (config.stellarNetwork === 'public' ? Networks.PUBLIC : Networks.TESTNET);
+      (stellarNetwork === 'public' ? Networks.PUBLIC : Networks.TESTNET);
   }
 
   private signer(): Keypair {
