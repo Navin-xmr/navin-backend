@@ -66,7 +66,14 @@ const MAX_BAD_SEQ_RETRIES = 2;
 /** Process-wide: every adapter instance signing for an account shares its queue. */
 const accountSerializer = new KeyedSerializer();
 
-/** Horizon rejects a stale sequence with `extras.result_codes.transaction === 'tx_bad_seq'`. */
+/**
+ * Unit-test seam: the symbols below stay exported only for the adapter's own
+ * chain.* suites (fake Horizon, event assertions). Domain modules must depend
+ * on the port (./types.ts) via getChainAdapter() — never import this file.
+ *
+ * isBadSequence: Horizon rejects a stale sequence with
+ * `extras.result_codes.transaction === 'tx_bad_seq'`.
+ */
 export function isBadSequence(err: unknown): boolean {
   const data = (err as { response?: { data?: unknown } } | null)?.response?.data as
     { extras?: { result_codes?: { transaction?: string } } } | undefined;
@@ -95,13 +102,13 @@ export interface HorizonClient {
   ): Promise<HorizonTxRecord[]>;
 }
 
-export interface SimulatedAdapterOptions {
+interface SimulatedAdapterOptions {
   horizon?: HorizonClient;
   secretKey?: string;
   networkPassphrase?: string;
 }
 
-export function createHorizonClient(horizonUrl: string = config.horizonUrl): HorizonClient {
+function createHorizonClient(horizonUrl: string = config.horizonUrl): HorizonClient {
   const server = new Horizon.Server(horizonUrl);
   return {
     loadAccount: publicKey => server.loadAccount(publicKey),
