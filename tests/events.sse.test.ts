@@ -93,7 +93,7 @@ describe('GET /api/events — SSE endpoint', () => {
     const blocklistModule = await import('../src/infra/redis/tokenBlocklist.js');
     const sseAuthModule = await import('../src/shared/middleware/requireSseAuth.js');
     const sseHubModule = await import('../src/infra/sse/sseHub.js');
-    const sseHubTestUtils = await import('../src/infra/sse/sseHub.testUtils.js');
+    const sseHubTestUtils = await import('./helpers/sseHubTestUtils.js');
     const factoriesModule = await import('./fixtures/factories.js');
 
     app = appModule.buildApp();
