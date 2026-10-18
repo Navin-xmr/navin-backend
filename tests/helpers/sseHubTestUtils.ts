@@ -1,6 +1,6 @@
-import type { RealtimeEvent } from '../../shared/types/realtimeEvents.js';
-import { publishToUser } from './sseHub.js';
-import { sseHubState } from './sseHubState.js';
+import type { RealtimeEvent } from '../../src/shared/types/realtimeEvents.js';
+import { publishToUser } from '../../src/infra/sse/sseHub.js';
+import { sseHubState } from '../../src/infra/sse/sseHubState.js';
 
 export function getSseClientCount(userId?: string): number {
   if (userId) {
