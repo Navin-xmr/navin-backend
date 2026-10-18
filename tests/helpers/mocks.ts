@@ -25,6 +25,8 @@ import type * as usersRepo from '../../src/modules/users/users.repo.js';
 import type { sendEmail } from '../../src/services/email.service.js';
 import type * as emailService from '../../src/services/email.service.js';
 import type * as socketIo from '../../src/infra/socket/io.js';
+import type { AnchorResult, EscrowResult } from '../../src/services/chain/types.js';
+import type { ChainEvent } from '../../src/shared/types/chain.js';
 import { fakeQuery } from './fakeModel.js';
 import type { FakeQuery } from './fakeModel.js';
 
@@ -124,21 +126,41 @@ export type ChainFactoryMock = {
 const MOCK_TX_HASH = 'a'.repeat(64);
 
 /**
+ * Scriptable port mock: `script` sets plain-value anchor/release receipts
+ * and the events `streamEvents` replays, so suites mock the ChainAdapter
+ * port — never stellar.service internals. Per-test overrides still win.
+ */
+export type ChainAdapterScript = {
+  anchorResult?: Partial<AnchorResult>;
+  releaseResult?: Partial<EscrowResult>;
+  events?: ChainEvent[];
+};
+
+/**
  * Port-shaped adapter: anchors/releases resolve a simulated receipt, the event
- * stream is empty. Override any method per test.
+ * stream replays `script.events` (default: empty). Override any method per test.
  */
 export function createChainAdapterMock(
-  overrides: Partial<ChainAdapterMock> = {}
+  overrides: Partial<ChainAdapterMock> = {},
+  script: ChainAdapterScript = {}
 ): ChainAdapterMock {
   return {
-    anchorEvent: jest.fn(async () => ({ txHash: MOCK_TX_HASH, ledger: 1, simulated: true })),
+    anchorEvent: jest.fn(async () => ({
+      txHash: MOCK_TX_HASH,
+      ledger: 1,
+      simulated: true,
+      ...script.anchorResult,
+    })),
     releaseEscrow: jest.fn(async (input: unknown) => ({
       txHash: MOCK_TX_HASH,
       ledger: 1,
       simulated: true,
       paymentId: (input as { payment_id: string }).payment_id,
+      ...script.releaseResult,
     })),
-    streamEvents: jest.fn(async function* () {}),
+    streamEvents: jest.fn(async function* () {
+      yield* script.events ?? [];
+    }),
     ...overrides,
   };
 }
