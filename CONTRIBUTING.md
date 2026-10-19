@@ -189,10 +189,12 @@ We want high quality code so our contributors can work on their issues not fix o
 
 This project uses [husky](https://typicode.github.io/husky/) + [lint-staged](https://github.com/lint-staged/lint-staged) to auto-format and lint staged files on commit. The hook runs automatically when you commit — no manual steps needed after `npm install`.
 
-If the hook doesn't fire, ensure `.husky/pre-commit` exists and is executable:
+If the hook doesn't fire, ensure `.husky/pre-commit` exists, is executable, and invokes `npx lint-staged`:
 
 ```bash
 chmod +x .husky/pre-commit
+git ls-files -s .husky/pre-commit   # expect mode 100755
+npx lint-staged                     # verify lint-staged runs against staged files
 ```
 
 ## Branch Protection
