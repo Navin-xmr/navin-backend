@@ -130,15 +130,13 @@ await jest.unstable_mockModule('../src/modules/users/users.model.js', () => ({
   OrganizationType: { ENTERPRISE: 'ENTERPRISE', LOGISTICS: 'LOGISTICS' },
 }));
 
+import { createEmailServiceMock } from './helpers/mocks.js';
+
 // ---------------------------------------------------------------------------
 // Email service mock (login/signup doesn't actually send email but it's
 // imported transitively)
 // ---------------------------------------------------------------------------
-await jest.unstable_mockModule('../src/services/email.service.js', () => ({
-  sendEmail: jest.fn(async () => undefined),
-  resetPasswordEmailHtml: (link: string) => `<html>${link}</html>`,
-  invitationEmailHtml: (link: string) => `<html>${link}</html>`,
-}));
+await jest.unstable_mockModule('../src/services/email.service.js', () => createEmailServiceMock());
 
 // ---------------------------------------------------------------------------
 // Dynamic imports (AFTER all mock registrations)
