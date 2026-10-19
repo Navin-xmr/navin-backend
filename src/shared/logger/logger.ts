@@ -7,6 +7,15 @@ const isProd = process.env.NODE_ENV === 'production';
 // OOMs. Tests log plain JSON to stdout instead (no assertions read it).
 const isTest = process.env.NODE_ENV === 'test' || typeof process.env.JEST_WORKER_ID !== 'undefined';
 
+/**
+ * Process-wide structured logger.
+ *
+ * Import it by name — `import { logger } from '.../logger/logger.js'` — which is
+ * what every other module in `src/` does. There is intentionally no default
+ * export: AGENTS.md §3 requires one declaration per name per file, and a second
+ * (default) binding for the same singleton only splits call sites across two
+ * import styles.
+ */
 export const logger = pino({
   level: process.env.LOG_LEVEL ?? (isProd ? 'info' : 'debug'),
   base: undefined,
@@ -37,5 +46,3 @@ export const logger = pino({
           },
         },
 });
-
-export default logger;

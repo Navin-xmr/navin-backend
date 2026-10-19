@@ -13,7 +13,7 @@ import { invalidateShipmentEtaCache } from '../shipments/shipmentsEta.cache.js';
 import type { BulkTelemetryItem } from './telemetry.validation.js';
 import { AppError, ErrorCodes } from '../../shared/http/errors.js';
 import { pushStellarAnchorJob, pushAlertJob } from '../../infra/redis/queue.js';
-import logger from '../../shared/logger/logger.js';
+import { logger } from '../../shared/logger/logger.js';
 import { offsetSkip, paginateCursor } from '../../shared/utils/pagination.js';
 import { auditLog } from '../../shared/utils/auditLog.js';
 

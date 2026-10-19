@@ -53,6 +53,19 @@ export default [
     files: ['src/**/*.ts'],
     rules: {
       'no-console': 'error',
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['**/shared/logger/logger*', './shared/logger/logger*'],
+              importNames: ['default'],
+              message:
+                "Use named import `import { logger } from '.../shared/logger/logger.js'` instead of default import (#816).",
+            },
+          ],
+        },
+      ],
     },
   },
   // P7-22 / #700: seed (and other CLI scripts) use colored console.* for human-readable
