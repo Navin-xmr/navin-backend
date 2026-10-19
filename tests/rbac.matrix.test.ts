@@ -6,10 +6,18 @@ import mongoose from 'mongoose';
 import type { Application } from 'express';
 import { env } from '../src/env.js';
 import { UserRole } from '../src/shared/constants/index.js';
-import { routeRoles as shipmentRoles } from '../src/modules/shipments/shipments.routes.js';
-import { routeRoles as userRoles } from '../src/modules/users/users.routes.js';
-import { routeRoles as analyticsRoles } from '../src/modules/analytics/analytics.routes.js';
-import { routeRoles as anomalyRoles } from '../src/modules/anomaly/anomaly.routes.js';
+
+const [
+  { routeRoles: shipmentRoles },
+  { routeRoles: userRoles },
+  { routeRoles: analyticsRoles },
+  { routeRoles: anomalyRoles },
+] = await Promise.all([
+  import('../src/modules/shipments/shipments.routes.js'),
+  import('../src/modules/users/users.routes.js'),
+  import('../src/modules/analytics/analytics.routes.js'),
+  import('../src/modules/anomaly/anomaly.routes.js'),
+]);
 
 // Role definitions for the matrix
 const ROLES = [
@@ -69,6 +77,7 @@ describe('RBAC Matrix Integration Tests', () => {
   const mockApiKeyFindOne = jest.fn();
 
   beforeAll(async () => {
+    jest.resetModules();
     testOrganizationId = new mongoose.Types.ObjectId().toString();
     testUserIds = {} as Record<Role, string>;
 
