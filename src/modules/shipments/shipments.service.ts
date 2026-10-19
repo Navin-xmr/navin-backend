@@ -257,7 +257,11 @@ export const getShipmentsService = async (params: {
   const query: FilterQuery<unknown> = {};
 
   if (filters.organizationId) {
-    query.organizationId = filters.organizationId;
+    query.$or = [
+      { enterpriseId: filters.organizationId },
+      { logisticsId: filters.organizationId },
+      { organizationId: filters.organizationId },
+    ];
   }
 
   if (status) {
