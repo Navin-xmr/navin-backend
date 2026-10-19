@@ -136,6 +136,13 @@ describe('Socket.io Client Integration Tests', () => {
       detectAnomaly: jest.fn<any>().mockResolvedValue({ detected: false, anomalies: [] }),
     }));
 
+    await jest.unstable_mockModule('../src/services/telemetryAnomalyDetection.js', () => ({
+      detectTelemetryAnomalies: jest.fn<any>().mockResolvedValue({
+        isAnomaly: false,
+        details: [],
+      }),
+    }));
+
     await jest.unstable_mockModule('../src/modules/shipments/shipments.model.js', () => ({
       Shipment: {
         findById: jest.fn<any>().mockReturnValue({

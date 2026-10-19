@@ -15,6 +15,7 @@ process.env.MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/test
  * Clears all collections to ensure test isolation
  */
 import { MongoMemoryServer } from 'mongodb-memory-server';
+import { flushUntilIdle } from './helpers/flush.js';
 
 let mongoServer: MongoMemoryServer | null = null;
 let mongoReady = false;
@@ -61,6 +62,11 @@ beforeAll(async () => {
  * from MongoDB and releases shared infrastructure handles.
  */
 afterAll(async () => {
+  // 0. Drain pending fire-and-forget setImmediate callbacks (e.g. IoT webhook
+  // anomaly detection) while Mongoose and mocks are still connected so no query
+  // starts after disconnect and triggers Mongoose 10s operation buffering timers.
+  await flushUntilIdle();
+
   // 1. Clear collections before disconnecting
   if (mongoReady && mongoose.connection.readyState === 1) {
     const collections = mongoose.connection.collections;
@@ -111,7 +117,8 @@ afterAll(async () => {
 }, 90_000);
 
 // Reset all mocks between tests
-afterEach(() => {
+afterEach(async () => {
+  await flushUntilIdle();
   jest.clearAllMocks();
   // Heal NODE_ENV poisoning: suites such as swaggerDocs/errorMiddleware flip
   // NODE_ENV mid-test and restore it in their own afterEach, but if one ever

@@ -96,6 +96,13 @@ describe('POST /api/webhooks/iot', () => {
       getStellarExplorerUrl: jest.fn(() => 'https://stellar.expert/explorer/testnet/tx/mock'),
     }));
 
+    await jest.unstable_mockModule('../src/services/telemetryAnomalyDetection.js', () => ({
+      detectTelemetryAnomalies: jest.fn<any>().mockResolvedValue({
+        isAnomaly: false,
+        details: [],
+      }),
+    }));
+
     await jest.unstable_mockModule('../src/modules/users/users.model.js', () => ({
       UserModel: { findById: jest.fn(), findOne: jest.fn(), create: jest.fn() },
       OrganizationModel: { findById: jest.fn() },

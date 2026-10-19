@@ -121,6 +121,13 @@ describe('Real-time Socket.io Events', () => {
       getStellarExplorerUrl: jest.fn(() => 'https://stellar.expert/explorer/testnet/tx/mock'),
     }));
 
+    await jest.unstable_mockModule('../src/services/telemetryAnomalyDetection.js', () => ({
+      detectTelemetryAnomalies: jest.fn<any>().mockResolvedValue({
+        isAnomaly: false,
+        details: [],
+      }),
+    }));
+
     await jest.unstable_mockModule('../src/modules/auth/apiKey.service.js', () => ({
       validateApiKey: mockValidateApiKey,
       generateApiKey: jest.fn(),
