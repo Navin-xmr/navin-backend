@@ -7,8 +7,12 @@ process.env.JWT_SECRET = 'test-jwt-secret-key-at-least-32-chars-long!';
 process.env.STELLAR_WEBHOOK_SECRET = 'test-stellar-webhook-secret-key';
 process.env.NODE_ENV = 'test';
 
-// Use MongoDB Memory Server URI if set by globalSetup
-process.env.MONGO_URI = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/test';
+// Use MongoDB Memory Server URI if set by globalSetup, scoped to a unique
+// per-suite logical database so parallel workers never collide or wipe each other.
+const baseMongoUri = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/test';
+const workerId = process.env.JEST_WORKER_ID || '1';
+const suiteDbName = `test_w${workerId}_${Math.random().toString(36).slice(2, 8)}`;
+process.env.MONGO_URI = baseMongoUri.replace(/\/([^/?]*)(\?.*)?$/, `/${suiteDbName}$2`);
 
 /**
  * Global test setup - runs before each test file

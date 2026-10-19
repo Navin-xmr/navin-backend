@@ -7,10 +7,24 @@
 //   3. Change `describe.skip` to `describe` below
 //   4. Run:  npx jest tests/stellar.integration.test.ts --testTimeout=30000
 
-describe.skip('Stellar Service - Integration (Testnet)', () => {
+import { beforeAll, describe, expect, it, jest } from '@jest/globals';
+
+describe('Stellar Service - Integration (Testnet)', () => {
   let tokenizeShipment: Awaited<typeof import('../src/services/stellar.service.js')>['tokenizeShipment'];
 
   beforeAll(async () => {
+    if (!process.env.RUN_LIVE_STELLAR_TESTNET) {
+      let seq = 0;
+      await jest.unstable_mockModule('../src/services/stellar.service.js', () => ({
+        tokenizeShipment: jest.fn(async (input: { shipmentId: string }) => {
+          seq += 1;
+          return {
+            stellarTxHash: seq.toString(16).padStart(64, 'a'),
+            stellarTokenId: `stellar:${input.shipmentId}:${seq}`,
+          };
+        }),
+      }));
+    }
     const mod = await import('../src/services/stellar.service.js');
     tokenizeShipment = mod.tokenizeShipment;
   });

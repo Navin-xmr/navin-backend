@@ -78,6 +78,9 @@ describe('RBAC Matrix Integration Tests', () => {
       testUserIds[role] = userId;
     }
 
+    // Reset module registry so top-level routeRoles imports do not cache unmocked services
+    jest.resetModules();
+
     // Setup mocks
     await jest.unstable_mockModule('../src/infra/redis/tokenBlocklist.js', () => ({
       isTokenBlocked: jest.fn().mockResolvedValue(false),

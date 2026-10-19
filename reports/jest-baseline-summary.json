@@ -1,0 +1,855 @@
+{
+  "success": true,
+  "numTotalTestSuites": 140,
+  "numPassedTestSuites": 140,
+  "numFailedTestSuites": 0,
+  "numPendingTestSuites": 0,
+  "numRuntimeErrorTestSuites": 0,
+  "numTotalTests": 1054,
+  "numPassedTests": 1054,
+  "numFailedTests": 0,
+  "numPendingTests": 0,
+  "startTime": 1792430441548,
+  "suites": [
+    {
+      "file": "tests\\auth.signup-default-role.test.ts",
+      "status": "passed",
+      "durationMs": 5668,
+      "assertionCount": 6
+    },
+    {
+      "file": "tests\\auth.signup-role-guard.test.ts",
+      "status": "passed",
+      "durationMs": 5935,
+      "assertionCount": 10
+    },
+    {
+      "file": "tests\\analytics.performance.test.ts",
+      "status": "passed",
+      "durationMs": 6463,
+      "assertionCount": 14
+    },
+    {
+      "file": "tests\\stellar.integration.test.ts",
+      "status": "passed",
+      "durationMs": 890,
+      "assertionCount": 2
+    },
+    {
+      "file": "tests\\telemetry.bulk-broadcast.test.ts",
+      "status": "passed",
+      "durationMs": 9059,
+      "assertionCount": 6
+    },
+    {
+      "file": "tests\\cors.test.ts",
+      "status": "passed",
+      "durationMs": 3842,
+      "assertionCount": 3
+    },
+    {
+      "file": "tests\\users.delete.controller.test.ts",
+      "status": "passed",
+      "durationMs": 10646,
+      "assertionCount": 6
+    },
+    {
+      "file": "tests\\users.list.controller.test.ts",
+      "status": "passed",
+      "durationMs": 10691,
+      "assertionCount": 6
+    },
+    {
+      "file": "tests\\payments.ws.integration.test.ts",
+      "status": "passed",
+      "durationMs": 1586,
+      "assertionCount": 5
+    },
+    {
+      "file": "tests\\chain.signing-concurrency.test.ts",
+      "status": "passed",
+      "durationMs": 4367,
+      "assertionCount": 8
+    },
+    {
+      "file": "tests\\password-hashing.test.ts",
+      "status": "passed",
+      "durationMs": 6330,
+      "assertionCount": 11
+    },
+    {
+      "file": "tests\\e2e\\core-flow.test.ts",
+      "status": "passed",
+      "durationMs": 2468,
+      "assertionCount": 13
+    },
+    {
+      "file": "tests\\chain.adapter.port.test.ts",
+      "status": "passed",
+      "durationMs": 3130,
+      "assertionCount": 4
+    },
+    {
+      "file": "tests\\apiKey.service.test.ts",
+      "status": "passed",
+      "durationMs": 13559,
+      "assertionCount": 13
+    },
+    {
+      "file": "tests\\events.sse.test.ts",
+      "status": "passed",
+      "durationMs": 14217,
+      "assertionCount": 9
+    },
+    {
+      "file": "tests\\iot.webhook.test.ts",
+      "status": "passed",
+      "durationMs": 3951,
+      "assertionCount": 3
+    },
+    {
+      "file": "tests\\stellar.webhook.test.ts",
+      "status": "passed",
+      "durationMs": 3927,
+      "assertionCount": 4
+    },
+    {
+      "file": "tests\\anomaly.resolution-notes.test.ts",
+      "status": "passed",
+      "durationMs": 1833,
+      "assertionCount": 3
+    },
+    {
+      "file": "tests\\socketEventContract.test.ts",
+      "status": "passed",
+      "durationMs": 891,
+      "assertionCount": 9
+    },
+    {
+      "file": "tests\\socketio.client.integration.test.ts",
+      "status": "passed",
+      "durationMs": 1926,
+      "assertionCount": 2
+    },
+    {
+      "file": "tests\\chain.factory.test.ts",
+      "status": "passed",
+      "durationMs": 3667,
+      "assertionCount": 7
+    },
+    {
+      "file": "src\\__tests__\\env-validation.test.ts",
+      "status": "passed",
+      "durationMs": 5318,
+      "assertionCount": 11
+    },
+    {
+      "file": "tests\\api-schema.snapshot.test.ts",
+      "status": "passed",
+      "durationMs": 2253,
+      "assertionCount": 2
+    },
+    {
+      "file": "tests\\twoFactor.service.test.ts",
+      "status": "passed",
+      "durationMs": 4102,
+      "assertionCount": 17
+    },
+    {
+      "file": "tests\\shipments.timeline.test.ts",
+      "status": "passed",
+      "durationMs": 2786,
+      "assertionCount": 3
+    },
+    {
+      "file": "src\\shared\\middleware\\__tests__\\rateLimiter.test.ts",
+      "status": "passed",
+      "durationMs": 4257,
+      "assertionCount": 7
+    },
+    {
+      "file": "tests\\shipments.export.test.ts",
+      "status": "passed",
+      "durationMs": 4649,
+      "assertionCount": 3
+    },
+    {
+      "file": "tests\\auth.controllers.test.ts",
+      "status": "passed",
+      "durationMs": 4103,
+      "assertionCount": 5
+    },
+    {
+      "file": "tests\\deliveryProof.test.ts",
+      "status": "passed",
+      "durationMs": 3651,
+      "assertionCount": 5
+    },
+    {
+      "file": "tests\\telemetry.controller-query.test.ts",
+      "status": "passed",
+      "durationMs": 4528,
+      "assertionCount": 2
+    },
+    {
+      "file": "tests\\telemetry.thresholds-endpoint.test.ts",
+      "status": "passed",
+      "durationMs": 4112,
+      "assertionCount": 2
+    },
+    {
+      "file": "tests\\auth-shipments.end-to-end.test.ts",
+      "status": "passed",
+      "durationMs": 4202,
+      "assertionCount": 3
+    },
+    {
+      "file": "tests\\rbac.matrix.test.ts",
+      "status": "passed",
+      "durationMs": 4091,
+      "assertionCount": 49
+    },
+    {
+      "file": "tests\\realtime.events.test.ts",
+      "status": "passed",
+      "durationMs": 3253,
+      "assertionCount": 6
+    },
+    {
+      "file": "tests\\shipments.tracking-number.test.ts",
+      "status": "passed",
+      "durationMs": 3866,
+      "assertionCount": 4
+    },
+    {
+      "file": "tests\\users.invitation.service.test.ts",
+      "status": "passed",
+      "durationMs": 3712,
+      "assertionCount": 10
+    },
+    {
+      "file": "tests\\chain.adapter.contract.test.ts",
+      "status": "passed",
+      "durationMs": 1632,
+      "assertionCount": 4
+    },
+    {
+      "file": "tests\\issues-144-145-146-152.test.ts",
+      "status": "passed",
+      "durationMs": 4288,
+      "assertionCount": 18
+    },
+    {
+      "file": "tests\\auth.refresh-token.test.ts",
+      "status": "passed",
+      "durationMs": 4030,
+      "assertionCount": 3
+    },
+    {
+      "file": "tests\\swagger.schema-composition.test.ts",
+      "status": "passed",
+      "durationMs": 1616,
+      "assertionCount": 8
+    },
+    {
+      "file": "tests\\integration-contract.test.ts",
+      "status": "passed",
+      "durationMs": 3906,
+      "assertionCount": 4
+    },
+    {
+      "file": "tests\\shipments.get-by-id.test.ts",
+      "status": "passed",
+      "durationMs": 3090,
+      "assertionCount": 5
+    },
+    {
+      "file": "tests\\requireRole.test.ts",
+      "status": "passed",
+      "durationMs": 1598,
+      "assertionCount": 7
+    },
+    {
+      "file": "tests\\helpers\\usersModel.test.ts",
+      "status": "passed",
+      "durationMs": 2996,
+      "assertionCount": 3
+    },
+    {
+      "file": "tests\\shipments.uploadProof.controller.test.ts",
+      "status": "passed",
+      "durationMs": 1388,
+      "assertionCount": 6
+    },
+    {
+      "file": "tests\\payload-limits.test.ts",
+      "status": "passed",
+      "durationMs": 2894,
+      "assertionCount": 1
+    },
+    {
+      "file": "tests\\stellar.worker.test.ts",
+      "status": "passed",
+      "durationMs": 4480,
+      "assertionCount": 7
+    },
+    {
+      "file": "tests\\security-issue-202-role-escalation.test.ts",
+      "status": "passed",
+      "durationMs": 2880,
+      "assertionCount": 13
+    },
+    {
+      "file": "tests\\organizations.test.ts",
+      "status": "passed",
+      "durationMs": 3478,
+      "assertionCount": 16
+    },
+    {
+      "file": "tests\\analytics.cache.test.ts",
+      "status": "passed",
+      "durationMs": 2994,
+      "assertionCount": 1
+    },
+    {
+      "file": "tests\\issue-286-state-machine.test.ts",
+      "status": "passed",
+      "durationMs": 1292,
+      "assertionCount": 15
+    },
+    {
+      "file": "tests\\iot.webhook.service.test.ts",
+      "status": "passed",
+      "durationMs": 2667,
+      "assertionCount": 3
+    },
+    {
+      "file": "tests\\users.service.repo.test.ts",
+      "status": "passed",
+      "durationMs": 2207,
+      "assertionCount": 2
+    },
+    {
+      "file": "tests\\auth.test.ts",
+      "status": "passed",
+      "durationMs": 5076,
+      "assertionCount": 13
+    },
+    {
+      "file": "tests\\shipments.test.ts",
+      "status": "passed",
+      "durationMs": 4892,
+      "assertionCount": 13
+    },
+    {
+      "file": "tests\\etag.test.ts",
+      "status": "passed",
+      "durationMs": 4868,
+      "assertionCount": 2
+    },
+    {
+      "file": "tests\\activity.test.ts",
+      "status": "passed",
+      "durationMs": 7907,
+      "assertionCount": 13
+    },
+    {
+      "file": "tests\\shipments.create-validation.test.ts",
+      "status": "passed",
+      "durationMs": 9735,
+      "assertionCount": 4
+    },
+    {
+      "file": "tests\\public-tracking.test.ts",
+      "status": "passed",
+      "durationMs": 7383,
+      "assertionCount": 5
+    },
+    {
+      "file": "tests\\anomaly.pagination.test.ts",
+      "status": "passed",
+      "durationMs": 5211,
+      "assertionCount": 5
+    },
+    {
+      "file": "tests\\battery-threshold.test.ts",
+      "status": "passed",
+      "durationMs": 5794,
+      "assertionCount": 15
+    },
+    {
+      "file": "tests\\app.smoke.test.ts",
+      "status": "passed",
+      "durationMs": 1462,
+      "assertionCount": 19
+    },
+    {
+      "file": "tests\\sms-otp.service.smoke.test.ts",
+      "status": "passed",
+      "durationMs": 2744,
+      "assertionCount": 2
+    },
+    {
+      "file": "tests\\infra.redis.queue.test.ts",
+      "status": "passed",
+      "durationMs": 2949,
+      "assertionCount": 3
+    },
+    {
+      "file": "tests\\sessions.test.ts",
+      "status": "passed",
+      "durationMs": 2829,
+      "assertionCount": 5
+    },
+    {
+      "file": "tests\\login-rate-limit.test.ts",
+      "status": "passed",
+      "durationMs": 4127,
+      "assertionCount": 2
+    },
+    {
+      "file": "tests\\users.create.integration.test.ts",
+      "status": "passed",
+      "durationMs": 4172,
+      "assertionCount": 5
+    },
+    {
+      "file": "tests\\soft-delete-integration.test.ts",
+      "status": "passed",
+      "durationMs": 4405,
+      "assertionCount": 4
+    },
+    {
+      "file": "tests\\health.test.ts",
+      "status": "passed",
+      "durationMs": 4438,
+      "assertionCount": 1
+    },
+    {
+      "file": "tests\\shipments.bulk-status.test.ts",
+      "status": "passed",
+      "durationMs": 2695,
+      "assertionCount": 9
+    },
+    {
+      "file": "tests\\swaggerDocs.test.ts",
+      "status": "passed",
+      "durationMs": 3856,
+      "assertionCount": 2
+    },
+    {
+      "file": "tests\\anomaly.stats.test.ts",
+      "status": "passed",
+      "durationMs": 3229,
+      "assertionCount": 3
+    },
+    {
+      "file": "tests\\users.repo.test.ts",
+      "status": "passed",
+      "durationMs": 2634,
+      "assertionCount": 2
+    },
+    {
+      "file": "tests\\errors.unauthorized-envelope.test.ts",
+      "status": "passed",
+      "durationMs": 3520,
+      "assertionCount": 4
+    },
+    {
+      "file": "tests\\shipments-search.test.ts",
+      "status": "passed",
+      "durationMs": 2716,
+      "assertionCount": 19
+    },
+    {
+      "file": "tests\\telemetry.thresholds.test.ts",
+      "status": "passed",
+      "durationMs": 3119,
+      "assertionCount": 5
+    },
+    {
+      "file": "tests\\telemetry.pagination.test.ts",
+      "status": "passed",
+      "durationMs": 3911,
+      "assertionCount": 2
+    },
+    {
+      "file": "tests\\shipments.status-cache-invalidation.test.ts",
+      "status": "passed",
+      "durationMs": 2305,
+      "assertionCount": 1
+    },
+    {
+      "file": "tests\\cors.delegate.test.ts",
+      "status": "passed",
+      "durationMs": 2128,
+      "assertionCount": 3
+    },
+    {
+      "file": "tests\\jwt-revocation.test.ts",
+      "status": "passed",
+      "durationMs": 2087,
+      "assertionCount": 7
+    },
+    {
+      "file": "src\\modules\\users\\__tests__\\listUsers.test.ts",
+      "status": "passed",
+      "durationMs": 1915,
+      "assertionCount": 9
+    },
+    {
+      "file": "tests\\password-min-length.test.ts",
+      "status": "passed",
+      "durationMs": 2446,
+      "assertionCount": 9
+    },
+    {
+      "file": "tests\\mongoose-query-timeouts.test.ts",
+      "status": "passed",
+      "durationMs": 1189,
+      "assertionCount": 2
+    },
+    {
+      "file": "tests\\stellar.worker.retry.test.ts",
+      "status": "passed",
+      "durationMs": 1871,
+      "assertionCount": 4
+    },
+    {
+      "file": "src\\modules\\__template__\\__tests__\\template.test.ts",
+      "status": "passed",
+      "durationMs": 1777,
+      "assertionCount": 8
+    },
+    {
+      "file": "tests\\issue-341-company-registration.test.ts",
+      "status": "passed",
+      "durationMs": 1942,
+      "assertionCount": 9
+    },
+    {
+      "file": "tests\\indexer.golden.test.ts",
+      "status": "passed",
+      "durationMs": 1486,
+      "assertionCount": 1
+    },
+    {
+      "file": "tests\\chain.types.test.ts",
+      "status": "passed",
+      "durationMs": 1205,
+      "assertionCount": 99
+    },
+    {
+      "file": "tests\\issue-377-milestone-ledger.test.ts",
+      "status": "passed",
+      "durationMs": 1577,
+      "assertionCount": 4
+    },
+    {
+      "file": "tests\\shipments.service.test.ts",
+      "status": "passed",
+      "durationMs": 3499,
+      "assertionCount": 6
+    },
+    {
+      "file": "tests\\ledger.canonical-field.test.ts",
+      "status": "passed",
+      "durationMs": 1463,
+      "assertionCount": 8
+    },
+    {
+      "file": "tests\\redis-persistence.config.test.ts",
+      "status": "passed",
+      "durationMs": 1443,
+      "assertionCount": 11
+    },
+    {
+      "file": "tests\\shipments.eta.service.test.ts",
+      "status": "passed",
+      "durationMs": 2254,
+      "assertionCount": 4
+    },
+    {
+      "file": "tests\\audit-logs.test.ts",
+      "status": "passed",
+      "durationMs": 3104,
+      "assertionCount": 3
+    },
+    {
+      "file": "src\\config\\__tests__\\helmet.test.ts",
+      "status": "passed",
+      "durationMs": 1559,
+      "assertionCount": 3
+    },
+    {
+      "file": "tests\\issue-266-api-key-role-guard.test.ts",
+      "status": "passed",
+      "durationMs": 1882,
+      "assertionCount": 15
+    },
+    {
+      "file": "tests\\shipments.pagination.test.ts",
+      "status": "passed",
+      "durationMs": 5208,
+      "assertionCount": 3
+    },
+    {
+      "file": "tests\\maintenance.worker.test.ts",
+      "status": "passed",
+      "durationMs": 3589,
+      "assertionCount": 13
+    },
+    {
+      "file": "tests\\chain.simulated-adapter.test.ts",
+      "status": "passed",
+      "durationMs": 3542,
+      "assertionCount": 13
+    },
+    {
+      "file": "tests\\requireApiKey.test.ts",
+      "status": "passed",
+      "durationMs": 1380,
+      "assertionCount": 5
+    },
+    {
+      "file": "tests\\crypto.test.ts",
+      "status": "passed",
+      "durationMs": 1173,
+      "assertionCount": 4
+    },
+    {
+      "file": "tests\\totp-secret-format.test.ts",
+      "status": "passed",
+      "durationMs": 1129,
+      "assertionCount": 7
+    },
+    {
+      "file": "tests\\payments.history.test.ts",
+      "status": "passed",
+      "durationMs": 1258,
+      "assertionCount": 11
+    },
+    {
+      "file": "tests\\stellar-indexer.worker.test.ts",
+      "status": "passed",
+      "durationMs": 1646,
+      "assertionCount": 1
+    },
+    {
+      "file": "tests\\errorMiddleware.test.ts",
+      "status": "passed",
+      "durationMs": 1645,
+      "assertionCount": 6
+    },
+    {
+      "file": "src\\config\\__tests__\\stellarNetwork.test.ts",
+      "status": "passed",
+      "durationMs": 1362,
+      "assertionCount": 4
+    },
+    {
+      "file": "tests\\issue-356-analytics-summary.test.ts",
+      "status": "passed",
+      "durationMs": 1363,
+      "assertionCount": 10
+    },
+    {
+      "file": "tests\\soroban.adapter.test.ts",
+      "status": "passed",
+      "durationMs": 3167,
+      "assertionCount": 3
+    },
+    {
+      "file": "tests\\ledger.schema-indexes.test.ts",
+      "status": "passed",
+      "durationMs": 1330,
+      "assertionCount": 2
+    },
+    {
+      "file": "tests\\websocket-origins.test.ts",
+      "status": "passed",
+      "durationMs": 1377,
+      "assertionCount": 2
+    },
+    {
+      "file": "tests\\issue-267-shipment-query-spread.test.ts",
+      "status": "passed",
+      "durationMs": 1514,
+      "assertionCount": 4
+    },
+    {
+      "file": "tests\\issue-352-invitations.test.ts",
+      "status": "passed",
+      "durationMs": 1546,
+      "assertionCount": 10
+    },
+    {
+      "file": "tests\\iso-dates.test.ts",
+      "status": "passed",
+      "durationMs": 1645,
+      "assertionCount": 17
+    },
+    {
+      "file": "tests\\stellar.service.test.ts",
+      "status": "passed",
+      "durationMs": 1667,
+      "assertionCount": 13
+    },
+    {
+      "file": "tests\\soft-delete.test.ts",
+      "status": "passed",
+      "durationMs": 1973,
+      "assertionCount": 5
+    },
+    {
+      "file": "src\\modules\\auth\\__tests__\\2fa-setup.test.ts",
+      "status": "passed",
+      "durationMs": 1794,
+      "assertionCount": 6
+    },
+    {
+      "file": "tests\\ledger.datahash.test.ts",
+      "status": "passed",
+      "durationMs": 1997,
+      "assertionCount": 6
+    },
+    {
+      "file": "src\\services\\__tests__\\queue.service.test.ts",
+      "status": "passed",
+      "durationMs": 1758,
+      "assertionCount": 3
+    },
+    {
+      "file": "tests\\issue-285-password-reset.test.ts",
+      "status": "passed",
+      "durationMs": 1634,
+      "assertionCount": 9
+    },
+    {
+      "file": "src\\services\\__tests__\\anomaly.service.test.ts",
+      "status": "passed",
+      "durationMs": 2076,
+      "assertionCount": 11
+    },
+    {
+      "file": "src\\infra\\socket\\__tests__\\io.disconnect.test.ts",
+      "status": "passed",
+      "durationMs": 1568,
+      "assertionCount": 8
+    },
+    {
+      "file": "src\\shared\\utils\\__tests__\\crypto.test.ts",
+      "status": "passed",
+      "durationMs": 1521,
+      "assertionCount": 11
+    },
+    {
+      "file": "tests\\helpers\\fakeModel.test.ts",
+      "status": "passed",
+      "durationMs": 1681,
+      "assertionCount": 2
+    },
+    {
+      "file": "tests\\payments.ws.test.ts",
+      "status": "passed",
+      "durationMs": 2238,
+      "assertionCount": 4
+    },
+    {
+      "file": "tests\\anomaly.detect-thresholds.test.ts",
+      "status": "passed",
+      "durationMs": 3646,
+      "assertionCount": 4
+    },
+    {
+      "file": "tests\\socketEvents.constants.test.ts",
+      "status": "passed",
+      "durationMs": 1969,
+      "assertionCount": 11
+    },
+    {
+      "file": "tests\\issue-265-payments-error-propagation.test.ts",
+      "status": "passed",
+      "durationMs": 2063,
+      "assertionCount": 5
+    },
+    {
+      "file": "src\\modules\\users\\__tests__\\updateDeleteMe.test.ts",
+      "status": "passed",
+      "durationMs": 1551,
+      "assertionCount": 9
+    },
+    {
+      "file": "tests\\settlements.summary.test.ts",
+      "status": "passed",
+      "durationMs": 1505,
+      "assertionCount": 7
+    },
+    {
+      "file": "tests\\isoDatePlugin.test.ts",
+      "status": "passed",
+      "durationMs": 1300,
+      "assertionCount": 8
+    },
+    {
+      "file": "src\\infra\\socket\\__tests__\\shipmentRooms.test.ts",
+      "status": "passed",
+      "durationMs": 1487,
+      "assertionCount": 5
+    },
+    {
+      "file": "tests\\storageErrorCodes.test.ts",
+      "status": "passed",
+      "durationMs": 1289,
+      "assertionCount": 5
+    },
+    {
+      "file": "src\\services\\__tests__\\alert.queue.test.ts",
+      "status": "passed",
+      "durationMs": 1383,
+      "assertionCount": 3
+    },
+    {
+      "file": "tests\\ledger.blocks.controller.test.ts",
+      "status": "passed",
+      "durationMs": 1539,
+      "assertionCount": 8
+    },
+    {
+      "file": "tests\\env-validation.test.ts",
+      "status": "passed",
+      "durationMs": 1332,
+      "assertionCount": 15
+    },
+    {
+      "file": "tests\\tokenBlocklistInvalidJti.test.ts",
+      "status": "passed",
+      "durationMs": 1237,
+      "assertionCount": 7
+    },
+    {
+      "file": "src\\shared\\middleware\\__tests__\\socketAuth.test.ts",
+      "status": "passed",
+      "durationMs": 1159,
+      "assertionCount": 3
+    },
+    {
+      "file": "tests\\settlements.detail.test.ts",
+      "status": "passed",
+      "durationMs": 1160,
+      "assertionCount": 10
+    },
+    {
+      "file": "src\\shared\\utils\\__tests__\\pagination.test.ts",
+      "status": "passed",
+      "durationMs": 1276,
+      "assertionCount": 7
+    },
+    {
+      "file": "tests\\telemetry.schema-indexes.test.ts",
+      "status": "passed",
+      "durationMs": 1238,
+      "assertionCount": 2
+    }
+  ]
+}

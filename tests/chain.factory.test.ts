@@ -41,6 +41,8 @@ describe('ChainAdapter factory — SOROBAN_ADAPTER env matrix', () => {
   it('soroban → fails fast with ERR_CHAIN_UNKNOWN until SorobanAdapter lands', async () => {
     const { config, factory, AppError, ErrorCodes } = await loadFactory({
       SOROBAN_ADAPTER: 'soroban',
+      SOROBAN_RPC_URL: 'https://soroban-testnet.stellar.org',
+      ESCROW_CONTRACT_ID: 'CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC',
     });
     expect(config.chainAdapter).toBe('soroban');
 
@@ -63,7 +65,11 @@ describe('ChainAdapter factory — SOROBAN_ADAPTER env matrix', () => {
   });
 
   it('explicit kind overrides config', async () => {
-    const { factory, SimulatedAdapter } = await loadFactory({ SOROBAN_ADAPTER: 'soroban' });
+    const { factory, SimulatedAdapter } = await loadFactory({
+      SOROBAN_ADAPTER: 'soroban',
+      SOROBAN_RPC_URL: 'https://soroban-testnet.stellar.org',
+      ESCROW_CONTRACT_ID: 'CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC',
+    });
     expect(factory.createChainAdapter('simulated')).toBeInstanceOf(SimulatedAdapter);
   });
 });

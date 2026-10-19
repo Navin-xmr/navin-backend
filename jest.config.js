@@ -44,6 +44,8 @@ export default {
     },
   },
   verbose: true,
+  maxWorkers: '50%',
+  workerIdleMemoryLimit: '512MB',
   setupFilesAfterEnv: ['./tests/setup.ts'],
   globalSetup: './tests/globalSetup.ts',
   globalTeardown: './tests/globalTeardown.ts',

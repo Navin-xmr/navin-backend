@@ -27,7 +27,6 @@ beforeAll(async () => {
   authToken = signToken({
     userId: 'pagination-test-user',
     role: 'MANAGER',
-    organizationId: FIXTURE_ORG_ID,
   });
 });
 
@@ -53,7 +52,7 @@ describe('GET /api/shipments - Offset Pagination', () => {
     await Shipment.create(makeShipment('001'));
 
     const res = await request(app)
-      .get('/api/shipments?limit=10')
+      .get(`/api/shipments?limit=10&trackingNumber=${TRK_PREFIX}`)
       .set('Authorization', `Bearer ${authToken}`);
 
     expect(res.status).toBe(200);
@@ -69,7 +68,7 @@ describe('GET /api/shipments - Offset Pagination', () => {
     );
 
     const firstPage = await request(app)
-      .get('/api/shipments?limit=2&page=1')
+      .get(`/api/shipments?limit=2&page=1&trackingNumber=${TRK_PREFIX}`)
       .set('Authorization', `Bearer ${authToken}`);
 
     expect(firstPage.status).toBe(200);
@@ -78,7 +77,7 @@ describe('GET /api/shipments - Offset Pagination', () => {
     expect(firstPage.body.meta.page).toBe(1);
 
     const secondPage = await request(app)
-      .get('/api/shipments?limit=2&page=2')
+      .get(`/api/shipments?limit=2&page=2&trackingNumber=${TRK_PREFIX}`)
       .set('Authorization', `Bearer ${authToken}`);
 
     expect(secondPage.status).toBe(200);
@@ -95,7 +94,7 @@ describe('GET /api/shipments - Offset Pagination', () => {
     await Shipment.create(makeShipment('S011', { status: 'IN_TRANSIT' }));
 
     const res = await request(app)
-      .get('/api/shipments?status=CREATED')
+      .get(`/api/shipments?status=CREATED&trackingNumber=${TRK_PREFIX}`)
       .set('Authorization', `Bearer ${authToken}`);
 
     expect(res.status).toBe(200);

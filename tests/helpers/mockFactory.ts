@@ -11,8 +11,14 @@ export async function mockModule<T extends Record<string, unknown>>(
   overrides: Partial<T>
 ): Promise<void> {
   const fromHelpers = `../${specifier}`;
+  let actual = {} as T;
+  try {
+    actual = jest.requireActual(fromHelpers) as T;
+  } catch {
+    // Pure-ESM dependency graphs (e.g. modules importing `otplib`) cannot be loaded via synchronous requireActual
+  }
   await jest.unstable_mockModule(fromHelpers, () => ({
-    ...(jest.requireActual(fromHelpers) as T),
+    ...actual,
     ...overrides,
   }));
 }
