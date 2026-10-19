@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
+import { createChainFactoryMock } from './helpers/mocks.js';
 import request from 'supertest';
 import type { Application } from 'express';
 
@@ -89,12 +90,9 @@ describe('POST /api/webhooks/iot', () => {
       getRedisClient: jest.fn(),
     }));
 
-    await jest.unstable_mockModule('../src/services/stellar.service.js', () => ({
-      tokenizeShipment: jest.fn(),
-      anchorTelemetryHash: jest.fn(),
-      releaseEscrow: jest.fn(),
-      getStellarExplorerUrl: jest.fn(() => 'https://stellar.expert/explorer/testnet/tx/mock'),
-    }));
+    await jest.unstable_mockModule('../src/services/chain/factory.js', () =>
+      createChainFactoryMock()
+    );
 
     await jest.unstable_mockModule('../src/modules/users/users.model.js', () => ({
       UserModel: { findById: jest.fn(), findOne: jest.fn(), create: jest.fn() },

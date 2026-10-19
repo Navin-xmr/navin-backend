@@ -1,4 +1,5 @@
 import { jest, describe, beforeAll, beforeEach, it, expect } from '@jest/globals';
+import { createChainFactoryMock } from './helpers/mocks.js';
 import request from 'supertest';
 import type { Application } from 'express';
 import { signToken } from './fixtures/factories.js';
@@ -122,12 +123,7 @@ await jest.unstable_mockModule('../src/modules/users/users.model.js', () => {
   return { UserModel, OrganizationModel, UserRole, OrganizationType };
 });
 
-await jest.unstable_mockModule('../src/services/stellar.service.js', () => ({
-  tokenizeShipment: jest.fn(),
-  anchorTelemetryHash: jest.fn(),
-  releaseEscrow: jest.fn(),
-  getStellarExplorerUrl: jest.fn(() => 'https://stellar.expert/explorer/testnet/tx/mock'),
-}));
+await jest.unstable_mockModule('../src/services/chain/factory.js', () => createChainFactoryMock());
 
 await jest.unstable_mockModule('../src/infra/socket/io.js', () => ({
   initSocketIO: jest.fn(),

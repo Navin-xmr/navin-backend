@@ -1,4 +1,5 @@
 import { describe, expect, beforeEach, it, jest } from '@jest/globals';
+import { createChainFactoryMock } from './helpers/mocks.js';
 import request from 'supertest';
 import { generateDataHash } from '../src/shared/utils/crypto.js';
 import type { Application } from 'express';
@@ -114,12 +115,9 @@ describe('Real-time Socket.io Events', () => {
       },
     }));
 
-    await jest.unstable_mockModule('../src/services/stellar.service.js', () => ({
-      tokenizeShipment: jest.fn(),
-      anchorTelemetryHash: mockAnchorTelemetryHash,
-      releaseEscrow: jest.fn(),
-      getStellarExplorerUrl: jest.fn(() => 'https://stellar.expert/explorer/testnet/tx/mock'),
-    }));
+    await jest.unstable_mockModule('../src/services/chain/factory.js', () =>
+      createChainFactoryMock()
+    );
 
     await jest.unstable_mockModule('../src/modules/auth/apiKey.service.js', () => ({
       validateApiKey: mockValidateApiKey,
