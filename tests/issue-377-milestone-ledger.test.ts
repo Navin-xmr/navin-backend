@@ -63,15 +63,6 @@ jest.unstable_mockModule('../src/modules/shipments/shipmentsEta.cache.js', () =>
   writeShipmentEtaCache: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
 }));
 
-jest.unstable_mockModule('../src/services/stellar.service.js', () => ({
-  tokenizeShipment: jest
-    .fn<() => Promise<{ stellarTokenId: string; stellarTxHash: string }>>()
-    .mockResolvedValue({ stellarTokenId: 'tok', stellarTxHash: 'tx123' }),
-  releaseEscrow: jest.fn(),
-  anchorTelemetryHash: jest.fn(),
-  getStellarExplorerUrl: jest.fn(),
-}));
-
 const chainAdapter = createChainAdapterMock();
 jest.unstable_mockModule('../src/services/chain/factory.js', () =>
   createChainFactoryMock(chainAdapter)

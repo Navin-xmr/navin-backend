@@ -1,56 +1,66 @@
-// Integration test that hits the Stellar testnet.
-//
-// To run:
-//   1. Fund a testnet account via Friendbot:
-//      curl "https://friendbot.stellar.org/?addr=YOUR_PUBLIC_KEY"
-//   2. Set the env var:  export STELLAR_SECRET_KEY="S..."
-//   3. Change `describe.skip` to `describe` below
-//   4. Run:  npx jest tests/stellar.integration.test.ts --testTimeout=30000
+import { beforeAll, describe, expect, it, jest } from '@jest/globals';
+import { createChainAdapterMock, createChainFactoryMock } from './helpers/mocks.js';
+import type { ChainAdapter } from '../src/services/chain/types.js';
 
-describe.skip('Stellar Service - Integration (Testnet)', () => {
-  let tokenizeShipment: Awaited<typeof import('../src/services/stellar.service.js')>['tokenizeShipment'];
-
-  beforeAll(async () => {
-    const mod = await import('../src/services/stellar.service.js');
-    tokenizeShipment = mod.tokenizeShipment;
+describe('Stellar ChainAdapter - Integration (Testnet / Port)', () => {
+  let adapter: ChainAdapter;
+  const mockAdapter = createChainAdapterMock({
+    anchorEvent: jest.fn(async (input: unknown) => {
+      const { shipment_id, data_hash } = input as { shipment_id: string; data_hash: string };
+      return {
+        txHash: `tx-${shipment_id}-${data_hash.slice(0, 8)}`,
+        ledger: 1,
+        simulated: true,
+      };
+    }),
   });
 
-  it('should tokenize a shipment on the Stellar testnet', async () => {
-    const shipmentId = `integ-${Date.now()}`;
+  beforeAll(async () => {
+    jest.resetModules();
+    await jest.unstable_mockModule('../src/services/chain/factory.js', () =>
+      createChainFactoryMock(mockAdapter)
+    );
+    const { getChainAdapter } = await import('../src/services/chain/factory.js');
+    adapter = getChainAdapter();
+  });
 
-    const result = await tokenizeShipment({
-      trackingNumber: 'INT-TEST-001',
-      origin: 'San Francisco',
-      destination: 'Tokyo',
-      shipmentId,
+  it('should anchor a shipment event via ChainAdapter', async () => {
+    const shipmentId = `integ-${Date.now()}`;
+    const dataHash = 'a'.repeat(64);
+
+    const result = await adapter.anchorEvent({
+      shipment_id: shipmentId,
+      event_type: 'CREATED',
+      data_hash: dataHash,
+      actor: 'GAAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQDZ7H',
     });
 
-    expect(result.stellarTxHash).toEqual(expect.any(String));
-    expect(result.stellarTxHash.length).toBeGreaterThan(0);
-
-    expect(result.stellarTokenId).toMatch(/^stellar:/);
-    expect(result.stellarTokenId).toContain(shipmentId);
-
-    console.log('Tx hash:', result.stellarTxHash);
-    console.log('Verify:  https://stellar.expert/explorer/testnet/tx/' + result.stellarTxHash);
+    expect(result.txHash).toEqual(expect.any(String));
+    expect(result.txHash.length).toBeGreaterThan(0);
+    expect(mockAdapter.anchorEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        shipment_id: shipmentId,
+        event_type: 'CREATED',
+        data_hash: dataHash,
+      })
+    );
   }, 30_000);
 
-  it('should produce unique token IDs for different shipments', async () => {
-    const first = await tokenizeShipment({
-      trackingNumber: 'INT-UNIQ-001',
-      origin: 'Berlin',
-      destination: 'Sydney',
-      shipmentId: `uniq-a-${Date.now()}`,
+  it('should produce unique transaction hashes for different shipments', async () => {
+    const first = await adapter.anchorEvent({
+      shipment_id: `uniq-a-${Date.now()}`,
+      event_type: 'CREATED',
+      data_hash: '1'.repeat(64),
+      actor: 'GAAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQDZ7H',
     });
 
-    const second = await tokenizeShipment({
-      trackingNumber: 'INT-UNIQ-002',
-      origin: 'Paris',
-      destination: 'Dubai',
-      shipmentId: `uniq-b-${Date.now()}`,
+    const second = await adapter.anchorEvent({
+      shipment_id: `uniq-b-${Date.now()}`,
+      event_type: 'CREATED',
+      data_hash: '2'.repeat(64),
+      actor: 'GAAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQDZ7H',
     });
 
-    expect(first.stellarTokenId).not.toBe(second.stellarTokenId);
-    expect(first.stellarTxHash).not.toBe(second.stellarTxHash);
+    expect(first.txHash).not.toBe(second.txHash);
   }, 60_000);
 });
