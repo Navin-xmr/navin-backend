@@ -11,8 +11,10 @@ export async function mockModule<T extends Record<string, unknown>>(
   overrides: Partial<T>
 ): Promise<void> {
   const fromHelpers = `../${specifier}`;
+  const actual = (await import(fromHelpers)) as T;
+  jest.resetModules();
   await jest.unstable_mockModule(fromHelpers, () => ({
-    ...(jest.requireActual(fromHelpers) as T),
+    ...actual,
     ...overrides,
   }));
 }
