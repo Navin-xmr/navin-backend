@@ -1,5 +1,5 @@
 import { jest, describe, it, expect, beforeEach } from '@jest/globals';
-import { createStellarServiceMock } from './helpers/mocks.js';
+import { createChainFactoryMock } from './helpers/mocks.js';
 import type { IPayment, PaymentStatus } from '../src/modules/payments/payments.model.js';
 
 const mockCreatePayment = jest.fn<(...args: unknown[]) => Promise<IPayment>>();
@@ -16,7 +16,7 @@ await jest.unstable_mockModule('../src/modules/payments/payments.repo.js', () =>
   disputePayment: jest.fn(),
 }));
 
-await jest.unstable_mockModule('../src/services/stellar.service.js', () => createStellarServiceMock());
+await jest.unstable_mockModule('../src/services/chain/factory.js', () => createChainFactoryMock());
 
 const { createPaymentService } = await import('../src/modules/payments/payments.service.js');
 const { AppError } = await import('../src/shared/http/errors.js');

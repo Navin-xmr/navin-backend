@@ -9,7 +9,7 @@
  */
 import { jest, describe, it, beforeEach, expect } from '@jest/globals';
 import type { Request, Response } from 'express';
-import { createStellarServiceMock } from './helpers/mocks.js';
+import { createChainFactoryMock } from './helpers/mocks.js';
 
 // ── Repo mock ────────────────────────────────────────────────────────────────
 const getPaymentByIdMock = jest.fn<(id: string) => Promise<unknown>>();
@@ -27,8 +27,8 @@ await jest.unstable_mockModule('../src/modules/payments/payments.repo.js', () =>
   disputePayment: disputePaymentMock,
 }));
 
-await jest.unstable_mockModule('../src/services/stellar.service.js', () =>
-  createStellarServiceMock()
+await jest.unstable_mockModule('../src/services/chain/factory.js', () =>
+  createChainFactoryMock()
 );
 
 await jest.unstable_mockModule('../src/infra/socket/io.js', () => ({
