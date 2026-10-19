@@ -1,7 +1,6 @@
 import { Shipment } from './shipments.model.js';
 import type { FilterQuery, SortOrder } from 'mongoose';
-import { tokenizeShipment } from '../../services/stellar.service.js';
-import { getChainAdapter } from '../../services/chain/factory.js';
+import { getChainActorAddress, getChainAdapter } from '../../services/chain/factory.js';
 import type { EscrowResult } from '../../services/chain/types.js';
 import { generateDataHash, buildCanonicalShipmentPayload } from '../../shared/utils/crypto.js';
 import { uploadFileToStorage } from '../../services/storage/upload.js';
@@ -500,7 +499,8 @@ export const getShipmentTimelineService = async (
 };
 
 /**
- * Creates a new shipment record and attempts Stellar tokenization.
+ * Creates a new shipment record and anchors its creation through the ChainAdapter port.
+ * Anchoring is best-effort: a chain failure is logged and the shipment is still returned.
  * @param {object} data - Shipment creation payload.
  * @param {string=} data.trackingNumber - Optional tracking number.
  * @param {string} data.origin - Shipment origin.
@@ -520,18 +520,31 @@ export const createShipmentService = async (data: {
   const shipment = new Shipment({ ...shipmentData, trackingNumber });
   await shipment.save();
 
+  const shipmentId = shipment._id.toString();
   try {
-    const stellar = await tokenizeShipment({
-      trackingNumber: shipment.trackingNumber,
-      origin: shipment.origin,
-      destination: shipment.destination,
-      shipmentId: shipment._id.toString(),
+    // Hash inputs come from the persisted record (incl. createdAt) so the
+    // anchored dataHash can be recomputed from the shipment alone.
+    const canonical = buildCanonicalShipmentPayload({
+      shipmentId,
+      event: MilestoneEvent.CREATED,
+      actor: actorUserId,
+      timestamp: shipment.createdAt,
+      metadata: {
+        trackingNumber: shipment.trackingNumber,
+        origin: shipment.origin,
+        destination: shipment.destination,
+      },
     });
-    shipment.stellarTokenId = stellar.stellarTokenId;
-    shipment.stellarTxHash = stellar.stellarTxHash;
+    const { txHash } = await getChainAdapter().anchorEvent({
+      shipment_id: shipmentId,
+      data_hash: generateDataHash(canonical),
+      actor: getChainActorAddress(),
+    });
+    shipment.stellarTokenId = `stellar:${shipmentId}:${txHash.slice(0, 8)}`;
+    shipment.stellarTxHash = txHash;
     await shipment.save();
   } catch (err) {
-    logger.warn({ err, shipmentId: shipment._id.toString() }, 'Stellar tokenization skipped');
+    logger.warn({ err, shipmentId }, 'Shipment creation anchoring skipped');
   }
 
   auditLog({
@@ -645,8 +658,9 @@ export const updateShipmentStatusService = async (
       shipmentId: id,
       eventType: status as unknown as MilestoneEvent,
       actor: actor?.userId,
-      metadata: { previousStatus, simulated: true, canonical },
+      metadata: { previousStatus, simulated: true },
       dataHash: generateDataHash(canonical),
+      canonicalPayload: canonical,
     });
   } catch (ledgerErr) {
     logger.warn(
@@ -683,10 +697,10 @@ export const updateShipmentStatusService = async (
             eventType: MilestoneEvent.SETTLEMENT_INITIATED,
             transactionHash: released.txHash,
             dataHash: generateDataHash(canonical),
+            canonicalPayload: canonical,
             actor: actor?.userId,
             metadata: {
               paymentId: payment._id.toString(),
-              canonical,
               simulated: released.simulated,
             },
           });
@@ -966,10 +980,10 @@ export const uploadShipmentProofService = async (
       shipmentReference: shipment?.trackingNumber,
       transactionHash: shipment?.stellarTxHash ?? undefined,
       dataHash: generateDataHash(canonical),
+      canonicalPayload: canonical,
       metadata: {
         proofUrl,
         recipientSignatureName: proof.recipientSignatureName,
-        canonical,
       },
     });
   } catch (ledgerErr) {
