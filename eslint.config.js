@@ -70,6 +70,25 @@ export default [
       'no-console': 'off',
     },
   },
+  // P9-14 / #925: forbid direct stellar.service.js imports in tests/** (except the legacy facade test).
+  {
+    files: ['tests/**/*.ts'],
+    ignores: ['tests/stellar.service.test.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['**/stellar.service.js', '**/stellar.service'],
+              message:
+                'Do not import stellar.service.js directly in tests; use port mocks from tests/helpers/mocks.ts instead.',
+            },
+          ],
+        },
+      ],
+    },
+  },
   {
     ignores: ['dist', 'node_modules', 'coverage', 'migrations'],
   },
