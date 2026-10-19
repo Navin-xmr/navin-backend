@@ -70,6 +70,25 @@ export default [
       'no-console': 'off',
     },
   },
+  // P9-14 / #925: Forbid direct stellar.service imports in tests except tests/stellar.service.test.ts.
+  {
+    files: ['tests/**/*.ts'],
+    ignores: ['tests/stellar.service.test.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['**/stellar.service.js', '**/stellar.service.ts', '**/stellar.service'],
+              message:
+                'Do not import stellar.service.js directly in tests. Mock or use the ChainAdapter port (src/services/chain/factory.js or createChainAdapterMock / createChainFactoryMock) instead.',
+            },
+          ],
+        },
+      ],
+    },
+  },
   {
     ignores: ['dist', 'node_modules', 'coverage', 'migrations'],
   },
