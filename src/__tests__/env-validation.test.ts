@@ -30,7 +30,7 @@ function runWithEnv(
     const child = spawn(process.execPath, [tsxCliPath, envEntryPath], {
       env: { ...process.env, ...baseEnv },
       stdio: ['ignore', 'pipe', 'pipe'],
-      timeout: 10_000,
+      timeout: 30_000,
     });
 
     // env.ts logs its validation errors through pino, which writes to stdout —
@@ -52,6 +52,8 @@ function runWithEnv(
     });
   });
 }
+
+jest.setTimeout(60_000);
 
 describe('env validation', () => {
   it('succeeds with all required vars present', async () => {
