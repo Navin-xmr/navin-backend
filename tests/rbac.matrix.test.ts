@@ -6,10 +6,6 @@ import mongoose from 'mongoose';
 import type { Application } from 'express';
 import { env } from '../src/env.js';
 import { UserRole } from '../src/shared/constants/index.js';
-import { routeRoles as shipmentRoles } from '../src/modules/shipments/shipments.routes.js';
-import { routeRoles as userRoles } from '../src/modules/users/users.routes.js';
-import { routeRoles as analyticsRoles } from '../src/modules/analytics/analytics.routes.js';
-import { routeRoles as anomalyRoles } from '../src/modules/anomaly/anomaly.routes.js';
 
 // Role definitions for the matrix
 const ROLES = [
@@ -26,29 +22,9 @@ type Role = (typeof ROLES)[number];
  * RBAC_MATRIX is derived from the routeRoles exports of each route module —
  * single source of truth, zero drift from requireRole() (TODO G6).
  * Special sentinels: 'PUBLIC' = no auth required; 'API_KEY' = API-key auth.
+ * NOTE: Dynamically populated in beforeAll() after mocks are registered.
  */
-const RBAC_MATRIX: Record<string, Role[]> = {
-  // Derived from route modules
-  ...userRoles,
-  ...shipmentRoles,
-  ...analyticsRoles,
-  ...anomalyRoles,
-
-  // Telemetry GET has no requireRole — all authenticated roles may access.
-  'GET /api/telemetry': [
-    UserRole.SUPER_ADMIN,
-    UserRole.ADMIN,
-    UserRole.MANAGER,
-    UserRole.VIEWER,
-    UserRole.CUSTOMER,
-  ],
-
-  // Health - public
-  'GET /api/health': ['PUBLIC' as Role],
-
-  // Webhooks - IoT webhook uses API key, not user auth
-  'POST /api/webhooks/iot': ['API_KEY' as Role],
-};
+let RBAC_MATRIX: Record<string, Role[]> = {};
 
 describe('RBAC Matrix Integration Tests', () => {
   let app: Application;
@@ -69,6 +45,9 @@ describe('RBAC Matrix Integration Tests', () => {
   const mockApiKeyFindOne = jest.fn();
 
   beforeAll(async () => {
+    // Reset modules to ensure clean slate for mocks
+    jest.resetModules();
+
     testOrganizationId = new mongoose.Types.ObjectId().toString();
     testUserIds = {} as Record<Role, string>;
 
@@ -288,7 +267,37 @@ describe('RBAC Matrix Integration Tests', () => {
       listApiKeys: jest.fn(),
     }));
 
-    // Build the app
+    // Load route roles dynamically after all mocks are registered
+    const { routeRoles: shipmentRoles } = await import('../src/modules/shipments/shipments.routes.js');
+    const { routeRoles: userRoles } = await import('../src/modules/users/users.routes.js');
+    const { routeRoles: analyticsRoles } = await import('../src/modules/analytics/analytics.routes.js');
+    const { routeRoles: anomalyRoles } = await import('../src/modules/anomaly/anomaly.routes.js');
+
+    // Build RBAC matrix from dynamically loaded route roles
+    RBAC_MATRIX = {
+      // Derived from route modules
+      ...userRoles,
+      ...shipmentRoles,
+      ...analyticsRoles,
+      ...anomalyRoles,
+
+      // Telemetry GET has no requireRole — all authenticated roles may access.
+      'GET /api/telemetry': [
+        UserRole.SUPER_ADMIN,
+        UserRole.ADMIN,
+        UserRole.MANAGER,
+        UserRole.VIEWER,
+        UserRole.CUSTOMER,
+      ],
+
+      // Health - public
+      'GET /api/health': ['PUBLIC' as Role],
+
+      // Webhooks - IoT webhook uses API key, not user auth
+      'POST /api/webhooks/iot': ['API_KEY' as Role],
+    };
+
+    // Build the app after mocks are registered
     const appModule = await import('../src/app.js');
     app = appModule.buildApp();
 
