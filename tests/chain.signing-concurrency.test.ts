@@ -19,10 +19,12 @@ import {
 import type { Transaction } from '@stellar/stellar-sdk';
 
 import { KeyedSerializer } from '../src/services/chain/serializer.js';
-import { SimulatedAdapter, isBadSequence } from '../src/services/chain/simulated.adapter.js';
-import type { HorizonClient } from '../src/services/chain/simulated.adapter.js';
+import { SimulatedAdapter } from '../src/services/chain/simulated.adapter.js';
 import { ErrorCodes } from '../src/shared/http/errors.js';
 import { generateDataHash } from '../src/shared/utils/crypto.js';
+
+type SimulatedAdapterOptions = NonNullable<ConstructorParameters<typeof SimulatedAdapter>[0]>;
+type HorizonClient = NonNullable<SimulatedAdapterOptions['horizon']>;
 
 const PASSPHRASE = Networks.TESTNET;
 const WORKERS = 5; // matches stellar.worker concurrency
@@ -182,10 +184,26 @@ describe('signing safety load gate', () => {
     expect(horizon.submitTransaction).toHaveBeenCalledTimes(1);
   });
 
-  it('isBadSequence recognises only Horizon tx_bad_seq responses', () => {
-    expect(isBadSequence(badSeqError())).toBe(true);
-    expect(isBadSequence(new Error('tx_bad_seq'))).toBe(false);
-    expect(isBadSequence(null)).toBe(false);
+  it('recognises only Horizon tx_bad_seq responses for retry', async () => {
+    const horizon = new SequencedHorizon();
+    const signer = Keypair.random();
+    const adapter = new SimulatedAdapter({
+      horizon,
+      secretKey: signer.secret(),
+      networkPassphrase: PASSPHRASE,
+    });
+
+    horizon.submitTransaction.mockRejectedValueOnce(new Error('tx_bad_seq'));
+    await expect(adapter.anchorEvent(anchorInput(0, 0, signer.publicKey()))).rejects.toMatchObject({
+      code: ErrorCodes.CHAIN_UNKNOWN,
+    });
+    expect(horizon.submitTransaction).toHaveBeenCalledTimes(1);
+
+    horizon.submitTransaction.mockRejectedValueOnce(null);
+    await expect(adapter.anchorEvent(anchorInput(0, 1, signer.publicKey()))).rejects.toMatchObject({
+      code: ErrorCodes.CHAIN_UNKNOWN,
+    });
+    expect(horizon.submitTransaction).toHaveBeenCalledTimes(2);
   });
 });
 
