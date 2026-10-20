@@ -171,6 +171,36 @@ services:
     healthcheck:
       disable: true
 
+  # Standalone Stellar Quickstart container (Horizon + Soroban RPC + Friendbot)
+  # for local integration & nightly test harness runs without external network
+  # dependency (Issue #806 / P6-19).
+  stellar-quickstart:
+    <<: [*resource-limits, *logging]
+    image: stellar/quickstart:latest
+    profiles:
+      - quickstart
+      - nightly
+    command:
+      - "--standalone"
+      - "--enable-soroban-rpc"
+      - "--protocol-version"
+      - "21"
+    environment:
+      ENABLE_SOROBAN_RPC: "true"
+    ports:
+      - "127.0.0.1:8000:8000"
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -fsS -X POST http://localhost:8000/soroban/rpc -H 'Content-Type: application/json' -d '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"getHealth\"}' | grep -q '\"healthy\"'",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
 volumes:
   mongo_data:
   redis_data:

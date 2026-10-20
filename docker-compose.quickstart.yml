@@ -1,0 +1,54 @@
+# Standalone Stellar Quickstart override for nightly & local integration harness (#806 / P6-19).
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.quickstart.yml up -d
+#   node scripts/stellar-quickstart-health.mjs
+
+services:
+  stellar-quickstart:
+    image: stellar/quickstart:latest
+    command:
+      - "--standalone"
+      - "--enable-soroban-rpc"
+      - "--protocol-version"
+      - "21"
+    environment:
+      ENABLE_SOROBAN_RPC: "true"
+    ports:
+      - "127.0.0.1:8000:8000"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -fsS -X POST http://localhost:8000/soroban/rpc -H 'Content-Type: application/json' -d '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"getHealth\"}' | grep -q '\"healthy\"'",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  app:
+    environment:
+      STELLAR_NETWORK: standalone
+      HORIZON_URL: http://stellar-quickstart:8000
+      SOROBAN_RPC_URL: http://stellar-quickstart:8000/soroban/rpc
+    depends_on:
+      stellar-quickstart:
+        condition: service_healthy
+
+  stellar-worker:
+    environment:
+      STELLAR_NETWORK: standalone
+      HORIZON_URL: http://stellar-quickstart:8000
+      SOROBAN_RPC_URL: http://stellar-quickstart:8000/soroban/rpc
+    depends_on:
+      stellar-quickstart:
+        condition: service_healthy
+
+  stellar-indexer:
+    environment:
+      STELLAR_NETWORK: standalone
+      HORIZON_URL: http://stellar-quickstart:8000
+      SOROBAN_RPC_URL: http://stellar-quickstart:8000/soroban/rpc
+    depends_on:
+      stellar-quickstart:
+        condition: service_healthy
