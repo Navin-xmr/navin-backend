@@ -141,6 +141,17 @@ class RedisRateLimitStore implements Store {
 
 // ── Handler factory ──────────────────────────────────────────────────────────
 
+/**
+ * Builds the 429 handler shared by every limiter in this module.
+ *
+ * Responds with the standard error envelope `{ success, message, data, retryAfter }`
+ * and sets a `Retry-After` header. The advertised delay is derived from the
+ * limiter's reset time when available, otherwise it falls back to the window
+ * length (1 minute in development, 15 minutes otherwise).
+ *
+ * @param message - Human-readable message returned in the response body.
+ * @returns An Express handler that sends HTTP 429 with the rate-limit envelope.
+ */
 const createRateLimitHandler = (message: string) => (req: Request, res: Response) => {
   const rateLimitState = (req as Request & { rateLimit?: { resetTime?: Date } }).rateLimit;
   const retryAfter = rateLimitState?.resetTime
@@ -185,25 +196,7 @@ export const loginLimiter = rateLimit({
   legacyHeaders: false,
   skipSuccessfulRequests: true,
   store: new RedisRateLimitStore(loginWindowMs, 'rl:login:'),
-  handler: (req: Request, res: Response) => {
-    const rateLimitState = (req as Request & { rateLimit?: { resetTime?: Date } }).rateLimit;
-    const retryAfter = rateLimitState?.resetTime
-      ? Math.max(1, Math.ceil((rateLimitState.resetTime.getTime() - Date.now()) / 1000))
-      : Math.ceil(15 * 60);
-
-    res.setHeader('Retry-After', String(retryAfter));
-    sendResponse(
-      res,
-      429,
-      false,
-      'Too many login attempts, please try again later.',
-      null,
-      undefined,
-      {
-        retryAfter,
-      }
-    );
-  },
+  handler: createRateLimitHandler('Too many login attempts, please try again later.'),
 });
 
 /** OTP / password-reset endpoints — tight limit: 5 req/15 min */

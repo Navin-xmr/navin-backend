@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - Corrected `docs/PAGINATION.md` pagination strategy table: users dual-mode is live, documented the payments `total` meta variance, added shipment timeline to the cursor list (#576)
+- Refactored `loginLimiter` in `src/shared/middleware/rateLimiter.ts` to reuse `createRateLimitHandler()`, removing the duplicated inline 429 handler (#815)
 
 ### Changed
 
