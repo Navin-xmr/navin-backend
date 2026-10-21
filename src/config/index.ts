@@ -56,6 +56,7 @@ export const config = {
   },
   sorobanRpcUrl: stellarUrls.sorobanRpcUrl,
   escrowContractId: env.ESCROW_CONTRACT_ID,
+  chainAdapter: env.SOROBAN_ADAPTER,
   sentryDsn: env.SENTRY_DSN,
   totpEncryptionKey: env.TOTP_ENCRYPTION_KEY,
 } as const;

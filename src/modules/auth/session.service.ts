@@ -1,6 +1,7 @@
 import { SessionModel } from './session.model.js';
 import { blockToken } from '../../infra/redis/tokenBlocklist.js';
 import { AppError, ErrorCodes } from '../../shared/http/errors.js';
+import { logger } from '../../shared/logger/logger.js';
 
 const TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60; // 7 days — matches auth.service TOKEN_TTL_SECONDS
 
@@ -28,7 +29,7 @@ export async function createSession(params: CreateSessionParams): Promise<void> 
     // Non-fatal: session tracking is a side-effect. Log in production but
     // never let a DB write failure prevent the user from receiving their token.
     const message = err instanceof Error ? err.message : String(err);
-    console.warn('[session] Failed to persist session record:', message);
+    logger.warn({ err, message }, '[session] Failed to persist session record');
   }
 }
 

@@ -1,7 +1,8 @@
 import { jest, describe, beforeAll, beforeEach, it, expect } from '@jest/globals';
+import { createChainFactoryMock } from './helpers/mocks.js';
 import request from 'supertest';
 import { signToken } from './fixtures/factories.js';
-import process from 'process';
+import { SOCKET_EVENTS } from '../src/shared/types/socketEvents.js';
 import type { Application } from 'express';
 
 type ShipmentRecord = {
@@ -23,11 +24,14 @@ const shipmentsData: ShipmentRecord[] = [];
 
 await jest.unstable_mockModule('../src/modules/shipments/shipments.model.js', () => {
   const ShipmentConstructor = {
-    new (doc: Record<string, unknown>) {
+    new(doc: Record<string, unknown>) {
       const s = { ...doc, milestones: [], save: async () => s } as unknown as ShipmentRecord;
       return s;
     },
-    find: (query: { _id?: { $in: string[] }; $or?: Array<{ enterpriseId?: string; logisticsId?: string }> }) => {
+    find: (query: {
+      _id?: { $in: string[] };
+      $or?: Array<{ enterpriseId?: string; logisticsId?: string }>;
+    }) => {
       const ids = query._id?.$in;
       const orgId = query.$or?.[0]?.enterpriseId ?? query.$or?.[1]?.logisticsId;
       let result = shipmentsData;
@@ -108,12 +112,7 @@ await jest.unstable_mockModule('../src/modules/users/users.model.js', () => ({
   },
 }));
 
-await jest.unstable_mockModule('../src/services/stellar.service.js', () => ({
-  tokenizeShipment: jest.fn(),
-  anchorTelemetryHash: jest.fn(),
-  releaseEscrow: jest.fn(() => Promise.resolve({ success: true, transactionHash: 'mock-tx-hash' })),
-  getStellarExplorerUrl: jest.fn((txHash: string) => `https://stellar.expert/explorer/testnet/tx/${txHash}`),
-}));
+await jest.unstable_mockModule('../src/services/chain/factory.js', () => createChainFactoryMock());
 
 await jest.unstable_mockModule('../src/infra/socket/io.js', () => ({
   initSocketIO: jest.fn(),
@@ -236,7 +235,13 @@ describe('Bulk Status Update API', () => {
     shipmentsData.push(
       { _id: 's1', status: 'CREATED', enterpriseId: 'org1', logisticsId: 'org2', milestones: [] },
       { _id: 's2', status: 'DELIVERED', enterpriseId: 'org1', logisticsId: 'org2', milestones: [] },
-      { _id: 's3', status: 'CREATED', enterpriseId: 'wrong-org', logisticsId: 'org2', milestones: [] }
+      {
+        _id: 's3',
+        status: 'CREATED',
+        enterpriseId: 'wrong-org',
+        logisticsId: 'org2',
+        milestones: [],
+      }
     );
 
     const res = await request(app)
@@ -271,11 +276,17 @@ describe('Bulk Status Update API', () => {
     expect(s1?.status).toBe('IN_TRANSIT');
   });
 
-  it('should emit status_update events for successful updates', async () => {
+  it(`should emit ${SOCKET_EVENTS.SHIPMENT_STATUS} events for successful updates`, async () => {
     const token = generateToken({ userId: 'admin-1', role: 'ADMIN', organizationId: 'org1' });
     const ioModule = await import('../src/infra/socket/io.js');
 
-    shipmentsData.push({ _id: 's1', status: 'CREATED', enterpriseId: 'org1', logisticsId: 'org2', milestones: [] });
+    shipmentsData.push({
+      _id: 's1',
+      status: 'CREATED',
+      enterpriseId: 'org1',
+      logisticsId: 'org2',
+      milestones: [],
+    });
 
     await request(app)
       .patch('/api/shipments/bulk/status')

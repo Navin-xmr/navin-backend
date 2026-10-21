@@ -72,8 +72,12 @@ export function buildApp() {
   // Stricter limiter for public tracking endpoint
   app.use('/api/public/tracking', strictLimiter);
 
-  app.use('/api/health', healthRouter);
-  app.use('/api/auth', authRouter);
+  // Per AGENTS.md §3 every route needs `requireAuth` or a `// PUBLIC: <reason>`
+  // marker. Routers mounted with a `PUBLIC:` comment below are NOT JWT-guarded at
+  // the mount — each carries the same reason again at the individual route inside
+  // the router. Every other mount below applies `requireAuth` at the router level.
+  app.use('/api/health', healthRouter); // PUBLIC: liveness/readiness probe for orchestrators
+  app.use('/api/auth', authRouter); // PUBLIC: login/signup/refresh need no token; guarded per-route
   app.use('/api/users', usersRouter);
   app.use('/api/organizations', organizationsRouter);
   app.use('/api/company/invitations', invitationsRouter);
@@ -81,7 +85,9 @@ export function buildApp() {
   app.use('/api/shipments', shipmentsRouter);
   app.use('/api/payments', paymentsRouter);
   app.use('/api/settlements', paymentsRouter);
+  // PUBLIC: unauthenticated tracking-number lookup, rate-limited above via strictLimiter
   app.use('/api/public/tracking', publicTrackingRouter);
+  // PUBLIC: machine callers authenticate with x-api-key / HMAC signature, not JWT
   app.use('/api/webhooks', webhooksRouter);
   app.use('/api/analytics', analyticsRouter);
   app.use('/api/anomalies', anomaliesRouter);
@@ -94,6 +100,7 @@ export function buildApp() {
   app.use('/api/notifications', notificationsRouter);
 
   if (process.env.NODE_ENV !== 'production') {
+    // PUBLIC: interactive API reference, development only — never mounted in production
     const swaggerDocument = YAML.load(swaggerDocumentPath) as Record<string, unknown>;
     app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
   }

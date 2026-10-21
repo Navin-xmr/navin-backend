@@ -1,4 +1,5 @@
 import { jest, describe, it, expect, beforeEach } from '@jest/globals';
+import { createChainAdapterMock, createChainFactoryMock } from './helpers/mocks.js';
 
 const createLedgerBlockMock = jest.fn<(...args: unknown[]) => Promise<unknown>>();
 
@@ -53,9 +54,7 @@ jest.unstable_mockModule('../src/shared/utils/auditLog.js', () => ({
 }));
 
 jest.unstable_mockModule('../src/modules/analytics/analytics.cache.js', () => ({
-  invalidateAnalyticsPerformanceCache: jest
-    .fn<() => Promise<void>>()
-    .mockResolvedValue(undefined),
+  invalidateAnalyticsPerformanceCache: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
 }));
 
 jest.unstable_mockModule('../src/modules/shipments/shipmentsEta.cache.js', () => ({
@@ -64,23 +63,18 @@ jest.unstable_mockModule('../src/modules/shipments/shipmentsEta.cache.js', () =>
   writeShipmentEtaCache: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
 }));
 
-jest.unstable_mockModule('../src/services/stellar.service.js', () => ({
-  tokenizeShipment: jest
-    .fn<() => Promise<{ stellarTokenId: string; stellarTxHash: string }>>()
-    .mockResolvedValue({ stellarTokenId: 'tok', stellarTxHash: 'tx123' }),
-  releaseEscrow: jest.fn(),
-  anchorTelemetryHash: jest.fn(),
-  getStellarExplorerUrl: jest.fn(),
-}));
+const chainAdapter = createChainAdapterMock();
+jest.unstable_mockModule('../src/services/chain/factory.js', () =>
+  createChainFactoryMock(chainAdapter)
+);
 
 jest.unstable_mockModule('../src/modules/payments/payments.repo.js', () => ({
   getPaymentByShipmentId: jest.fn<() => Promise<null>>().mockResolvedValue(null),
   updatePaymentStatus: jest.fn(),
 }));
 
-const { updateShipmentStatusService, uploadShipmentProofService } = await import(
-  '../src/modules/shipments/shipments.service.js'
-);
+const { updateShipmentStatusService, uploadShipmentProofService } =
+  await import('../src/modules/shipments/shipments.service.js');
 
 const { multerFile } = await import('./fixtures/factories.js');
 
@@ -130,9 +124,52 @@ describe('Ledger block creation on lifecycle events', () => {
       expect.objectContaining({
         shipmentId: 'ship-1',
         eventType: 'IN_TRANSIT',
+        dataHash: expect.stringMatching(/^[0-9a-f]{64}$/),
         actor: 'user-1',
       })
     );
+  });
+
+  it('status-change ledger block carries no transactionHash (simulated placeholder, not stale creation tx)', async () => {
+    // Regression test for #663: status blocks must NOT cite shipment.stellarTxHash
+    // (the tokenization tx from creation), because that hash has nothing to do with
+    // a status update.  The block should carry no txHash and metadata.simulated===true
+    // until per-event Soroban anchoring lands.
+    const now = new Date();
+    mockShipmentDoc = {
+      _id: 'ship-2',
+      status: 'CREATED',
+      // Deliberately set stellarTxHash to verify it is NOT forwarded to the ledger.
+      stellarTxHash: 'stale-creation-tx-should-never-appear-in-status-block',
+      milestones: [],
+      updatedAt: now,
+      save: mockSave.mockImplementation(async function (this: Record<string, unknown>) {
+        this.status = 'IN_TRANSIT';
+        (this.milestones as unknown[]).push({
+          name: 'IN_TRANSIT',
+          timestamp: now,
+          description: 'Status changed to IN_TRANSIT',
+        });
+        return this;
+      }),
+    };
+
+    findByIdMock.mockResolvedValue(mockShipmentDoc);
+
+    await updateShipmentStatusService('ship-2', 'IN_TRANSIT' as never, { userId: 'user-2' });
+
+    expect(createLedgerBlockMock).toHaveBeenCalled();
+    const callArg = createLedgerBlockMock.mock.calls.find(
+      ([arg]) => (arg as Record<string, unknown>).shipmentId === 'ship-2'
+    )?.[0] as Record<string, unknown> | undefined;
+
+    expect(callArg).toBeDefined();
+    // No transactionHash — must not carry the stale creation-time tx.
+    expect(callArg).not.toHaveProperty('transactionHash');
+    // metadata.simulated flag must be true so readers know anchoring is pending.
+    expect(callArg?.metadata).toMatchObject({ simulated: true });
+    // previousStatus must still be present for audit purposes.
+    expect(callArg?.metadata).toMatchObject({ previousStatus: 'CREATED' });
   });
 
   it('proof upload creates a PROOF_SUBMITTED ledger block', async () => {
@@ -152,19 +189,23 @@ describe('Ledger block creation on lifecycle events', () => {
       expect.objectContaining({
         shipmentId: 'ship-1',
         milestoneEvent: 'PROOF_SUBMITTED',
+        dataHash: expect.stringMatching(/^[0-9a-f]{64}$/),
       })
     );
   });
 
   it('settlement initiation creates a SETTLEMENT_INITIATED ledger block', async () => {
-    const { releaseEscrow } = await import('../src/services/stellar.service.js');
     const paymentsRepo = await import('../src/modules/payments/payments.repo.js');
 
-    (releaseEscrow as jest.MockedFunction<typeof releaseEscrow>).mockResolvedValue({
-      success: true,
-      transactionHash: 'stellar-tx-hash-abc',
+    chainAdapter.releaseEscrow.mockResolvedValueOnce({
+      txHash: 'stellar-tx-hash-abc',
+      ledger: 1,
+      simulated: true,
+      paymentId: 'pay-1',
     });
-    (paymentsRepo.getPaymentByShipmentId as jest.Mock<(...args: unknown[]) => Promise<unknown>>).mockResolvedValue({
+    (
+      paymentsRepo.getPaymentByShipmentId as jest.Mock<(...args: unknown[]) => Promise<unknown>>
+    ).mockResolvedValue({
       _id: 'pay-1',
       shipmentId: 'ship-1',
       organizationId: 'org-1',
@@ -175,7 +216,9 @@ describe('Ledger block creation on lifecycle events', () => {
       createdAt: new Date(),
       updatedAt: new Date(),
     });
-    (paymentsRepo.updatePaymentStatus as jest.Mock<(...args: unknown[]) => Promise<unknown>>).mockResolvedValue({
+    (
+      paymentsRepo.updatePaymentStatus as jest.Mock<(...args: unknown[]) => Promise<unknown>>
+    ).mockResolvedValue({
       _id: 'pay-1',
       shipmentId: 'ship-1',
       organizationId: 'org-1',
@@ -208,16 +251,23 @@ describe('Ledger block creation on lifecycle events', () => {
 
     findByIdMock.mockResolvedValue(mockShipmentDoc);
 
-    await updateShipmentStatusService('ship-1', 'DELIVERED' as never, {
+    const result = await updateShipmentStatusService('ship-1', 'DELIVERED' as never, {
       userId: 'user-1',
     });
 
+    expect(result).toMatchObject({ simulated: true });
     expect(createLedgerBlockMock).toHaveBeenCalledWith(
       expect.objectContaining({
         shipmentId: 'ship-1',
         eventType: 'SETTLEMENT_INITIATED',
         transactionHash: 'stellar-tx-hash-abc',
+        dataHash: expect.stringMatching(/^[0-9a-f]{64}$/),
+        metadata: expect.objectContaining({ paymentId: 'pay-1', simulated: true }),
       })
     );
+    expect(chainAdapter.releaseEscrow).toHaveBeenCalledWith({
+      payment_id: 'pay-1',
+      proof_hash: expect.stringMatching(/^[0-9a-f]{64}$/),
+    });
   });
 });

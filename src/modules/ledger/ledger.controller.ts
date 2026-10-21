@@ -51,3 +51,16 @@ export const getLedgerBlockById = async (req: Request, res: Response) => {
   const block = await ledgerService.getLedgerBlockByIdService(params.id);
   return sendResponse(res, 200, true, 'Ledger block retrieved', block);
 };
+
+/**
+ * Returns verification material for a ledger block.
+ * Requires auth and ADMIN / MANAGER / VIEWER.
+ *
+ * @param req.params.id - Ledger block id.
+ * @returns HTTP 200 with `{ canonicalPayload, dataHash, txHash, ledger }`.
+ */
+export const getLedgerBlockVerification = async (req: Request, res: Response) => {
+  const params = req.params as unknown as LedgerBlockIdParam;
+  const verification = await ledgerService.getLedgerBlockVerificationService(params.id);
+  return sendResponse(res, 200, true, 'Ledger block verification retrieved', verification);
+};

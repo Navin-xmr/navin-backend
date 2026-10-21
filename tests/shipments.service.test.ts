@@ -48,8 +48,6 @@ await jest.unstable_mockModule('../src/modules/telemetry/telemetry.model.js', ()
 
 await jest.unstable_mockModule(STORAGE_MOCK_SPECIFIER, () => ({
   uploadFileToStorage: uploadFileToStorageMock,
-  deleteFileFromStorage: jest.fn(async () => undefined),
-  getSignedUrl: jest.fn(async () => ''),
 }));
 
 await jest.unstable_mockModule('../src/modules/ledger/ledger.service.js', () => ({

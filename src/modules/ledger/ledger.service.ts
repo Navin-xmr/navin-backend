@@ -7,7 +7,7 @@ import { logger } from '../../shared/logger/logger.js';
 export async function createLedgerBlockService(input: LedgerBlockInput) {
   const block = await ledgerRepo.createLedgerBlock(input);
   logger.info(
-    { blockId: block._id, shipmentId: input.shipmentId, eventType: input.eventType },
+    { blockId: block._id, shipmentId: input.shipmentId, milestoneEvent: block.milestoneEvent },
     'Ledger block created'
   );
   return block;
@@ -28,4 +28,15 @@ export async function getLedgerBlockByIdService(id: string) {
     throw new AppError(404, 'Ledger block not found', ErrorCodes.LEDGER_BLOCK_NOT_FOUND);
   }
   return block;
+}
+
+export async function getLedgerBlockVerificationService(id: string) {
+  const block = await getLedgerBlockByIdService(id);
+  return {
+    canonicalPayload: (block as unknown as { canonicalPayload?: unknown }).canonicalPayload ?? null,
+    dataHash: block.dataHash ?? null,
+    txHash: block.transactionHash ?? null,
+    transactionHash: block.transactionHash ?? null,
+    ledger: block.ledger,
+  };
 }

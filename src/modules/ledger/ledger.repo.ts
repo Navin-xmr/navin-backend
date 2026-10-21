@@ -6,11 +6,21 @@ import { paginateCursor } from '../../shared/utils/pagination.js';
 
 export interface LedgerBlockInput {
   shipmentId: string | Types.ObjectId;
+  /**
+   * Canonical event field.  Callers should always supply this; the legacy
+   * `eventType` alias is accepted for backwards compatibility during the
+   * transition window and is treated as a synonym.
+   */
   milestoneEvent?: MilestoneEvent;
+  /** @deprecated Use milestoneEvent.  Accepted but not persisted separately. */
   eventType?: MilestoneEvent;
   blockNumber?: number;
   timestamp?: Date;
   shipmentReference?: string;
+  /** SHA-256 hex digest of the payload committed by the on-chain transaction. */
+  dataHash?: string;
+  /** Exact payload hashed into dataHash. Persisted alongside every dataHash. */
+  canonicalPayload?: Record<string, unknown>;
   transactionHash?: string;
   ledger?: number;
   verified?: boolean;
@@ -19,6 +29,7 @@ export interface LedgerBlockInput {
 }
 
 export async function createLedgerBlock(input: LedgerBlockInput): Promise<ILedgerBlock> {
+  // milestoneEvent is canonical; accept legacy eventType as a synonym.
   const milestoneEvent = input.milestoneEvent ?? input.eventType;
   if (!milestoneEvent) {
     throw new AppError(400, 'milestoneEvent or eventType is required', ErrorCodes.BAD_REQUEST);
@@ -30,8 +41,9 @@ export async function createLedgerBlock(input: LedgerBlockInput): Promise<ILedge
     shipmentId: new Types.ObjectId(input.shipmentId),
     shipmentReference: input.shipmentReference,
     milestoneEvent,
-    eventType: input.eventType,
     ...(input.transactionHash && { transactionHash: input.transactionHash }),
+    ...(input.dataHash && { dataHash: input.dataHash }),
+    ...(input.canonicalPayload && { canonicalPayload: input.canonicalPayload }),
     ledger: input.ledger ?? input.blockNumber ?? 0,
     verified: input.verified ?? false,
     ...(input.actor && { actor: input.actor }),

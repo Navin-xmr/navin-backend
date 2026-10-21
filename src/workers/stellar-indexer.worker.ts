@@ -1,222 +1,151 @@
 import '../loadEnv.js';
 import { pathToFileURL } from 'node:url';
 import { Worker, Queue, type Job } from 'bullmq';
-import { Horizon } from '@stellar/stellar-sdk';
+import mongoose, { Schema } from 'mongoose';
 import { connectMongo } from '../infra/mongo/connection.js';
 import { config } from '../config/index.js';
 import { getBullMQConnection } from '../infra/redis/connection.js';
-import { PaymentModel } from '../modules/payments/payments.model.js';
-import { Telemetry } from '../modules/telemetry/telemetry.model.js';
 import { LedgerBlock } from '../modules/ledger/ledger.model.js';
 import { MilestoneEvent } from '../shared/types/shipment.js';
+import { CHAIN_EVENT_NAMES } from '../shared/types/chain.js';
+import type { ChainAdapter } from '../services/chain/types.js';
+import { getChainAdapter } from '../services/chain/factory.js';
 import { logger } from '../shared/logger/logger.js';
 
 export const STELLAR_INDEXER_QUEUE = 'stellar_indexer_queue';
 export const STELLAR_INDEXER_JOB = 'poll_stellar_transactions';
 
-export interface StellarTransaction {
-  hash: string;
-  ledger: number;
-  memo?: string;
-  createdAt?: string;
+const IndexerStateSchema = new Schema(
+  {
+    key: { type: String, required: true, unique: true },
+    cursor: { type: String, required: true },
+  },
+  { timestamps: true }
+);
+
+export interface IndexerStateDocument {
+  key: string;
+  cursor: string;
 }
 
-export interface StellarIndexerClient {
-  getLatestLedger: () => Promise<number>;
-  getTransaction: (hash: string) => Promise<StellarTransaction | null>;
+export const IndexerStateModel =
+  mongoose.models.IndexerState ||
+  mongoose.model<IndexerStateDocument>('IndexerState', IndexerStateSchema);
+
+export async function getStoredCursor(key = 'stellar_indexer'): Promise<string | undefined> {
+  try {
+    const doc = await IndexerStateModel.findOne({ key }).lean<{ key: string; cursor: string }>();
+    return doc?.cursor;
+  } catch {
+    return undefined;
+  }
+}
+
+export async function saveStoredCursor(cursor: string, key = 'stellar_indexer'): Promise<void> {
+  try {
+    await IndexerStateModel.updateOne({ key }, { $set: { cursor } }, { upsert: true });
+  } catch {
+    // Graceful fallback for un-connected DB in isolated unit tests
+  }
+}
+
+export interface IndexerSummary {
+  processed: number;
+  upserted: number;
+  lastCursor?: string;
 }
 
 /**
- * Builds a Horizon-backed {@link StellarIndexerClient}. Uses the resolved Horizon
- * URL from config (derived from STELLAR_NETWORK, overridable via HORIZON_URL).
+ * Event-driven indexer pipeline consuming spec events from ChainAdapter.streamEvents().
+ * Zero string-inference or memo-guessing. Persists event cursor across restarts.
  */
-export function createHorizonIndexerClient(
-  horizonUrl: string = config.horizonUrl
-): StellarIndexerClient {
-  const server = new Horizon.Server(horizonUrl);
-
-  return {
-    async getLatestLedger(): Promise<number> {
-      const page = await server.ledgers().limit(1).order('desc').call();
-      const record = page.records[0];
-      return record ? record.sequence : 0;
-    },
-    async getTransaction(hash: string): Promise<StellarTransaction | null> {
-      try {
-        const tx = await server.transactions().transaction(hash).call();
-        return {
-          hash: tx.hash,
-          ledger: tx.ledger_attr,
-          memo: tx.memo ?? undefined,
-          createdAt: tx.created_at,
-        };
-      } catch {
-        // Not found on the ledger yet — treated as "pending confirmation".
-        return null;
-      }
-    },
-  };
-}
-
-const DEFAULT_CONFIRMATIONS = 3;
-
-function toMilestoneEvent(memo?: string): MilestoneEvent {
-  const text = (memo ?? '').toUpperCase();
-
-  if (text.includes('TELEMETRY')) return MilestoneEvent.IN_TRANSIT;
-  if (text.includes('SETTLEMENT_INITIATED')) return MilestoneEvent.SETTLEMENT_INITIATED;
-  if (text.includes('PROOF_SUBMITTED')) return MilestoneEvent.PROOF_SUBMITTED;
-  if (text.includes('DELIVERED')) return MilestoneEvent.DELIVERED;
-  return MilestoneEvent.SETTLEMENT_COMPLETED;
-}
-
 export async function indexStellarTransactions(
-  client: StellarIndexerClient,
-  minConfirmations: number = DEFAULT_CONFIRMATIONS
-): Promise<{ processed: number; upserted: number; verified: number }> {
-  const payments = await PaymentModel.find({ stellarTxHash: { $exists: true, $ne: null } })
-    .select('_id shipmentId stellarTxHash')
-    .lean();
-
-  const telemetryRecords = await Telemetry.find({ stellarTxHash: { $exists: true, $ne: null } })
-    .select('_id shipmentId stellarTxHash')
-    .lean();
-
-  const seen = new Set<string>();
-  const latestLedger = await client.getLatestLedger();
-
+  adapter: ChainAdapter = getChainAdapter(),
+  initialCursor?: string
+): Promise<IndexerSummary> {
+  let cursor = initialCursor ?? (await getStoredCursor());
   let processed = 0;
   let upserted = 0;
-  let verified = 0;
 
-  for (const payment of payments) {
-    const txHash = String((payment as { stellarTxHash?: string }).stellarTxHash ?? '').trim();
-    if (!txHash || seen.has(txHash)) {
-      continue;
-    }
-    seen.add(txHash);
-
-    const tx = await client.getTransaction(txHash);
-    if (!tx) {
-      continue;
-    }
-
+  for await (const event of adapter.streamEvents(cursor)) {
     processed += 1;
-    const confirmations = Math.max(0, latestLedger - tx.ledger);
-    const isVerified = confirmations >= minConfirmations;
+    cursor = event.id;
 
-    if (isVerified) {
-      verified += 1;
-    }
-
-    const metadata = {
-      blockNumber: tx.ledger,
-      ledger: tx.ledger,
-      confirmations,
-      verified: isVerified,
-      memo: tx.memo,
+    let milestoneEvent: MilestoneEvent;
+    let shipmentId: string;
+    /** Anchor-only; promoted to the top-level indexed `LedgerBlock.dataHash` field. */
+    let dataHash: string | undefined;
+    const metadata: Record<string, unknown> = {
+      blockNumber: event.ledger,
+      ledger: event.ledger,
+      contractId: event.contract_id,
+      eventId: event.id,
       indexedAt: new Date().toISOString(),
     };
 
-    const result = await LedgerBlock.updateOne(
-      { transactionHash: tx.hash },
+    if (event.name === CHAIN_EVENT_NAMES.ANCHOR) {
+      milestoneEvent = MilestoneEvent.IN_TRANSIT;
+      shipmentId = event.topic[1];
+      dataHash = event.data[0];
+      metadata.dataHash = dataHash;
+    } else if (event.name === CHAIN_EVENT_NAMES.ESCROW_INIT) {
+      milestoneEvent = MilestoneEvent.SETTLEMENT_INITIATED;
+      shipmentId = event.data[0];
+      metadata.paymentId = event.topic[1];
+      metadata.payer = event.data[1];
+      metadata.payee = event.data[2];
+      metadata.token = event.data[3];
+      metadata.amount = event.data[4];
+    } else if (event.name === CHAIN_EVENT_NAMES.ESCROW_RELEASE) {
+      milestoneEvent = MilestoneEvent.SETTLEMENT_COMPLETED;
+      shipmentId = event.topic[1];
+      metadata.paymentId = event.topic[1];
+      metadata.proofHash = event.data[0];
+      metadata.payee = event.data[1];
+      metadata.amount = event.data[2];
+    } else {
+      continue;
+    }
+
+    const res = await LedgerBlock.updateOne(
+      { transactionHash: event.tx_hash },
       {
         $setOnInsert: {
-          shipmentId: String((payment as { shipmentId: unknown }).shipmentId),
-          eventType: toMilestoneEvent(tx.memo),
-          transactionHash: tx.hash,
+          shipmentId,
+          milestoneEvent,
+          transactionHash: event.tx_hash,
           actor: 'stellar-indexer',
         },
-        $set: { metadata },
-      },
-      { upsert: true }
-    );
-
-    if ((result as { upsertedCount?: number }).upsertedCount) {
-      upserted += 1;
-    }
-  }
-
-  for (const record of telemetryRecords) {
-    const txHash = String((record as { stellarTxHash?: string }).stellarTxHash ?? '').trim();
-    if (!txHash || seen.has(txHash)) {
-      continue;
-    }
-    seen.add(txHash);
-
-    const tx = await client.getTransaction(txHash);
-    if (!tx) {
-      continue;
-    }
-
-    processed += 1;
-    const confirmations = Math.max(0, latestLedger - tx.ledger);
-    const isVerified = confirmations >= minConfirmations;
-
-    if (isVerified) {
-      verified += 1;
-    }
-
-    const metadata = {
-      blockNumber: tx.ledger,
-      ledger: tx.ledger,
-      confirmations,
-      verified: isVerified,
-      memo: tx.memo,
-      indexedAt: new Date().toISOString(),
-    };
-
-    await Telemetry.updateOne(
-      { _id: (record as { _id: unknown })._id },
-      {
+        // dataHash lives in $set (not $setOnInsert) so re-indexing backfills rows
+        // written before it was promoted; Mongo rejects a path in both operators.
         $set: {
-          verified: isVerified,
-          confirmationMetadata: metadata,
+          milestoneEvent,
           metadata,
+          ...(dataHash !== undefined && { dataHash }),
         },
-      }
-    );
-
-    const eventType =
-      tx.memo &&
-      (tx.memo.toUpperCase().includes('SETTLEMENT') ||
-        tx.memo.toUpperCase().includes('PROOF') ||
-        tx.memo.toUpperCase().includes('DELIVERED'))
-        ? toMilestoneEvent(tx.memo)
-        : MilestoneEvent.IN_TRANSIT;
-
-    const result = await LedgerBlock.updateOne(
-      { transactionHash: tx.hash },
-      {
-        $setOnInsert: {
-          shipmentId: String((record as { shipmentId: unknown }).shipmentId),
-          eventType,
-          transactionHash: tx.hash,
-          actor: 'stellar-indexer',
-        },
-        $set: { metadata },
       },
       { upsert: true }
     );
 
-    if ((result as { upsertedCount?: number }).upsertedCount) {
+    if ((res as { upsertedCount?: number }).upsertedCount) {
       upserted += 1;
+    }
+
+    if (cursor) {
+      await saveStoredCursor(cursor);
     }
   }
 
-  return { processed, upserted, verified };
+  return { processed, upserted, lastCursor: cursor };
 }
 
-async function processIndexerJob(
-  _job: Job,
-  client: StellarIndexerClient
-): Promise<{ processed: number; upserted: number; verified: number }> {
-  const summary = await indexStellarTransactions(client);
-  logger.info(summary, 'Stellar indexer polling cycle complete');
+async function processIndexerJob(_job: Job): Promise<IndexerSummary> {
+  const summary = await indexStellarTransactions();
+  logger.info(summary, 'Stellar indexer event stream cycle complete');
   return summary;
 }
 
-export async function startStellarIndexerWorker(client: StellarIndexerClient): Promise<Worker> {
+export async function startStellarIndexerWorker(): Promise<Worker> {
   await connectMongo(config.mongoUri);
 
   const queue = new Queue(STELLAR_INDEXER_QUEUE, { connection: getBullMQConnection() });
@@ -233,7 +162,7 @@ export async function startStellarIndexerWorker(client: StellarIndexerClient): P
     }
   );
 
-  const worker = new Worker(STELLAR_INDEXER_QUEUE, async job => processIndexerJob(job, client), {
+  const worker = new Worker(STELLAR_INDEXER_QUEUE, async job => processIndexerJob(job), {
     connection: getBullMQConnection(),
     concurrency: 1,
   });
@@ -249,13 +178,10 @@ export async function startStellarIndexerWorker(client: StellarIndexerClient): P
   return worker;
 }
 
-// Self-start entrypoint. Fires only when executed as a script (node/tsx directly),
-// matching the docker/CI worker-topology decision; stays inert when imported by
-// the test-suite so module import has no side effects.
 const isDirectRun =
   process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href;
 if (isDirectRun) {
-  startStellarIndexerWorker(createHorizonIndexerClient()).catch(err => {
+  startStellarIndexerWorker().catch(err => {
     logger.error({ err }, 'Stellar indexer worker bootstrap failed');
     process.exitCode = 1;
   });

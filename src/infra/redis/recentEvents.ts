@@ -60,7 +60,7 @@ export async function pushRecentEvent(event: RealtimeEvent): Promise<void> {
       }
     }
   } catch (err) {
-    logger.error(err, 'recentEvents: failed to push event to Redis');
+    logger.error({ err }, 'recentEvents: failed to push event to Redis');
   }
 }
 

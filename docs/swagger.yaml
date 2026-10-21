@@ -2,6 +2,9 @@ openapi: 3.0.0
 info:
   title: Navin Backend API
   version: 1.0.0
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
   description: |
     Navin Backend is the logistics / supply-chain HTTP API for shipment lifecycle management,
     IoT telemetry ingest and anomaly detection, Stellar-backed settlements/payments, and
@@ -78,6 +81,7 @@ x-rate-limit:
 paths:
   /api/webhooks/iot:
     post:
+      operationId: webhooks_post_webhooks_iot
       tags:
         - Webhooks
       summary: IoT webhook — ingest telemetry into the anchoring pipeline
@@ -169,6 +173,7 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
   /api/webhooks/stellar:
     post:
+      operationId: webhooks_post_webhooks_stellar
       tags:
         - Webhooks
       summary: Stellar proof-of-delivery / settlement webhook
@@ -218,6 +223,9 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
   /api/health:
     get:
+      operationId: health_get_health
+      tags:
+        - Health
       summary: Health check
       description: Public health endpoint used by load balancers and uptime monitors.
       security: []
@@ -262,6 +270,7 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
   /api/notifications:
     get:
+      operationId: notifications_get_notifications
       tags: [Notifications]
       summary: List notifications
       description: >
@@ -331,6 +340,7 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
   /api/notifications/unread-count:
     get:
+      operationId: notifications_get_notifications_unread_count
       tags: [Notifications]
       summary: Get unread notifications count
       description: Returns the number of unread notifications for the authenticated user.
@@ -363,6 +373,7 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
   /api/notifications/read-all:
     post:
+      operationId: notifications_post_notifications_read_all
       tags: [Notifications]
       summary: Mark all notifications as read
       description: Marks every unread notification of the authenticated user as read.
@@ -396,6 +407,7 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
   /api/notifications/{id}/read:
     patch:
+      operationId: notifications_patch_notifications_id_read
       tags: [Notifications]
       summary: Mark a notification as read
       description: Marks the specified notification as read. Only the owning user can update it.
@@ -438,6 +450,7 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
   /api/notifications/{id}:
     delete:
+      operationId: notifications_delete_notifications_id
       tags: [Notifications]
       summary: Delete a notification
       description: Soft-deletes the specified notification. Only the owning user can delete it.
@@ -480,6 +493,7 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
   /api/notifications/preferences:
     get:
+      operationId: notifications_get_notifications_preferences
       tags: [Notifications]
       summary: Get notification channel preferences
       description: Returns all notification preferences for the authenticated user.
@@ -510,6 +524,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
     patch:
+      operationId: notifications_patch_notifications_preferences
       tags: [Notifications]
       summary: Update a notification preference
       description: >
@@ -527,7 +542,15 @@ paths:
               properties:
                 event:
                   type: string
-                  enum: [shipment_created, status_changed, delivery_confirmed, payment_received, dispute_opened, dispute_resolved]
+                  enum:
+                    [
+                      shipment_created,
+                      status_changed,
+                      delivery_confirmed,
+                      payment_received,
+                      dispute_opened,
+                      dispute_resolved,
+                    ]
                 channel:
                   type: string
                   enum: [email, sms]
@@ -563,6 +586,7 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
   /api/notifications/phone/send-otp:
     post:
+      operationId: notifications_post_notifications_phone_send_otp
       tags: [Notifications]
       summary: Send an SMS OTP to a phone number
       description: >
@@ -633,6 +657,7 @@ paths:
                     nullable: true
   /api/notifications/phone/verify-otp:
     post:
+      operationId: notifications_post_notifications_phone_verify_otp
       tags: [Notifications]
       summary: Verify an SMS OTP
       description: >
@@ -729,6 +754,7 @@ paths:
 
   /api/public/tracking/{trackingNumber}:
     get:
+      operationId: public_tracking_get_public_tracking_trackingnumber
       tags: [Public Tracking]
       summary: Public shipment tracking by tracking number
       description: |
@@ -736,6 +762,7 @@ paths:
         data suitable for public tracking pages. No authentication required.
         Rate limited to prevent abuse.
       x-implemented: true
+      x-required-role: none
       security: []
       parameters:
         - in: path
@@ -743,6 +770,8 @@ paths:
           required: true
           schema:
             type: string
+            pattern: '^[A-Za-z0-9_-]+$'
+            maxLength: 64
           description: Carrier tracking number (e.g., NVN-123456)
       responses:
         '200':
@@ -782,6 +811,7 @@ paths:
 
   /api/events:
     get:
+      operationId: events_get_events
       summary: Real-time event stream (SSE)
       description: |
         Status: implemented (x-implemented: true). Listed in API-QA #398 for completeness.
@@ -830,6 +860,10 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
   /api/auth/api-keys:
     post:
+      operationId: api_keys_post_auth_api_keys
+      tags:
+        - API Keys
+      x-required-role: [ADMIN, SUPER_ADMIN]
       summary: Create a new API key
       description: Generates a new API key for machine-to-machine authentication. The raw API key is returned only once.
       security:
@@ -894,6 +928,7 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
   /api/auth/sessions:
     get:
+      operationId: auth_get_auth_sessions
       summary: List active sessions
       description: |
         Returns all active session records for the authenticated user (one per device/login).
@@ -928,6 +963,7 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
   /api/auth/sessions/{jti}:
     delete:
+      operationId: auth_delete_auth_sessions_jti
       summary: Revoke a session
       description: |
         Blocklists the token identified by `jti` in Redis and removes the session record.
@@ -984,6 +1020,9 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
   /api/auth/signup:
     post:
+      operationId: auth_post_auth_signup
+      tags:
+        - Auth
       summary: Register a new user
       security: []
       description: Creates a new user account. organizationId is optional. Public signup does not allow privileged role assignment.
@@ -1050,10 +1089,11 @@ paths:
                     nullable: true
   /api/auth/register/company:
     post:
+      operationId: auth_post_auth_register_company
       summary: Self-service company registration
       description: |
         Creates both an Organization (type: ENTERPRISE) and its first admin user in a single atomic operation.
-        
+
         This endpoint enables self-service company onboarding without requiring a SUPER_ADMIN to pre-provision organizations.
         It creates:
         1. An Organization with type ENTERPRISE and company settings (industry, country, company size)
@@ -1155,12 +1195,14 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
   /api/company/api-keys:
     post:
+      operationId: api_keys_post_company_api_keys
+      x-required-role: [ADMIN, SUPER_ADMIN]
       summary: Create a new API key
       description: |
         Generates a new API key for machine-to-machine authentication.
         The API key is derived from the caller's organization (taken from JWT claims).
         The raw API key secret is returned exactly once and should be stored securely.
-        
+
         This endpoint replaces the deprecated `/api/auth/api-keys` route.
       tags:
         - API Keys
@@ -1234,11 +1276,13 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
     get:
+      operationId: api_keys_get_company_api_keys
+      x-required-role: [ADMIN, SUPER_ADMIN]
       summary: List all active API keys
       description: |
         Returns all active API keys for the caller's organization.
         organizationId is derived from the JWT — no query parameter needed.
-        
+
         This endpoint replaces the deprecated `/api/auth/api-keys/{organizationId}` route.
       tags:
         - API Keys
@@ -1292,12 +1336,14 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
   /api/company/api-keys/{apiKeyId}:
     delete:
+      operationId: api_keys_delete_company_api_keys_apikeyid
+      x-required-role: [ADMIN, SUPER_ADMIN]
       summary: Revoke an API key
       description: |
         Soft-revokes an API key by setting `isActive = false`.
         The key cannot be used after revocation, but the record is retained for audit purposes.
         Only API keys belonging to the caller's organization can be revoked.
-        
+
         This endpoint replaces the deprecated `/api/auth/api-keys/{apiKeyId}` route.
       tags:
         - API Keys
@@ -1347,6 +1393,8 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
   /api/company/invitations:
     post:
+      operationId: invitations_post_company_invitations
+      x-required-role: [ADMIN, SUPER_ADMIN]
       summary: Create and send invitation
       description: Send an invitation to a new team member (requires ADMIN role).
       security:
@@ -1412,6 +1460,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
     get:
+      operationId: invitations_get_company_invitations
+      x-required-role: [ADMIN, SUPER_ADMIN]
       summary: List organization invitations
       description: Get all invitations for the organization (requires ADMIN role).
       security:
@@ -1495,6 +1545,8 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
   /api/company/invitations/{id}/resend:
     post:
+      operationId: invitations_post_company_invitations_id_resend
+      x-required-role: [ADMIN, SUPER_ADMIN]
       summary: Resend invitation
       description: Resend an invitation with a new token and refresh expiry (requires ADMIN role).
       security:
@@ -1550,6 +1602,8 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
   /api/company/invitations/{id}:
     delete:
+      operationId: invitations_delete_company_invitations_id
+      x-required-role: [ADMIN, SUPER_ADMIN]
       summary: Revoke invitation
       description: Revoke an invitation preventing further acceptance (requires ADMIN role).
       security:
@@ -1597,6 +1651,7 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
   /api/company/invitations/info:
     get:
+      operationId: invitations_get_company_invitations_info
       summary: Get invitation info from token
       description: Get invitation details without authentication (public endpoint).
       security: []
@@ -1643,6 +1698,7 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
   /api/company/invitations/accept:
     post:
+      operationId: invitations_post_company_invitations_accept
       summary: Accept invitation and create account
       description: Accept an invitation and create a user account (public endpoint).
       security: []
@@ -1703,6 +1759,10 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
   /api/audit-logs:
     get:
+      operationId: audit_logs_get_audit_logs
+      tags:
+        - Audit Logs
+      x-required-role: [SUPER_ADMIN, ADMIN]
       summary: Retrieve compliance audit logs
       description: Returns audit history for compliance and traceability with filter and cursor pagination support.
       security:
@@ -1799,6 +1859,10 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
   /api/activity:
     get:
+      operationId: audit_logs_get_activity
+      tags:
+        - Audit Logs
+      x-required-role: [ADMIN, MANAGER, VIEWER, SUPER_ADMIN]
       summary: Get activity feed
       description: |
         Returns a paginated activity feed of platform-wide events ordered
@@ -1939,6 +2003,10 @@ paths:
 
   /api/shipment-templates:
     get:
+      operationId: shipment_templates_get_shipment_templates
+      tags:
+        - Shipment Templates
+      x-required-role: [ADMIN, MANAGER, VIEWER]
       summary: List all shipment templates for the caller's organization
       security:
         - bearerAuth: []
@@ -1963,6 +2031,10 @@ paths:
         '403':
           description: Forbidden
     post:
+      operationId: shipment_templates_post_shipment_templates
+      tags:
+        - Shipment Templates
+      x-required-role: [ADMIN, MANAGER]
       summary: Create a new shipment template
       security:
         - bearerAuth: []
@@ -1994,6 +2066,10 @@ paths:
           description: Forbidden
   /api/shipment-templates/{id}:
     get:
+      operationId: shipment_templates_get_shipment_templates_id
+      tags:
+        - Shipment Templates
+      x-required-role: [ADMIN, MANAGER, VIEWER]
       summary: Get a shipment template by ID
       security:
         - bearerAuth: []
@@ -2024,6 +2100,10 @@ paths:
         '404':
           description: Template not found
     patch:
+      operationId: shipment_templates_patch_shipment_templates_id
+      tags:
+        - Shipment Templates
+      x-required-role: [ADMIN, MANAGER]
       summary: Update a shipment template
       security:
         - bearerAuth: []
@@ -2062,6 +2142,10 @@ paths:
         '404':
           description: Template not found
     delete:
+      operationId: shipment_templates_delete_shipment_templates_id
+      tags:
+        - Shipment Templates
+      x-required-role: [ADMIN, MANAGER]
       summary: Soft-delete a shipment template
       security:
         - bearerAuth: []
@@ -2092,8 +2176,10 @@ paths:
         '404':
           description: Template not found
   /api/auth/login:
-
     post:
+      operationId: auth_post_auth_login
+      tags:
+        - Auth
       summary: Authenticate a user
       security: []
       requestBody:
@@ -2157,11 +2243,12 @@ paths:
                     nullable: true
   /api/auth/refresh:
     post:
+      operationId: auth_post_auth_refresh
       summary: Refresh authentication token
       description: |
         Refreshes an expired or expiring JWT by providing the old token.
         The old token's `jti` is blocklisted, preventing reuse.
-        
+
         Returns a new JWT valid for 7 days with fresh claims (userId, organizationId, role).
         Useful for maintaining user sessions without requiring re-login.
       tags:
@@ -2232,6 +2319,9 @@ paths:
                   code: ERR_AUTH_INVALID
   /api/auth/logout:
     post:
+      operationId: auth_post_auth_logout
+      tags:
+        - Auth
       summary: Logout current user
       description: Invalidates the current JWT (server-side revocation). Requires Authorization header.
       security:
@@ -2259,6 +2349,7 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
   /api/auth/forgot-password:
     post:
+      operationId: auth_post_auth_forgot_password
       summary: Request a password reset email
       description: >-
         Sends a password reset email to the specified address. Always returns a
@@ -2300,8 +2391,69 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /api/auth/reset-password:
+    post:
+      summary: Reset a password with a reset token
+      description: >-
+        Completes the password-reset flow started by
+        `POST /api/auth/forgot-password`. Exchanges the emailed reset token for
+        a new password and invalidates the token. Public route (no bearer token
+        required); rate-limited per IP.
+      tags:
+        - Auth
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - token
+                - newPassword
+              properties:
+                token:
+                  type: string
+                  minLength: 1
+                  description: Reset token from the password-reset email link
+                newPassword:
+                  type: string
+                  minLength: 8
+                  description: Replacement password (at least 8 characters)
+      responses:
+        '200':
+          description: Password reset successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Password reset successfully
+                  data:
+                    type: string
+                    nullable: true
+        '400':
+          description: >-
+            Validation error (missing/short token or password) or invalid,
+            expired, or wrong-type reset token (`ERR_AUTH_INVALID_RESET_TOKEN`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '429':
+          description: Too many reset attempts — rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/auth/2fa/setup:
     post:
+      operationId: auth_post_auth_2fa_setup
       summary: Initiate TOTP 2FA setup
       description: |
         Generates a TOTP secret for the authenticated user and returns an `otpauth://` URI
@@ -2346,6 +2498,7 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
   /api/auth/2fa/verify:
     post:
+      operationId: auth_post_auth_2fa_verify
       summary: Verify first TOTP code and enable 2FA
       description: |
         Validates the first TOTP code after setup. On success, enables 2FA and returns
@@ -2423,6 +2576,7 @@ paths:
                     nullable: true
   /api/auth/2fa:
     delete:
+      operationId: auth_delete_auth_2fa
       summary: Disable 2FA
       description: |
         Disables 2FA on the account after verifying the user's current password.
@@ -2472,6 +2626,7 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
   /api/auth/2fa/backup-codes/regenerate:
     post:
+      operationId: auth_post_auth_2fa_backup_codes_regenerate
       summary: Regenerate backup codes
       description: |
         Invalidates all existing backup codes and issues 10 new single-use codes.
@@ -2512,15 +2667,22 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
-  /api/auth/api-keys/{id}:
+  /api/auth/api-keys/{organizationId}:
     get:
+      operationId: api_keys_get_auth_api_keys_id
       summary: List API keys for an organization
-      description: Returns all active API keys for the specified organization (without exposing the raw keys)
+      description: >-
+        Deprecated alias of `GET /api/company/api-keys`. Returns all active API
+        keys for the specified organization (without exposing the raw keys).
+        Requires JWT auth plus ADMIN or SUPER_ADMIN role.
+      tags:
+        - API Keys
       security:
         - bearerAuth: []
+      x-required-role: [ADMIN, SUPER_ADMIN]
       parameters:
         - in: path
-          name: id
+          name: organizationId
           required: true
           schema:
             type: string
@@ -2560,14 +2722,28 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Insufficient role permissions (ADMIN / SUPER_ADMIN required)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/auth/api-keys/{apiKeyId}:
     delete:
+      operationId: api_keys_delete_auth_api_keys_id
       summary: Revoke an API key
-      description: Deactivates an API key, preventing it from being used for authentication
+      description: >-
+        Deprecated alias of `DELETE /api/company/api-keys/{apiKeyId}`.
+        Deactivates an API key, preventing it from being used for
+        authentication. Requires JWT auth plus ADMIN or SUPER_ADMIN role.
+      tags:
+        - API Keys
       security:
         - bearerAuth: []
+      x-required-role: [ADMIN, SUPER_ADMIN]
       parameters:
         - in: path
-          name: id
+          name: apiKeyId
           required: true
           schema:
             type: string
@@ -2588,6 +2764,12 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Insufficient role permissions (ADMIN / SUPER_ADMIN required)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '404':
           description: API key not found
           content:
@@ -2596,6 +2778,7 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
   /api/users/me:
     get:
+      operationId: users_get_users_me
       summary: Get current authenticated user's profile
       description: Returns the profile of the authenticated user (excluding passwordHash). Requires valid JWT.
       security:
@@ -2645,6 +2828,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
     patch:
+      operationId: users_patch_users_me
       summary: Update current authenticated user's profile
       description: >-
         Updates the authenticated user's profile. Supports updating name, email,
@@ -2728,6 +2912,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
     delete:
+      operationId: users_delete_users_me
       summary: Delete current authenticated user
       description: >-
         Soft-deletes the authenticated user by setting deletedAt and blocklists
@@ -2776,6 +2961,10 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
   /api/users/invitations:
     post:
+      operationId: users_post_users_invitations
+      tags:
+        - Users
+      x-required-role: [ADMIN, SUPER_ADMIN]
       summary: Generate user invitation link
       description: >-
         Creates a signed 48-hour invitation token bound to the inviter
@@ -2810,6 +2999,9 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
   /api/users/invitations/verify:
     get:
+      operationId: users_get_users_invitations_verify
+      tags:
+        - Users
       summary: Verify invitation token
       security: []
       parameters:
@@ -2829,6 +3021,9 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
   /api/users/invitations/accept:
     post:
+      operationId: users_post_users_invitations_accept
+      tags:
+        - Users
       summary: Accept invitation and create account
       security: []
       requestBody:
@@ -2859,6 +3054,10 @@ paths:
           description: Email already in use
   /api/users/{id}:
     delete:
+      operationId: users_delete_users_id
+      tags:
+        - Users
+      x-required-role: [ADMIN, SUPER_ADMIN]
       summary: Delete a user (soft delete)
       description: Soft-deletes a user by setting deletedAt. Requires ADMIN or SUPER_ADMIN role.
       security:
@@ -2926,6 +3125,8 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
   /api/users:
     post:
+      operationId: users_post_users
+      x-required-role: [ADMIN, SUPER_ADMIN]
       summary: Create a new user (admin only)
       description: >
         Creates a new user within the authenticated admin's organization.
@@ -3003,6 +3204,10 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
     get:
+      operationId: users_get_users
+      tags:
+        - Users
+      x-required-role: [ADMIN, MANAGER, SUPER_ADMIN]
       summary: List users
       description: >-
         Returns a paginated list of users within the caller's organization.
@@ -3120,6 +3325,10 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
   /api/users/team:
     post:
+      operationId: users_post_users_team
+      tags:
+        - Users
+      x-required-role: [ADMIN, SUPER_ADMIN]
       summary: Create a user as a team member (admin only)
       description: Create a user within the organization. Requires ADMIN or SUPER_ADMIN role.
       security:
@@ -3147,6 +3356,10 @@ paths:
           description: Forbidden
   /api/analytics/performance:
     get:
+      operationId: analytics_get_analytics_performance
+      tags:
+        - Analytics
+      x-required-role: [ADMIN, MANAGER]
       summary: Get analytics performance dashboard
       security:
         - bearerAuth: []
@@ -3246,6 +3459,8 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
   /api/analytics/summary:
     get:
+      operationId: analytics_get_analytics_summary
+      x-required-role: [ADMIN, MANAGER]
       summary: Get KPI summary with 30-day sparklines
       description: |
         Returns dashboard KPIs with 30-day sparklines for visualization.
@@ -3295,7 +3510,39 @@ paths:
                           minimum: 0
                           maximum: 100
                         description: 30-day sparkline of on-time rates (one value per day)
-                        example: [85, 86, 84, 87, 85, 86, 85, 84, 85, 86, 87, 85, 84, 86, 85, 86, 85, 87, 86, 85, 84, 85, 86, 85, 84, 85, 86, 87, 85, 86]
+                        example:
+                          [
+                            85,
+                            86,
+                            84,
+                            87,
+                            85,
+                            86,
+                            85,
+                            84,
+                            85,
+                            86,
+                            87,
+                            85,
+                            84,
+                            86,
+                            85,
+                            86,
+                            85,
+                            87,
+                            86,
+                            85,
+                            84,
+                            85,
+                            86,
+                            85,
+                            84,
+                            85,
+                            86,
+                            87,
+                            85,
+                            86,
+                          ]
                       averageTransitDays:
                         type: number
                         description: Current 30-day average transit time in days
@@ -3361,6 +3608,9 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
   /api/payments:
     get:
+      operationId: payments_get_payments
+      tags:
+        - Payments
       summary: Get payments history (legacy — prefer /api/settlements)
       description: Returns settlement records for the authenticated user's organization. Both `/api/payments` and `/api/settlements` resolve to the same router.
       security:
@@ -3460,6 +3710,10 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
     post:
+      operationId: payments_post_payments
+      tags:
+        - Payments
+      x-required-role: [ADMIN, SUPER_ADMIN]
       summary: Create a payment / settlement
       description: |
         Creates a settlement record tied to a shipment. Both `/api/payments` and
@@ -3467,7 +3721,6 @@ paths:
         Provide `token` (preferred) or legacy `tokenType` (`XLMN` | `USDC` | `Other`).
       security:
         - bearerAuth: []
-      x-required-role: [ADMIN, SUPER_ADMIN]
       requestBody:
         required: true
         content:
@@ -3537,8 +3790,72 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /api/payments/summary:
+    get:
+      summary: Get settlement summary (legacy payments alias)
+      description: |
+        Legacy alias of `GET /api/settlements/summary` — both `/api/payments` and
+        `/api/settlements` resolve to the same router. Returns aggregated
+        settlement totals and a per-day sparkline array for the chosen period.
+        Results are cached in Redis for 5 minutes.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: period
+          schema:
+            type: string
+            enum: [week, month, quarter]
+            default: week
+          description: Aggregation window. `week`=7 days, `month`=30 days, `quarter`=90 days.
+      responses:
+        '200':
+          description: Summary retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      totalReleased:
+                        type: number
+                        description: Sum of released settlement amounts in the period.
+                      totalInEscrow:
+                        type: number
+                        description: Sum of escrowed settlement amounts in the period.
+                      totalPending:
+                        type: number
+                        description: Sum of pending settlement amounts in the period.
+                      sparkline:
+                        type: array
+                        items:
+                          type: number
+                        description: One entry per day in the period (released amounts per day).
+                      period:
+                        type: string
+                        enum: [week, month, quarter]
+        '400':
+          description: Invalid period value
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
   /api/payments/{id}:
     get:
+      operationId: payments_get_payments_id
+      tags:
+        - Payments
       summary: Get payment / settlement by ID
       description: |
         Returns a single settlement (same handler as `GET /api/settlements/{id}`).
@@ -3583,13 +3900,16 @@ paths:
 
   /api/payments/{id}/status:
     patch:
+      operationId: payments_patch_payments_id_status
+      tags:
+        - Payments
+      x-required-role: [ADMIN, SUPER_ADMIN]
       summary: Update payment / settlement status
       description: |
         Advances settlement lifecycle status and optionally records `stellarTxHash`.
         Requires JWT auth and ADMIN or SUPER_ADMIN.
       security:
         - bearerAuth: []
-      x-required-role: [ADMIN, SUPER_ADMIN]
       parameters:
         - in: path
           name: id
@@ -3653,8 +3973,82 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /api/payments/{id}/dispute:
+    post:
+      summary: Dispute a payment / settlement (legacy payments alias)
+      description: |
+        Legacy alias of `POST /api/settlements/{id}/dispute` — both `/api/payments`
+        and `/api/settlements` resolve to the same router. Transitions the
+        settlement status to `Disputed` and records dispute metadata
+        (`disputedAt`, `disputeReason`, `additionalNotes`) in `escrowRelease`.
+        Requires JWT auth and ADMIN or MANAGER role.
+      security:
+        - bearerAuth: []
+      x-required-role: [ADMIN, MANAGER]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            minLength: 1
+          description: Payment / settlement ObjectId.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - reason
+              properties:
+                reason:
+                  type: string
+                  minLength: 1
+                  description: Reason for the dispute.
+                notes:
+                  type: string
+                  description: Optional additional context.
+      responses:
+        '200':
+          description: Settlement disputed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: '#/components/schemas/Settlement'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Forbidden — requires ADMIN or MANAGER role
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Payment not found (`ERR_PAYMENT_NOT_FOUND`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /api/settlements:
     get:
+      operationId: settlements_get_settlements
+      tags:
+        - Settlements
       summary: List settlements
       description: Returns settlement records for the authenticated user's organization (cursor-paginated).
       security:
@@ -3739,8 +4133,87 @@ paths:
         '403':
           $ref: '#/components/responses/Forbidden'
 
+    post:
+      summary: Create a settlement
+      description: |
+        Creates a settlement record tied to a shipment. Canonical settlement
+        creation endpoint — `/api/payments` shares this router, so this operation
+        is contract-identical to `POST /api/payments`.
+        Requires JWT auth and ADMIN or SUPER_ADMIN.
+        Provide `token` (preferred) or legacy `tokenType` (`XLMN` | `USDC` | `Other`).
+      security:
+        - bearerAuth: []
+      x-required-role: [ADMIN, SUPER_ADMIN]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - shipmentId
+                - amount
+              properties:
+                shipmentId:
+                  type: string
+                  minLength: 1
+                  description: MongoDB ObjectId of the related shipment.
+                amount:
+                  type: number
+                  minimum: 0
+                  exclusiveMinimum: true
+                  description: Positive settlement amount.
+                token:
+                  type: string
+                  enum: [XLMN, USDC, Other]
+                  description: Preferred on-chain asset field.
+                tokenType:
+                  type: string
+                  enum: [XLMN, USDC, Other]
+                  description: Deprecated alias for token (backward compatibility).
+                payerAddress:
+                  type: string
+                payeeAddress:
+                  type: string
+                status:
+                  type: string
+                  enum: [Pending, Escrowed, Released, Failed, Disputed]
+                  default: Pending
+      responses:
+        '201':
+          description: Settlement created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                    example: Payment created successfully
+                  data:
+                    $ref: '#/components/schemas/Settlement'
+        '400':
+          description: Validation error (e.g. missing token/tokenType, non-positive amount)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Insufficient role permissions (ADMIN / SUPER_ADMIN required)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /api/settlements/summary:
     get:
+      operationId: settlements_get_settlements_summary
+      tags:
+        - Settlements
       summary: Get settlement summary with sparkline
       description: |
         Returns aggregated settlement totals and a per-day sparkline array for the chosen period.
@@ -3800,6 +4273,9 @@ paths:
 
   /api/settlements/{id}:
     get:
+      operationId: settlements_get_settlements_id
+      tags:
+        - Settlements
       summary: Get settlement detail
       description: Returns full settlement detail including escrowRelease subdocument.
       security:
@@ -3836,8 +4312,82 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /api/settlements/{id}/status:
+    patch:
+      summary: Update settlement status
+      description: |
+        Canonical settlement status transition — contract-identical to
+        `PATCH /api/payments/{id}/status` (both paths share the payments router).
+        Advances settlement lifecycle status and optionally records
+        `stellarTxHash`. Requires JWT auth and ADMIN or SUPER_ADMIN.
+      security:
+        - bearerAuth: []
+      x-required-role: [ADMIN, SUPER_ADMIN]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            minLength: 1
+          description: Settlement ObjectId.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - status
+              properties:
+                status:
+                  type: string
+                  enum: [Pending, Escrowed, Released, Failed, Disputed]
+                stellarTxHash:
+                  type: string
+                  description: Optional on-chain transaction hash for audit.
+      responses:
+        '200':
+          description: Settlement status updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                    example: Payment status updated successfully
+                  data:
+                    $ref: '#/components/schemas/Settlement'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Insufficient role permissions (ADMIN / SUPER_ADMIN required)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Settlement not found (`ERR_PAYMENT_NOT_FOUND`)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /api/settlements/{id}/dispute:
     post:
+      operationId: settlements_post_settlements_id_dispute
+      tags:
+        - Settlements
+      x-required-role: [ADMIN, MANAGER]
       summary: Dispute a settlement
       description: |
         Transitions the settlement status to `Disputed` and records dispute metadata
@@ -3904,6 +4454,9 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
   /api/telemetry:
     get:
+      operationId: telemetry_get_telemetry
+      tags:
+        - Telemetry
       summary: Get telemetry records
       description: Retrieve telemetry time-series points with optional shipment filtering and pagination.
       security:
@@ -4027,6 +4580,9 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
   /api/telemetry/bulk:
     post:
+      operationId: telemetry_post_telemetry_bulk
+      tags:
+        - Telemetry
       summary: Bulk ingest telemetry readings
       description: |
         Authenticated batch ingest of sensor readings (JWT). Batch size is 1–1000 items
@@ -4121,222 +4677,244 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
   /api/organizations:
-     post:
-       summary: Create an organization
-       description: Creates a new organization. Requires SUPER_ADMIN role.
-       security:
-         - bearerAuth: []
-       requestBody:
-         required: true
-         content:
-           application/json:
-             schema:
-               type: object
-               required: [name, type]
-               properties:
-                 name:
-                   type: string
-                   description: Organization name
-                 type:
-                   type: string
-                   enum: [ENTERPRISE, LOGISTICS]
-                   description: Organization type
-                 settings:
-                   type: object
-                   description: Optional organization settings
-       responses:
-         '201':
-           description: Organization created successfully
-           content:
-             application/json:
-               schema:
-                 $ref: '#/components/schemas/Organization'
-         '401':
-           description: Unauthorized
-           content:
-             application/json:
-               schema:
-                 $ref: '#/components/schemas/ErrorResponse'
-         '403':
-           description: Forbidden - not SUPER_ADMIN
-           content:
-             application/json:
-               schema:
-                 $ref: '#/components/schemas/ErrorResponse'
-         '409':
-           description: Organization already exists
-           content:
-             application/json:
-               schema:
-                 $ref: '#/components/schemas/ErrorResponse'
-     get:
-       summary: List all organizations
-       description: Lists all organizations. Requires SUPER_ADMIN role.
-       security:
-         - bearerAuth: []
-       responses:
-         '200':
-           description: Organizations retrieved successfully
-           content:
-             application/json:
-               schema:
-                 type: object
-                 properties:
-                   success:
-                     type: boolean
-                   message:
-                     type: string
-                   data:
-                     type: array
-                     items:
-                       $ref: '#/components/schemas/Organization'
-         '401':
-           description: Unauthorized
-           content:
-             application/json:
-               schema:
-                 $ref: '#/components/schemas/ErrorResponse'
-         '403':
-           description: Forbidden - not SUPER_ADMIN
-           content:
-             application/json:
-               schema:
-                 $ref: '#/components/schemas/ErrorResponse'
+    post:
+      operationId: organizations_post_organizations
+      tags:
+        - Organizations
+      x-required-role: [SUPER_ADMIN]
+      summary: Create an organization
+      description: Creates a new organization. Requires SUPER_ADMIN role.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, type]
+              properties:
+                name:
+                  type: string
+                  description: Organization name
+                type:
+                  type: string
+                  enum: [ENTERPRISE, LOGISTICS]
+                  description: Organization type
+                settings:
+                  type: object
+                  description: Optional organization settings
+      responses:
+        '201':
+          description: Organization created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden - not SUPER_ADMIN
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Organization already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    get:
+      operationId: organizations_get_organizations
+      tags:
+        - Organizations
+      x-required-role: [SUPER_ADMIN]
+      summary: List all organizations
+      description: Lists all organizations. Requires SUPER_ADMIN role.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Organizations retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Organization'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden - not SUPER_ADMIN
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/organizations/{id}:
-     get:
-       summary: Get organization by ID
-       description: Get a single organization. ADMIN can read own; SUPER_ADMIN can read any.
-       security:
-         - bearerAuth: []
-       parameters:
-         - in: path
-           name: id
-           required: true
-           schema:
-             type: string
-       responses:
-         '200':
-           description: Organization retrieved successfully
-           content:
-             application/json:
-               schema:
-                 $ref: '#/components/schemas/Organization'
-         '401':
-           description: Unauthorized
-           content:
-             application/json:
-               schema:
-                 $ref: '#/components/schemas/ErrorResponse'
-         '403':
-           description: Forbidden - insufficient role or cross-org access
-           content:
-             application/json:
-               schema:
-                 $ref: '#/components/schemas/ErrorResponse'
-         '404':
-           description: Organization not found
-           content:
-             application/json:
-               schema:
-                 $ref: '#/components/schemas/ErrorResponse'
-     patch:
-       summary: Update organization
-       description: Update organization details. ADMIN can update own; SUPER_ADMIN can update any. ADMIN cannot modify type.
-       security:
-         - bearerAuth: []
-       parameters:
-         - in: path
-           name: id
-           required: true
-           schema:
-             type: string
-       requestBody:
-         required: true
-         content:
-           application/json:
-             schema:
-               type: object
-               properties:
-                 name:
-                   type: string
-                 settings:
-                   type: object
-       responses:
-         '200':
-           description: Organization updated successfully
-           content:
-             application/json:
-               schema:
-                 $ref: '#/components/schemas/Organization'
-         '400':
-           description: Validation error
-           content:
-             application/json:
-               schema:
-                 $ref: '#/components/schemas/ErrorResponse'
-         '401':
-           description: Unauthorized
-           content:
-             application/json:
-               schema:
-                 $ref: '#/components/schemas/ErrorResponse'
-         '403':
-           description: Forbidden - insufficient role or cross-org access
-           content:
-             application/json:
-               schema:
-                 $ref: '#/components/schemas/ErrorResponse'
-         '404':
-           description: Organization not found
-           content:
-             application/json:
-               schema:
-                 $ref: '#/components/schemas/ErrorResponse'
-     delete:
-       summary: Delete an organization
-       description: Soft-delete an organization. Requires SUPER_ADMIN role.
-       security:
-         - bearerAuth: []
-       parameters:
-         - in: path
-           name: id
-           required: true
-           schema:
-             type: string
-       responses:
-         '200':
-           description: Organization deleted successfully
-           content:
-             application/json:
-               schema:
-                 type: object
-                 properties:
-                   success:
-                     type: boolean
-                   message:
-                     type: string
-                   data:
-                     $ref: '#/components/schemas/Organization'
-         '401':
-           description: Unauthorized
-           content:
-             application/json:
-               schema:
-                 $ref: '#/components/schemas/ErrorResponse'
-         '403':
-           description: Forbidden - not SUPER_ADMIN
-           content:
-             application/json:
-               schema:
-                 $ref: '#/components/schemas/ErrorResponse'
-         '404':
-           description: Organization not found
-           content:
-             application/json:
-               schema:
-                 $ref: '#/components/schemas/ErrorResponse'
+    get:
+      operationId: organizations_get_organizations_id
+      tags:
+        - Organizations
+      x-required-role: [ADMIN, SUPER_ADMIN]
+      summary: Get organization by ID
+      description: Get a single organization. ADMIN can read own; SUPER_ADMIN can read any.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Organization retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden - insufficient role or cross-org access
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Organization not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    patch:
+      operationId: organizations_patch_organizations_id
+      tags:
+        - Organizations
+      x-required-role: [ADMIN, SUPER_ADMIN]
+      summary: Update organization
+      description: Update organization details. ADMIN can update own; SUPER_ADMIN can update any. ADMIN cannot modify type.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                settings:
+                  type: object
+      responses:
+        '200':
+          description: Organization updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden - insufficient role or cross-org access
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Organization not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    delete:
+      operationId: deleteOrganization
+      tags:
+        - Organizations
+      x-required-role: [SUPER_ADMIN]
+      summary: Delete an organization
+      description: Soft-delete an organization. Requires SUPER_ADMIN role.
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Organization deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: '#/components/schemas/Organization'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Forbidden - not SUPER_ADMIN
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Organization not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/shipments/export:
     get:
+      operationId: shipments_get_shipments_export
+      x-required-role: [ADMIN, MANAGER]
       summary: Export shipments as CSV or JSON
       description: |
         Downloads filtered shipments as a CSV or JSON attachment.
@@ -4345,7 +4923,6 @@ paths:
         - Shipments
       security:
         - bearerAuth: []
-      x-required-role: [ADMIN, MANAGER]
       parameters:
         - in: query
           name: format
@@ -4414,6 +4991,7 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
   /api/auth/password:
     patch:
+      operationId: auth_patch_auth_password
       summary: Change authenticated user's password
       description: |
         Verifies `currentPassword` against the stored hash. If correct, hashes
@@ -4472,6 +5050,10 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
   /api/shipments:
     get:
+      operationId: shipments_get_shipments
+      tags:
+        - Shipments
+      x-required-role: [ADMIN, MANAGER, VIEWER]
       summary: Get paginated shipments with offset-based pagination
       description: Returns a paginated list of shipments. Uses offset-based pagination with page and limit parameters.
       security:
@@ -4605,12 +5187,16 @@ paths:
                 message: Validation failed - limit must be between 1 and 100
                 data: null
                 error:
-                  code: ERR_VALIDATION_FAILED
+                  code: VALIDATION_ERROR
                 details:
                   - path: limit
                     message: limit must be between 1 and 100
                     code: too_big
     post:
+      operationId: shipments_post_shipments
+      tags:
+        - Shipments
+      x-required-role: [MANAGER, ADMIN]
       summary: Create a shipment
       security:
         - bearerAuth: []
@@ -4662,6 +5248,10 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
   /api/shipments/{id}:
     get:
+      operationId: shipments_get_shipments_id
+      tags:
+        - Shipments
+      x-required-role: [SUPER_ADMIN, ADMIN, MANAGER, VIEWER]
       summary: Get a single shipment by ID
       description: |
         Returns a single shipment wrapped in the standard API envelope
@@ -4670,7 +5260,6 @@ paths:
         limited to shipments in their organization.
       security:
         - bearerAuth: []
-      x-required-role: [SUPER_ADMIN, ADMIN, MANAGER, VIEWER]
       parameters:
         - in: path
           name: id
@@ -4718,6 +5307,10 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
     patch:
+      operationId: shipments_patch_shipments_id
+      tags:
+        - Shipments
+      x-required-role: [ADMIN, MANAGER]
       summary: Update off-chain metadata
       security:
         - bearerAuth: []
@@ -4764,6 +5357,10 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
     delete:
+      operationId: shipments_delete_shipments_id
+      tags:
+        - Shipments
+      x-required-role: [ADMIN, MANAGER]
       summary: Delete a shipment
       description: Soft-delete a shipment. Requires ADMIN or MANAGER role.
       security:
@@ -4791,6 +5388,8 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
   /api/shipments/{id}/timeline:
     get:
+      operationId: shipments_get_shipments_id_timeline
+      x-required-role: [ADMIN, MANAGER, VIEWER]
       tags:
         - Shipments
       summary: Get unified shipment activity timeline
@@ -4875,6 +5474,10 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
   /api/shipments/{id}/proof:
     post:
+      operationId: shipments_post_shipments_id_proof
+      tags:
+        - Shipments
+      x-required-role: [ADMIN, MANAGER]
       summary: Upload proof of delivery for a shipment
       security:
         - bearerAuth: []
@@ -4939,6 +5542,10 @@ paths:
           description: Storage unavailable
   /api/shipments/{id}/documents:
     post:
+      operationId: shipments_post_shipments_id_documents
+      tags:
+        - Shipments
+      x-required-role: [ADMIN, MANAGER]
       summary: Upload a document to a shipment
       description: >
         Upload a document (PDF or image) for a shipment. Maximum file size is 10MB.
@@ -4997,6 +5604,10 @@ paths:
           description: Storage unavailable
   /api/shipments/{id}/photos:
     post:
+      operationId: shipments_post_shipments_id_photos
+      tags:
+        - Shipments
+      x-required-role: [ADMIN, MANAGER]
       summary: Upload a photo to a shipment
       description: >
         Upload a photo (image only) for a shipment. Maximum file size is 5MB.
@@ -5055,6 +5666,10 @@ paths:
           description: Storage unavailable
   /api/shipments/{id}/disputes:
     post:
+      operationId: shipments_post_shipments_id_disputes
+      tags:
+        - Shipments
+      x-required-role: [ADMIN, MANAGER]
       summary: Create a dispute with evidence
       security:
         - bearerAuth: []
@@ -5131,6 +5746,9 @@ paths:
           description: Storage unavailable
   /api/shipments/{id}/eta:
     get:
+      operationId: shipments_get_shipments_id_eta
+      tags:
+        - Shipments
       summary: Get shipment ETA from recent telemetry
       description: Returns ETA, distance remaining, average speed, and confidence when shipment is in transit.
       security:
@@ -5204,6 +5822,10 @@ paths:
           description: Shipment or telemetry data not found
   /api/shipments/{id}/status:
     patch:
+      operationId: shipments_patch_shipments_id_status
+      tags:
+        - Shipments
+      x-required-role: [ADMIN, MANAGER]
       summary: Update shipment status
       description: Update the current shipment status (e.g., IN_TRANSIT, DELIVERED). Requires ADMIN or MANAGER role.
       security:
@@ -5244,6 +5866,10 @@ paths:
           description: Forbidden - insufficient role
   /api/shipments/bulk/status:
     patch:
+      operationId: shipments_patch_shipments_bulk_status
+      tags:
+        - Shipments
+      x-required-role: [ADMIN, MANAGER]
       summary: Bulk update shipment status
       description: Update status for multiple shipments at once. Requires ADMIN or MANAGER role. Accepts up to 50 shipment IDs.
       security:
@@ -5265,7 +5891,18 @@ paths:
                   description: Array of shipment IDs to update (max 50)
                 status:
                   type: string
-                  enum: [CREATED, PICKUP_CONFIRMED, IN_TRANSIT, CUSTOMS_CLEARED, OUT_FOR_DELIVERY, DELIVERED, SETTLEMENT_INITIATED, SETTLEMENT_COMPLETED, CANCELLED]
+                  enum:
+                    [
+                      CREATED,
+                      PICKUP_CONFIRMED,
+                      IN_TRANSIT,
+                      CUSTOMS_CLEARED,
+                      OUT_FOR_DELIVERY,
+                      DELIVERED,
+                      SETTLEMENT_INITIATED,
+                      SETTLEMENT_COMPLETED,
+                      CANCELLED,
+                    ]
       responses:
         '200':
           description: Bulk status update completed
@@ -5316,6 +5953,10 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
   /api/telemetry/thresholds:
     get:
+      operationId: telemetry_get_telemetry_thresholds
+      tags:
+        - Telemetry
+      x-required-role: [SUPER_ADMIN, ADMIN, MANAGER, VIEWER]
       summary: Get organization telemetry anomaly thresholds
       description: |
         Returns effective anomaly thresholds for the caller's organization
@@ -5325,7 +5966,6 @@ paths:
         receive 403.
       security:
         - bearerAuth: []
-      x-required-role: [SUPER_ADMIN, ADMIN, MANAGER, VIEWER]
       parameters:
         - in: query
           name: shipmentType
@@ -5383,6 +6023,10 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
     put:
+      operationId: telemetry_put_telemetry_thresholds
+      tags:
+        - Telemetry
+      x-required-role: [SUPER_ADMIN, ADMIN]
       summary: Update organization telemetry anomaly thresholds
       security:
         - bearerAuth: []
@@ -5421,6 +6065,8 @@ paths:
           description: Validation error
   /api/anomalies/stats:
     get:
+      operationId: anomalies_get_anomalies_stats
+      x-required-role: [ADMIN, MANAGER]
       summary: Get anomaly statistics
       description: |
         Returns aggregated anomaly statistics for the organization, including:
@@ -5429,13 +6075,12 @@ paths:
         - Total resolved anomalies
         - Breakdown by severity (LOW, MEDIUM, HIGH)
         - Breakdown by type (TEMPERATURE_EXCEEDED, HUMIDITY_EXCEEDED, etc.)
-        
+
         Results are cached for 5 minutes. Requires ADMIN or MANAGER role.
       tags:
         - Anomalies
       security:
         - bearerAuth: []
-      x-required-role: [ADMIN, MANAGER]
       responses:
         '200':
           description: Anomaly statistics retrieved successfully
@@ -5511,6 +6156,10 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
   /api/anomalies:
     get:
+      operationId: anomalies_get_anomalies
+      tags:
+        - Anomalies
+      x-required-role: [ADMIN, MANAGER]
       summary: Get anomalies with pagination and filtering
       description: Retrieve a paginated list of anomalies, sorted by timestamp descending. Supports filtering by severity and shipmentId. Requires ADMIN or MANAGER role.
       security:
@@ -5594,6 +6243,10 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
   /api/anomalies/{id}/resolve:
     patch:
+      operationId: anomalies_patch_anomalies_id_resolve
+      tags:
+        - Anomalies
+      x-required-role: [ADMIN, MANAGER]
       summary: Resolve an anomaly
       description: Mark an anomaly as resolved. Requires ADMIN or MANAGER role.
       security:
@@ -5650,6 +6303,8 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
   /api/ledger/blocks:
     get:
+      operationId: ledger_get_ledger_blocks
+      x-required-role: [ADMIN, MANAGER, VIEWER]
       summary: List ledger blocks
       description: Returns a cursor-paginated list of ledger blocks, optionally filtered by shipment or event type.
       tags:
@@ -5731,6 +6386,8 @@ paths:
                   code: ERR_PERMISSION_DENIED
   /api/ledger/blocks/{id}:
     get:
+      operationId: ledger_get_ledger_blocks_id
+      x-required-role: [ADMIN, MANAGER, VIEWER]
       summary: Get a ledger block by ID
       description: Retrieves a single ledger block by its ObjectId.
       tags:
@@ -5769,8 +6426,64 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
 
+  /api/ledger/blocks/{id}/verification:
+    get:
+      operationId: ledger_get_ledger_blocks_id_verification
+      x-required-role: [ADMIN, MANAGER, VIEWER]
+      summary: Get client-side verification material for a ledger block
+      description: |
+        Returns everything a client needs to independently verify a ledger block
+        without trusting the API, in three steps:
+
+        1. Fetch `canonicalPayload`, `dataHash` and `txHash` from this endpoint.
+        2. Recompute `sha256(canonicalPayload)` client-side (Web Crypto) and compare
+           it with `dataHash`.
+        3. Query Horizon (`memo_hash` / `manageData` value) or Soroban RPC
+           (`getTransaction` + `getEvents`) for `txHash` and confirm the on-chain
+           digest equals `dataHash`.
+
+        See `docs/blockchain.md` for the copy-pasteable browser implementation.
+      tags:
+        - Ledger
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Ledger block ObjectId
+      responses:
+        '200':
+          description: Verification material retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    $ref: '#/components/schemas/LedgerVerificationBundle'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden - insufficient role
+        '404':
+          description: Ledger block not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
   /api/events/poll:
     get:
+      operationId: events_get_events_poll
+      tags:
+        - Events
       summary: Poll for recent real-time events (polling fallback)
       description: |
         Returns an array of `RealtimeEvent` objects published after the
@@ -5874,7 +6587,22 @@ components:
     TelemetryUpdateEvent:
       type: object
       description: Real-time telemetry reading from an IoT sensor.
-      required: [type, publishedAt, telemetryId, shipmentId, sensorId, temperature, humidity, latitude, longitude, batteryLevel, timestamp, dataHash, anchorStatus]
+      required:
+        [
+          type,
+          publishedAt,
+          telemetryId,
+          shipmentId,
+          sensorId,
+          temperature,
+          humidity,
+          latitude,
+          longitude,
+          batteryLevel,
+          timestamp,
+          dataHash,
+          anchorStatus,
+        ]
       properties:
         type:
           type: string
@@ -6418,13 +7146,10 @@ components:
             - code
           properties:
             code:
-              type: string
-              example: ERR_VALIDATION_FAILED
+              $ref: '#/components/schemas/ErrorCode'
               description: |
                 Machine-readable error code for programmatic handling.
                 See docs/ERROR_CODES.md for the complete registry.
-                Common codes: ERR_AUTH_INVALID, ERR_PERMISSION_DENIED, ERR_NOT_FOUND,
-                ERR_VALIDATION_FAILED, ERR_DUPLICATE_KEY, ERR_INTERNAL_SERVER_ERROR
           description: Error details container with machine-readable code
         details:
           type: array
@@ -6450,7 +7175,7 @@ components:
         message: Validation failed - email must be a valid email address
         data: null
         error:
-          code: ERR_VALIDATION_FAILED
+          code: VALIDATION_ERROR
         details:
           - path: email
             message: Invalid email format
@@ -6488,7 +7213,18 @@ components:
       properties:
         status:
           type: string
-          enum: [CREATED, PICKUP_CONFIRMED, IN_TRANSIT, CUSTOMS_CLEARED, OUT_FOR_DELIVERY, DELIVERED, SETTLEMENT_INITIATED, SETTLEMENT_COMPLETED, CANCELLED]
+          enum:
+            [
+              CREATED,
+              PICKUP_CONFIRMED,
+              IN_TRANSIT,
+              CUSTOMS_CLEARED,
+              OUT_FOR_DELIVERY,
+              DELIVERED,
+              SETTLEMENT_INITIATED,
+              SETTLEMENT_COMPLETED,
+              CANCELLED,
+            ]
           description: The new status of the shipment.
         milestoneData:
           type: object
@@ -6520,7 +7256,15 @@ components:
           description: Document file (PDF, JPG, PNG, WebP). Max 10MB.
         type:
           type: string
-          enum: [BILL_OF_LADING, CUSTOMS_DECLARATION, INSURANCE_CERTIFICATE, PACKING_LIST, INVOICE, OTHER]
+          enum:
+            [
+              BILL_OF_LADING,
+              CUSTOMS_DECLARATION,
+              INSURANCE_CERTIFICATE,
+              PACKING_LIST,
+              INVOICE,
+              OTHER,
+            ]
           description: Document classification type.
     UploadPhotoRequest:
       type: object
@@ -6549,7 +7293,15 @@ components:
           description: MIME type of the uploaded file.
         type:
           type: string
-          enum: [BILL_OF_LADING, CUSTOMS_DECLARATION, INSURANCE_CERTIFICATE, PACKING_LIST, INVOICE, OTHER]
+          enum:
+            [
+              BILL_OF_LADING,
+              CUSTOMS_DECLARATION,
+              INSURANCE_CERTIFICATE,
+              PACKING_LIST,
+              INVOICE,
+              OTHER,
+            ]
           description: Document classification type.
         size:
           type: integer
@@ -6606,7 +7358,18 @@ components:
           description: Organization ID of the logistics provider.
         status:
           type: string
-          enum: [CREATED, PICKUP_CONFIRMED, IN_TRANSIT, CUSTOMS_CLEARED, OUT_FOR_DELIVERY, DELIVERED, SETTLEMENT_INITIATED, SETTLEMENT_COMPLETED, CANCELLED]
+          enum:
+            [
+              CREATED,
+              PICKUP_CONFIRMED,
+              IN_TRANSIT,
+              CUSTOMS_CLEARED,
+              OUT_FOR_DELIVERY,
+              DELIVERED,
+              SETTLEMENT_INITIATED,
+              SETTLEMENT_COMPLETED,
+              CANCELLED,
+            ]
           description: Current lifecycle status of the shipment.
         priority:
           type: string
@@ -6778,9 +7541,10 @@ components:
         updatedAt:
           type: string
           format: date-time
-    ErrorCodes:
+    ErrorCode:
       type: string
       enum:
+        - VALIDATION_ERROR
         - ERR_AUTH_INVALID
         - ERR_PERMISSION_DENIED
         - ERR_NOT_FOUND
@@ -6788,21 +7552,95 @@ components:
         - ERR_VALIDATION_FAILED
         - ERR_INTERNAL_SERVER_ERROR
         - ERR_SHIPMENT_NOT_FOUND
+        - ERR_SHIPMENT_INVALID_TRANSITION
         - ERR_PAYMENT_NOT_FOUND
+        - ERR_SETTLEMENT_NOT_FOUND
+        - ERR_SETTLEMENT_ALREADY_DISPUTED
+        - ERR_ORGANIZATION_NOT_FOUND
+        - ERR_TEMPLATE_NOT_FOUND
         - ERR_DUPLICATE_KEY
+        - ERR_AUTH_INVALID_RESET_TOKEN
+        - ERR_STELLAR_CONFIG
+        - ERR_STELLAR_INVALID_HASH
+        - ERR_CHAIN_UNAUTHORIZED
+        - ERR_CHAIN_INVALID_HASH
+        - ERR_CHAIN_ALREADY_ANCHORED
+        - ERR_CHAIN_ESCROW_EXISTS
+        - ERR_CHAIN_ESCROW_NOT_FOUND
+        - ERR_CHAIN_ESCROW_ALREADY_RELEASED
+        - ERR_CHAIN_INVALID_AMOUNT
+        - ERR_CHAIN_INVALID_PROOF
+        - ERR_CHAIN_UNKNOWN
+        - ERR_CHAIN_INVALID_EVENT
+        - ERR_RATE_LIMIT_EXCEEDED
         - ERR_LEDGER_BLOCK_NOT_FOUND
+        - ERR_FILE_TOO_LARGE
+        - ERR_INVALID_MIME_TYPE
+        - ERR_INVALID_DOCUMENT_TYPE
+        - ERR_PHOTO_LIMIT_EXCEEDED
+        - ERR_EVENTS_POLL_FAILED
+        - ERR_AUTH_TOKEN_REVOKED
+        - ERR_NOTIFICATION_NOT_FOUND
+        - ERR_AUTH_2FA_INVALID_CODE
+        - ERR_AUTH_2FA_NOT_SETUP
+        - ERR_AUTH_2FA_ALREADY_ENABLED
+        - ERR_AUTH_2FA_NOT_ENABLED
+        - ERR_AUTH_2FA_INVALID_BACKUP_CODE
+        - ERR_AUTH_2FA_INVALID_SECRET_FORMAT
+        - ERR_AUTH_INVALID_TOKEN_IDENTIFIER
+        - ERR_FILE_UPLOAD_FAILED
+        - ERR_FILE_DELETE_FAILED
       description: |
-        Standard error codes returned by the API. See docs/ERROR_CODES.md for details.
+        Exhaustive machine-readable error code registry. Every value of
+        `ErrorCodes` in src/shared/http/errors.ts is listed below, plus the
+        `VALIDATION_ERROR` literal emitted by validateRequest for 400 schema
+        failures. Referenced from ErrorResponse. See docs/ERROR_CODES.md for details.
+        - VALIDATION_ERROR: Schema validation failed (400)
         - ERR_AUTH_INVALID: Invalid or missing authentication token (401)
         - ERR_PERMISSION_DENIED: Insufficient role permissions (403)
         - ERR_NOT_FOUND: Generic resource not found (404)
         - ERR_BAD_REQUEST: Malformed request (400)
-        - ERR_VALIDATION_FAILED: Schema validation failed (400)
+        - ERR_VALIDATION_FAILED: Schema validation failed (400, legacy alias of VALIDATION_ERROR)
         - ERR_INTERNAL_SERVER_ERROR: Unhandled server error (500)
         - ERR_SHIPMENT_NOT_FOUND: Specific shipment not found (404)
+        - ERR_SHIPMENT_INVALID_TRANSITION: Shipment status transition not allowed (400)
         - ERR_PAYMENT_NOT_FOUND: Specific payment not found (404)
+        - ERR_SETTLEMENT_NOT_FOUND: Settlement not found (404)
+        - ERR_SETTLEMENT_ALREADY_DISPUTED: Settlement already disputed (409)
+        - ERR_ORGANIZATION_NOT_FOUND: Organization not found (404)
+        - ERR_TEMPLATE_NOT_FOUND: Shipment template not found (404)
         - ERR_DUPLICATE_KEY: Unique constraint violation (409)
+        - ERR_AUTH_INVALID_RESET_TOKEN: Invalid or expired reset token (400)
+        - ERR_STELLAR_CONFIG: Stellar server configuration missing (500)
+        - ERR_STELLAR_INVALID_HASH: Invalid Stellar data hash (400)
+        - ERR_CHAIN_UNAUTHORIZED: Contract NotAuthorized (403)
+        - ERR_CHAIN_INVALID_HASH: Contract InvalidHash (422)
+        - ERR_CHAIN_ALREADY_ANCHORED: Contract AlreadyAnchored (409)
+        - ERR_CHAIN_ESCROW_EXISTS: Contract EscrowExists (409)
+        - ERR_CHAIN_ESCROW_NOT_FOUND: Contract EscrowNotFound (404)
+        - ERR_CHAIN_ESCROW_ALREADY_RELEASED: Contract EscrowAlreadyReleased (409)
+        - ERR_CHAIN_INVALID_AMOUNT: Contract InvalidAmount (422)
+        - ERR_CHAIN_INVALID_PROOF: Contract InvalidProof (422)
+        - ERR_CHAIN_UNKNOWN: Unmapped contract error (502)
+        - ERR_CHAIN_INVALID_EVENT: Indexed event failed spec validation (502)
+        - ERR_RATE_LIMIT_EXCEEDED: Too many requests (429)
         - ERR_LEDGER_BLOCK_NOT_FOUND: Ledger block not found (404)
+        - ERR_FILE_TOO_LARGE: Upload exceeds size cap (413)
+        - ERR_INVALID_MIME_TYPE: Upload MIME type not accepted (415)
+        - ERR_INVALID_DOCUMENT_TYPE: Uploaded document type not accepted (415)
+        - ERR_PHOTO_LIMIT_EXCEEDED: Photo count limit reached (400)
+        - ERR_EVENTS_POLL_FAILED: Redis event store unavailable (502)
+        - ERR_AUTH_TOKEN_REVOKED: JWT revoked (401)
+        - ERR_NOTIFICATION_NOT_FOUND: Notification not found (404)
+        - ERR_AUTH_2FA_INVALID_CODE: TOTP code did not match (401)
+        - ERR_AUTH_2FA_NOT_SETUP: TOTP not configured (400)
+        - ERR_AUTH_2FA_ALREADY_ENABLED: TOTP already enabled (409)
+        - ERR_AUTH_2FA_NOT_ENABLED: Operation requires TOTP (400)
+        - ERR_AUTH_2FA_INVALID_BACKUP_CODE: Backup code did not match (401)
+        - ERR_AUTH_2FA_INVALID_SECRET_FORMAT: Stored TOTP secret unreadable (500)
+        - ERR_AUTH_INVALID_TOKEN_IDENTIFIER: Token jti is not a UUID v4 (400)
+        - ERR_FILE_UPLOAD_FAILED: Provider rejected the upload (502)
+        - ERR_FILE_DELETE_FAILED: Provider rejected the delete (502)
 
     ShipmentTimelineEventType:
       type: string
@@ -6909,10 +7747,26 @@ components:
         shipmentId:
           type: string
           description: Associated shipment ObjectId
-        eventType:
+        milestoneEvent:
           $ref: '#/components/schemas/MilestoneEvent'
+          description: Canonical lifecycle event for this block.
+        dataHash:
+          type: string
+          nullable: true
+          description: >
+            SHA-256 hex digest of the payload committed by the on-chain transaction.
+            Allows independent verification that `transactionHash` covers the expected data.
+            Present only when the block was created with an associated on-chain anchor.
+        canonicalPayload:
+          type: object
+          additionalProperties: true
+          nullable: true
+          description: >
+            Canonical JSON payload that was hashed into dataHash and anchored on-chain.
+            Stored alongside the block for independent verification.
         transactionHash:
           type: string
+          nullable: true
           description: Stellar transaction hash, if applicable
         actor:
           type: string
@@ -6926,6 +7780,39 @@ components:
         updatedAt:
           type: string
           format: date-time
+    LedgerVerificationBundle:
+      type: object
+      description: >
+        Off-chain / on-chain verification bundle for a ledger block, returned by
+        GET /api/ledger/blocks/{id}/verification. A verifier recomputes
+        sha256(canonicalPayload) and compares it with dataHash, then confirms the
+        digest is committed on-chain via txHash.
+      properties:
+        canonicalPayload:
+          type: object
+          additionalProperties: true
+          nullable: true
+          description: >
+            Exact object that was hashed into `dataHash`. Null for blocks written
+            before the payload began being persisted; such blocks are unverifiable,
+            not invalid.
+        dataHash:
+          type: string
+          nullable: true
+          description: >
+            Lowercase hex SHA-256 digest (64 chars) of the canonical payload,
+            committed on-chain by `txHash`.
+        txHash:
+          type: string
+          nullable: true
+          description: On-chain transaction hash to look up on Horizon / Soroban RPC.
+        transactionHash:
+          type: string
+          nullable: true
+          description: Alias of `txHash`.
+        ledger:
+          type: integer
+          description: Stellar ledger sequence the transaction landed in.
     Notification:
       type: object
       description: A notification entry for a user.
@@ -6990,7 +7877,15 @@ components:
           description: Owner user ObjectId.
         event:
           type: string
-          enum: [shipment_created, status_changed, delivery_confirmed, payment_received, dispute_opened, dispute_resolved]
+          enum:
+            [
+              shipment_created,
+              status_changed,
+              delivery_confirmed,
+              payment_received,
+              dispute_opened,
+              dispute_resolved,
+            ]
         channel:
           type: string
           enum: [email, sms]

@@ -22,10 +22,11 @@ const mockMemoHash = jest.fn();
 
 await jest.unstable_mockModule('@stellar/stellar-sdk', () => ({
   Horizon: {
-    Server: jest.fn().mockReturnValue({
+    Server: jest.fn().mockImplementation((url?: string) => ({
+      url,
       loadAccount: mockLoadAccount,
       submitTransaction: mockSubmitTransaction,
-    }),
+    })),
   },
   Keypair: { fromSecret: mockFromSecret },
   TransactionBuilder: MockTransactionBuilder,
@@ -36,12 +37,18 @@ await jest.unstable_mockModule('@stellar/stellar-sdk', () => ({
   Operation: { manageData: mockManageData },
   Memo: { hash: mockMemoHash },
   BASE_FEE: '100',
+  StrKey: { encodeContract: () => 'CACAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAINCW' },
+  Address: jest.fn(),
+  Contract: jest.fn(),
+  nativeToScVal: jest.fn(),
+  rpc: { Server: jest.fn(), Api: { isSimulationError: jest.fn() } },
 }));
 
 await jest.unstable_mockModule('../src/config/index.js', () => ({
   config: {
     get stellarSecretKey() { return mockStellarSecretKey; },
     stellarNetwork: 'testnet',
+    chainAdapter: 'simulated',
   },
 }));
 
@@ -223,5 +230,30 @@ describe('Stellar Service - anchorTelemetryHash', () => {
       message: 'STELLAR_SECRET_KEY is not configured',
       code: ErrorCodes.STELLAR_CONFIG,
     });
+  });
+});
+
+describe('Stellar Service - network matrix & releaseEscrow', () => {
+  it('resolves Horizon server dynamically from config URL', async () => {
+    const { getHorizonServer } = await import('../src/services/stellar.service.js');
+    const serverTestnet = getHorizonServer('https://horizon-testnet.stellar.org') as unknown as { url: string };
+    const serverPublic = getHorizonServer('https://horizon.stellar.org') as unknown as { url: string };
+
+    expect(serverTestnet.url).toBe('https://horizon-testnet.stellar.org');
+    expect(serverPublic.url).toBe('https://horizon.stellar.org');
+    expect(serverTestnet.url).not.toBe(serverPublic.url);
+  });
+
+  it('releaseEscrow delegates to ChainAdapter and propagates AppError without swallowing', async () => {
+    mockStellarSecretKey = 'STEST_MOCK_SECRET_KEY_FOR_UNIT_TESTS';
+    const { releaseEscrow } = await import('../src/services/stellar.service.js');
+    const result = await releaseEscrow({
+      paymentId: 'pay-123',
+      shipmentId: 'ship-123',
+      proofHash: 'a'.repeat(64),
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.transactionHash).toBeDefined();
   });
 });

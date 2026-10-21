@@ -1,4 +1,4 @@
-import { generateDataHash } from '../crypto.js';
+import { generateDataHash, buildCanonicalShipmentPayload } from '../crypto.js';
 
 describe('generateDataHash', () => {
   // Core requirement
@@ -48,5 +48,36 @@ describe('generateDataHash', () => {
   // Output format
   it('returns a 64-char SHA-256 hex string', () => {
     expect(generateDataHash({ foo: 'bar' })).toMatch(/^[a-f0-9]{64}$/);
+  });
+
+  it('canonical shipment payload is deterministic across key order', () => {
+    const a = buildCanonicalShipmentPayload({
+      shipmentId: 'ship-1',
+      event: 'DELIVERED',
+      actor: 'user-1',
+      timestamp: new Date('2026-09-27T00:00:00.000Z'),
+      metadata: { b: 2, a: 1 },
+    });
+    const b = buildCanonicalShipmentPayload({
+      shipmentId: 'ship-1',
+      event: 'DELIVERED',
+      actor: 'user-1',
+      timestamp: new Date('2026-09-27T00:00:00.000Z'),
+      metadata: { a: 1, b: 2 },
+    });
+    expect(generateDataHash(a)).toBe(generateDataHash(b));
+  });
+
+  it('different events produce different hashes', () => {
+    const base = {
+      shipmentId: 'ship-1',
+      actor: 'user-1',
+      timestamp: new Date('2026-09-27T00:00:00.000Z'),
+    };
+    const h1 = generateDataHash(buildCanonicalShipmentPayload({ ...base, event: 'DELIVERED' }));
+    const h2 = generateDataHash(
+      buildCanonicalShipmentPayload({ ...base, event: 'PROOF_SUBMITTED' })
+    );
+    expect(h1).not.toBe(h2);
   });
 });

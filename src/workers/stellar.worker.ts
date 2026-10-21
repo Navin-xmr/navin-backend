@@ -2,7 +2,7 @@ import '../loadEnv.js';
 import { Worker, Job } from 'bullmq';
 import { connectMongo } from '../infra/mongo/connection.js';
 import { config } from '../config/index.js';
-import { anchorTelemetryHash } from '../services/stellar.service.js';
+import { getChainActorAddress, getChainAdapter } from '../services/chain/factory.js';
 import {
   updateTelemetryAnchor,
   markTelemetryAnchorFailed,
@@ -21,10 +21,11 @@ async function processStellarAnchor(job: Job<AnchorTelemetryJob>) {
   logger.info({ jobId: job.id, telemetryId }, 'Processing stellar anchor job');
 
   try {
-    // Execute Stellar transaction
-    const { stellarTxHash } = await anchorTelemetryHash({
-      shipmentId,
-      dataHash,
+    // Anchor through the ChainAdapter port (submissions are serialized per signing account)
+    const { txHash: stellarTxHash } = await getChainAdapter().anchorEvent({
+      shipment_id: shipmentId,
+      data_hash: dataHash,
+      actor: getChainActorAddress(),
     });
 
     logger.info({ telemetryId, stellarTxHash }, 'Telemetry anchored on Stellar');
@@ -47,6 +48,9 @@ async function processStellarAnchor(job: Job<AnchorTelemetryJob>) {
 }
 
 async function startWorker() {
+  // Fail fast on a misconfigured SOROBAN_ADAPTER instead of failing every job
+  getChainAdapter();
+
   // Connect to MongoDB
   await connectMongo(config.mongoUri);
   logger.info('Stellar worker connected to MongoDB');
@@ -57,7 +61,7 @@ async function startWorker() {
       host: new URL(config.redisUrl).hostname,
       port: parseInt(new URL(config.redisUrl).port || '6379'),
     },
-    concurrency: 5, // Process up to 5 jobs concurrently
+    concurrency: 5, // Safe: the adapter serializes submissions per signing account
   });
 
   worker.on('completed', job => {

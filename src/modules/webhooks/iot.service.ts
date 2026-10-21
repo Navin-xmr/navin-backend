@@ -5,7 +5,7 @@ import { AppError, ErrorCodes } from '../../shared/http/errors.js';
 import { detectTelemetryAnomalies } from '../../services/telemetryAnomalyDetection.js';
 import { emitAnomalyDetected, emitTelemetryUpdate } from '../../infra/socket/io.js';
 import { pushAlertJob, pushStellarAnchorJob } from '../../infra/redis/queue.js';
-import logger from '../../shared/logger/logger.js';
+import { logger } from '../../shared/logger/logger.js';
 import type { IotWebhookBody } from './iot.validation.js';
 import type {
   AnomalyAlertPayload,

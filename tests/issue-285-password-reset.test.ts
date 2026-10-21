@@ -1,11 +1,12 @@
 import { jest, describe, it, expect, beforeAll } from '@jest/globals';
+import type { sendEmail } from '../src/services/email.service.js';
+import { createEmailServiceMock } from './helpers/mocks.js';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mockBlockToken = jest.fn() as any;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mockIsTokenBlocked = jest.fn() as any;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const mockSendEmail = jest.fn() as any;
+const mockSendEmail = jest.fn<typeof sendEmail>().mockResolvedValue(undefined);
 
 await jest.unstable_mockModule('../src/modules/users/users.model.js', () => {
   const users: Record<string, unknown>[] = [];
@@ -44,11 +45,9 @@ await jest.unstable_mockModule('../src/infra/redis/connection.js', () => ({
   connectRedis: jest.fn(),
 }));
 
-await jest.unstable_mockModule('../src/services/email.service.js', () => ({
-  sendEmail: mockSendEmail,
-  resetPasswordEmailHtml: (link: string) => `<html>Reset: ${link}</html>`,
-  invitationEmailHtml: (link: string) => `<html>Invite: ${link}</html>`,
-}));
+await jest.unstable_mockModule('../src/services/email.service.js', () =>
+  createEmailServiceMock({ sendEmail: mockSendEmail })
+);
 
 const jwt = await import('jsonwebtoken');
 const { forgotPassword, resetPassword } = await import('../src/modules/auth/auth.service.js');
@@ -89,9 +88,8 @@ describe('#285 - Password Reset Flow', () => {
     it('should include a valid reset link in the email', async () => {
       mockSendEmail.mockClear();
       await forgotPassword('existing@test.com');
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const call = (mockSendEmail.mock.calls as any)[0] as [{ to: string; subject: string; html: string }];
-      expect(call[0].html).toContain('/reset-password?token=');
+      const [params] = mockSendEmail.mock.calls[0];
+      expect(params.html).toContain('/reset-password?token=');
     });
   });
 

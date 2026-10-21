@@ -1,98 +1,1099 @@
 {
-  "generated": "2026-07-28T00:00:00Z",
-  "issueRange": "325-390",
-  "totalIssues": 66,
+  "generated": "2026-09-28T12:21:55Z",
+  "issueRange": "491-724",
+  "totalIssues": 146,
+  "waveProgram": {
+    "corePhases": "P1-P6",
+    "coreIssueCount": 100,
+    "phase7Batch": 46
+  },
   "summary": {
-    "open": 45,
-    "closed": 21,
+    "open": 30,
+    "closed": 116,
     "byTier": {
-      "Easy": 18,
-      "Medium": 28,
-      "Hard": 20
+      "Easy": 70,
+      "Medium": 67,
+      "Hard": 9
     },
     "byDomain": {
-      "API-QA": 12,
-      "Auth": 8,
-      "Users": 7,
-      "Shipments": 15,
-      "Payments": 6,
+      "API-QA": 111,
+      "Auth": 7,
+      "Payments": 1,
+      "Shipments": 13,
       "Telemetry": 8,
-      "WebSockets": 4
+      "Users": 3,
+      "WebSockets": 3
     }
   },
   "hardIssues": [
-    { "number": 385, "title": "[API-QA] Complex integration test suite", "domain": "API-QA" },
-    { "number": 378, "title": "[Payments] Implement cryptocurrency settlement", "domain": "Payments" },
-    { "number": 372, "title": "[Shipments] Real-time route optimization", "domain": "Shipments" },
-    { "number": 365, "title": "[Auth] Multi-factor authentication system", "domain": "Auth" },
-    { "number": 358, "title": "[Telemetry] Event aggregation pipeline", "domain": "Telemetry" }
+    {
+      "number": 671,
+      "title": "[Chain] Dual-binding behavioral suite and simulated-flag honesty assertion",
+      "domain": "API-QA"
+    },
+    {
+      "number": 667,
+      "title": "[Chain] Stand up Stellar quickstart harness for adapter integration tests",
+      "domain": "API-QA"
+    },
+    {
+      "number": 666,
+      "title": "[Chain] Create golden fixtures as cross-repo conformance artifacts",
+      "domain": "API-QA"
+    },
+    {
+      "number": 662,
+      "title": "[Chain] Rewrite stellar-indexer as event-driven consumer",
+      "domain": "API-QA"
+    },
+    {
+      "number": 657,
+      "title": "[Chain] Replace releaseEscrow manageData placeholder with contract escrow call",
+      "domain": "API-QA"
+    },
+    {
+      "number": 656,
+      "title": "[Chain] Implement SorobanAdapter invoke pipeline (simulate→assemble→sign→send→poll)",
+      "domain": "API-QA"
+    },
+    {
+      "number": 653,
+      "title": "[Chain] Config-selected adapter factory with per-account submission serialization",
+      "domain": "API-QA"
+    },
+    {
+      "number": 649,
+      "title": "[Chain] Draft docs/chain-interface.md v1 with contracts repo",
+      "domain": "API-QA"
+    },
+    {
+      "number": 636,
+      "title": "[Testing] Make the full Jest suite terminate reliably without live Redis",
+      "domain": "API-QA"
+    }
   ],
   "issues": [
-    { "number": 390, "title": "[API-QA] Create HTML roadmap dashboard", "tier": "Medium", "domain": "API-QA", "status": "open" },
-    { "number": 389, "title": "[Auth] JWT token rotation", "tier": "Medium", "domain": "Auth", "status": "open" },
-    { "number": 388, "title": "[Users] User profile avatar upload", "tier": "Easy", "domain": "Users", "status": "open" },
-    { "number": 387, "title": "[Shipments] Batch shipment creation", "tier": "Hard", "domain": "Shipments", "status": "open" },
-    { "number": 386, "title": "[Payments] Payment webhook verification", "tier": "Medium", "domain": "Payments", "status": "closed" },
-    { "number": 385, "title": "[API-QA] Complex integration test suite", "tier": "Hard", "domain": "API-QA", "status": "open" },
-    { "number": 384, "title": "[Telemetry] Custom event tracking", "tier": "Easy", "domain": "Telemetry", "status": "closed" },
-    { "number": 383, "title": "[WebSockets] Connection pooling", "tier": "Hard", "domain": "WebSockets", "status": "open" },
-    { "number": 382, "title": "[Shipments] GPS tracking integration", "tier": "Medium", "domain": "Shipments", "status": "open" },
-    { "number": 381, "title": "[Users] Bulk user import API", "tier": "Medium", "domain": "Users", "status": "open" },
-    { "number": 380, "title": "[Auth] Session management improvements", "tier": "Easy", "domain": "Auth", "status": "closed" },
-    { "number": 379, "title": "[API-QA] Performance benchmarking", "tier": "Medium", "domain": "API-QA", "status": "open" },
-    { "number": 378, "title": "[Payments] Cryptocurrency settlement", "tier": "Hard", "domain": "Payments", "status": "open" },
-    { "number": 377, "title": "[Shipments] Cost optimization algorithm", "tier": "Hard", "domain": "Shipments", "status": "open" },
-    { "number": 376, "title": "[Users] Permission system overhaul", "tier": "Hard", "domain": "Users", "status": "open" },
-    { "number": 375, "title": "[Telemetry] Dashboard analytics", "tier": "Medium", "domain": "Telemetry", "status": "closed" },
-    { "number": 374, "title": "[Auth] SAML integration", "tier": "Hard", "domain": "Auth", "status": "open" },
-    { "number": 373, "title": "[API-QA] GraphQL schema validation", "tier": "Medium", "domain": "API-QA", "status": "open" },
-    { "number": 372, "title": "[Shipments] Real-time route optimization", "tier": "Hard", "domain": "Shipments", "status": "open" },
-    { "number": 371, "title": "[WebSockets] Auto-reconnection logic", "tier": "Easy", "domain": "WebSockets", "status": "closed" },
-    { "number": 370, "title": "[Payments] Invoice generation", "tier": "Easy", "domain": "Payments", "status": "closed" },
-    { "number": 369, "title": "[Users] Audit log implementation", "tier": "Medium", "domain": "Users", "status": "open" },
-    { "number": 368, "title": "[Telemetry] Alert system", "tier": "Medium", "domain": "Telemetry", "status": "open" },
-    { "number": 367, "title": "[Auth] OAuth2 provider support", "tier": "Hard", "domain": "Auth", "status": "open" },
-    { "number": 366, "title": "[Shipments] Carrier integration API", "tier": "Medium", "domain": "Shipments", "status": "closed" },
-    { "number": 365, "title": "[Auth] Multi-factor authentication", "tier": "Hard", "domain": "Auth", "status": "open" },
-    { "number": 364, "title": "[API-QA] Load testing framework", "tier": "Easy", "domain": "API-QA", "status": "closed" },
-    { "number": 363, "title": "[Payments] Refund management", "tier": "Medium", "domain": "Payments", "status": "open" },
-    { "number": 362, "title": "[WebSockets] Message encryption", "tier": "Hard", "domain": "WebSockets", "status": "open" },
-    { "number": 361, "title": "[Users] Email verification", "tier": "Easy", "domain": "Users", "status": "closed" },
-    { "number": 360, "title": "[Shipments] Proof of delivery", "tier": "Medium", "domain": "Shipments", "status": "open" },
-    { "number": 359, "title": "[Telemetry] Error rate monitoring", "tier": "Easy", "domain": "Telemetry", "status": "closed" },
-    { "number": 358, "title": "[Telemetry] Event aggregation pipeline", "tier": "Hard", "domain": "Telemetry", "status": "open" },
-    { "number": 357, "title": "[Auth] Rate limiting by user", "tier": "Easy", "domain": "Auth", "status": "closed" },
-    { "number": 356, "title": "[API-QA] API versioning strategy", "tier": "Medium", "domain": "API-QA", "status": "open" },
-    { "number": 355, "title": "[Shipments] Shipment status webhook", "tier": "Easy", "domain": "Shipments", "status": "closed" },
-    { "number": 354, "title": "[Payments] Tax calculation engine", "tier": "Hard", "domain": "Payments", "status": "open" },
-    { "number": 353, "title": "[Users] Role-based access control", "tier": "Medium", "domain": "Users", "status": "open" },
-    { "number": 352, "title": "[Telemetry] Custom metrics", "tier": "Easy", "domain": "Telemetry", "status": "open" },
-    { "number": 351, "title": "[WebSockets] Presence tracking", "tier": "Medium", "domain": "WebSockets", "status": "closed" },
-    { "number": 350, "title": "[Auth] Password reset workflow", "tier": "Easy", "domain": "Auth", "status": "closed" },
-    { "number": 349, "title": "[API-QA] Documentation generator", "tier": "Medium", "domain": "API-QA", "status": "open" },
-    { "number": 348, "title": "[Shipments] Geofencing alerts", "tier": "Hard", "domain": "Shipments", "status": "open" },
-    { "number": 347, "title": "[Payments] Payment plan management", "tier": "Medium", "domain": "Payments", "status": "open" },
-    { "number": 346, "title": "[Users] User notification preferences", "tier": "Easy", "domain": "Users", "status": "closed" },
-    { "number": 345, "title": "[Telemetry] Performance tracing", "tier": "Medium", "domain": "Telemetry", "status": "open" },
-    { "number": 344, "title": "[Auth] Token blacklist cleanup", "tier": "Easy", "domain": "Auth", "status": "open" },
-    { "number": 343, "title": "[Shipments] Container management", "tier": "Hard", "domain": "Shipments", "status": "open" },
-    { "number": 342, "title": "[API-QA] Error boundary documentation", "tier": "Medium", "domain": "API-QA", "status": "open" },
-    { "number": 341, "title": "[Payments] Dispute resolution", "tier": "Hard", "domain": "Payments", "status": "open" },
-    { "number": 340, "title": "[Users] Bulk export functionality", "tier": "Easy", "domain": "Users", "status": "open" },
-    { "number": 339, "title": "[Telemetry] Log aggregation", "tier": "Easy", "domain": "Telemetry", "status": "closed" },
-    { "number": 338, "title": "[WebSockets] Binary message support", "tier": "Easy", "domain": "WebSockets", "status": "open" },
-    { "number": 337, "title": "[Auth] Device fingerprinting", "tier": "Hard", "domain": "Auth", "status": "open" },
-    { "number": 336, "title": "[Shipments] Multi-leg shipping", "tier": "Hard", "domain": "Shipments", "status": "open" },
-    { "number": 335, "title": "[API-QA] Request validation schema", "tier": "Medium", "domain": "API-QA", "status": "open" },
-    { "number": 334, "title": "[Payments] Currency conversion", "tier": "Medium", "domain": "Payments", "status": "closed" },
-    { "number": 333, "title": "[Users] SSO integration", "tier": "Hard", "domain": "Users", "status": "open" },
-    { "number": 332, "title": "[Telemetry] Real-time dashboards", "tier": "Medium", "domain": "Telemetry", "status": "open" },
-    { "number": 331, "title": "[WebSockets] Graceful degradation", "tier": "Easy", "domain": "WebSockets", "status": "closed" },
-    { "number": 330, "title": "[Auth] Biometric authentication", "tier": "Hard", "domain": "Auth", "status": "open" },
-    { "number": 329, "title": "[Shipments] Hazmat compliance", "tier": "Medium", "domain": "Shipments", "status": "open" },
-    { "number": 328, "title": "[API-QA] Cache strategy docs", "tier": "Easy", "domain": "API-QA", "status": "closed" },
-    { "number": 327, "title": "[Payments] Recurring billing", "tier": "Hard", "domain": "Payments", "status": "open" },
-    { "number": 326, "title": "[Users] Team management", "tier": "Medium", "domain": "Users", "status": "open" },
-    { "number": 325, "title": "[Telemetry] Alerting engine", "tier": "Hard", "domain": "Telemetry", "status": "open" }
+    {
+      "number": 724,
+      "title": "[QA] Cross-check post-pull src/shared + app diffs against hard rules",
+      "tier": "Medium",
+      "domain": "API-QA",
+      "status": "open"
+    },
+    {
+      "number": 723,
+      "title": "[Docs] Reconcile swagger M-series checkboxes with landed work",
+      "tier": "Easy",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 722,
+      "title": "[Docker] Remove or consume unused x-worker-env anchor",
+      "tier": "Easy",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 721,
+      "title": "[DB] Drop duplicate {keyHash:1} api-key index",
+      "tier": "Medium",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 720,
+      "title": "[DB] Drop duplicate {name:1} organization index",
+      "tier": "Medium",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 719,
+      "title": "[Testing] Add shared createChainAdapterMock helper (port-only mocking)",
+      "tier": "Medium",
+      "domain": "API-QA",
+      "status": "open"
+    },
+    {
+      "number": 718,
+      "title": "[Docs] public-tracking swagger: operationId + machine-readable roles",
+      "tier": "Medium",
+      "domain": "API-QA",
+      "status": "open"
+    },
+    {
+      "number": 717,
+      "title": "[Security] Audit public-tracking auth marking and rate limits",
+      "tier": "Easy",
+      "domain": "Shipments",
+      "status": "open"
+    },
+    {
+      "number": 716,
+      "title": "[Testing] Backfill public-tracking route tests (200/404/400/429)",
+      "tier": "Medium",
+      "domain": "API-QA",
+      "status": "open"
+    },
+    {
+      "number": 715,
+      "title": "[Docs] Fix reports README/data staleness (60 vs 100 issues)",
+      "tier": "Easy",
+      "domain": "API-QA",
+      "status": "open"
+    },
+    {
+      "number": 714,
+      "title": "[DX] Add no-console rule for src (doc claims it already exists)",
+      "tier": "Easy",
+      "domain": "API-QA",
+      "status": "open"
+    },
+    {
+      "number": 713,
+      "title": "[Testing] Normalize @see telemetry-improvements comments to live paths",
+      "tier": "Easy",
+      "domain": "API-QA",
+      "status": "open"
+    },
+    {
+      "number": 712,
+      "title": "[Docs] Record landed chain work in CHANGELOG.md",
+      "tier": "Easy",
+      "domain": "API-QA",
+      "status": "open"
+    },
+    {
+      "number": 711,
+      "title": "[Docs] Sync TODO.md Part 3 and header with landed chain work",
+      "tier": "Easy",
+      "domain": "API-QA",
+      "status": "open"
+    },
+    {
+      "number": 710,
+      "title": "[Docs] Correct rbac-metadata.md zero-drift claim or finish routeRoles",
+      "tier": "Medium",
+      "domain": "API-QA",
+      "status": "open"
+    },
+    {
+      "number": 709,
+      "title": "[Testing] Merge setup.ts double afterAll hooks",
+      "tier": "Easy",
+      "domain": "API-QA",
+      "status": "open"
+    },
+    {
+      "number": 708,
+      "title": "[Chain] Privatize chain-dir internal-only exports",
+      "tier": "Easy",
+      "domain": "API-QA",
+      "status": "open"
+    },
+    {
+      "number": 707,
+      "title": "[SSE] Relocate test-only helpers out of sseHub production file",
+      "tier": "Easy",
+      "domain": "WebSockets",
+      "status": "open"
+    },
+    {
+      "number": 706,
+      "title": "[Storage] Remove or wire dead storage wrappers deleteFileFromStorage/getSignedUrl",
+      "tier": "Easy",
+      "domain": "API-QA",
+      "status": "open"
+    },
+    {
+      "number": 705,
+      "title": "[Telemetry] Merge stacked dead JSDoc block in telemetry.service.ts",
+      "tier": "Easy",
+      "domain": "Telemetry",
+      "status": "open"
+    },
+    {
+      "number": 704,
+      "title": "[Chain] Replace bare config Error in stellar.service.ts with AppError",
+      "tier": "Easy",
+      "domain": "API-QA",
+      "status": "open"
+    },
+    {
+      "number": 703,
+      "title": "[Infra] Replace bare Error with AppError in tokenBlocklist.ts",
+      "tier": "Easy",
+      "domain": "API-QA",
+      "status": "open"
+    },
+    {
+      "number": 702,
+      "title": "[Auth] Replace bare Errors with AppError in totp.utils.ts",
+      "tier": "Easy",
+      "domain": "Auth",
+      "status": "open"
+    },
+    {
+      "number": 701,
+      "title": "[Storage] Replace bare Errors with AppError in cloudinaryStorage.ts",
+      "tier": "Medium",
+      "domain": "API-QA",
+      "status": "open"
+    },
+    {
+      "number": 700,
+      "title": "[DX] Route seed.ts console output through logger or scope an eslint override",
+      "tier": "Easy",
+      "domain": "API-QA",
+      "status": "open"
+    },
+    {
+      "number": 699,
+      "title": "[Auth] Replace console.warn with logger in session.service.ts",
+      "tier": "Easy",
+      "domain": "Auth",
+      "status": "open"
+    },
+    {
+      "number": 698,
+      "title": "[Chore] Decide reports/*.html tracking policy (generated vs committed)",
+      "tier": "Easy",
+      "domain": "API-QA",
+      "status": "open"
+    },
+    {
+      "number": 697,
+      "title": "[Docs] Triage redocly lint warnings captured in lint_output.txt",
+      "tier": "Medium",
+      "domain": "API-QA",
+      "status": "open"
+    },
+    {
+      "number": 696,
+      "title": "[Chore] Remove lint_output.txt and harden .gitignore against local artifacts",
+      "tier": "Easy",
+      "domain": "API-QA",
+      "status": "open"
+    },
+    {
+      "number": 695,
+      "title": "[Chore] Remove throwaway fix_yaml*.ps1 scripts from repo root",
+      "tier": "Easy",
+      "domain": "API-QA",
+      "status": "open"
+    },
+    {
+      "number": 671,
+      "title": "[Chain] Dual-binding behavioral suite and simulated-flag honesty assertion",
+      "tier": "Hard",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 670,
+      "title": "[Chain] Enforce port-only mocking convention with ESLint restriction",
+      "tier": "Medium",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 669,
+      "title": "[Chain] Prove zero sequence-number failures under concurrent anchor load",
+      "tier": "Medium",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 668,
+      "title": "[Chain] Author acceptance demo scripts as the conformance suite",
+      "tier": "Medium",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 667,
+      "title": "[Chain] Stand up Stellar quickstart harness for adapter integration tests",
+      "tier": "Hard",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 666,
+      "title": "[Chain] Create golden fixtures as cross-repo conformance artifacts",
+      "tier": "Hard",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 665,
+      "title": "[Ledger] Ship verification-bundle endpoint and FE verification guide",
+      "tier": "Medium",
+      "domain": "Shipments",
+      "status": "closed"
+    },
+    {
+      "number": 664,
+      "title": "[Chain] Extend confirmation tracking to telemetry anchors",
+      "tier": "Medium",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 663,
+      "title": "[Ledger] Stop citing stale creation-time stellarTxHash on unrelated status blocks",
+      "tier": "Easy",
+      "domain": "Shipments",
+      "status": "open"
+    },
+    {
+      "number": 662,
+      "title": "[Chain] Rewrite stellar-indexer as event-driven consumer",
+      "tier": "Hard",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 661,
+      "title": "[Ledger] Unify eventType/milestoneEvent dual-field split-brain",
+      "tier": "Medium",
+      "domain": "Shipments",
+      "status": "open"
+    },
+    {
+      "number": 660,
+      "title": "[Ledger] Add dataHash field to LedgerBlock model",
+      "tier": "Medium",
+      "domain": "Shipments",
+      "status": "closed"
+    },
+    {
+      "number": 659,
+      "title": "[Chain] Plumb adapter/env configuration and validation updates",
+      "tier": "Easy",
+      "domain": "API-QA",
+      "status": "open"
+    },
+    {
+      "number": 658,
+      "title": "[Chain] Fix hardcoded Horizon URL ignoring configured network",
+      "tier": "Easy",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 657,
+      "title": "[Chain] Replace releaseEscrow manageData placeholder with contract escrow call",
+      "tier": "Hard",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 656,
+      "title": "[Chain] Implement SorobanAdapter invoke pipeline (simulate→assemble→sign→send→poll)",
+      "tier": "Hard",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 655,
+      "title": "[Chain] Persist canonicalPayload alongside every dataHash",
+      "tier": "Medium",
+      "domain": "API-QA",
+      "status": "open"
+    },
+    {
+      "number": 654,
+      "title": "[Chain] Extend generateDataHash coverage to all event domains",
+      "tier": "Medium",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 653,
+      "title": "[Chain] Config-selected adapter factory with per-account submission serialization",
+      "tier": "Hard",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 652,
+      "title": "[Chain] Implement SimulatedAdapter preserving current Horizon behavior",
+      "tier": "Medium",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 651,
+      "title": "[Chain] Define ChainAdapter port (src/services/chain/types.ts)",
+      "tier": "Medium",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 650,
+      "title": "[Chain] Mirror interface spec as typed source of truth src/shared/types/chain.ts",
+      "tier": "Medium",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 649,
+      "title": "[Chain] Draft docs/chain-interface.md v1 with contracts repo",
+      "tier": "Hard",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 636,
+      "title": "[Testing] Make the full Jest suite terminate reliably without live Redis",
+      "tier": "Hard",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 635,
+      "title": "[Swagger] Resolve remaining OpenAPI schema-composition warnings",
+      "tier": "Medium",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 634,
+      "title": "[Swagger] Add missing 4xx responses flagged by OpenAPI lint",
+      "tier": "Medium",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 633,
+      "title": "[Swagger] Document the implemented auth password-reset route",
+      "tier": "Easy",
+      "domain": "Auth",
+      "status": "closed"
+    },
+    {
+      "number": 632,
+      "title": "[Swagger] Resolve the stale public tracking operation",
+      "tier": "Easy",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 631,
+      "title": "[Swagger] Document or remove settlement create and status routes",
+      "tier": "Medium",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 630,
+      "title": "[Swagger] Reconcile legacy payments summary and dispute routes",
+      "tier": "Medium",
+      "domain": "Payments",
+      "status": "closed"
+    },
+    {
+      "number": 629,
+      "title": "[API-QA] Keep the template scaffold router out of the production API surface",
+      "tier": "Medium",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 628,
+      "title": "[Swagger] Align API-key paths with mounted Express routes",
+      "tier": "Medium",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 627,
+      "title": "[Testing] Make shared mock factories safe for ESM module loading",
+      "tier": "Medium",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 626,
+      "title": "[Events/SSE] Fix still-failing SSE authentication tests",
+      "tier": "Medium",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 625,
+      "title": "[Testing] Point storage mock at services/storage/upload.js specifier actually imported",
+      "tier": "Medium",
+      "domain": "Shipments",
+      "status": "closed"
+    },
+    {
+      "number": 624,
+      "title": "[Testing] Implement .lean() chain in invitations UserModel mock",
+      "tier": "Easy",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 623,
+      "title": "[Webhooks] Migrate iot.webhook tests from dead detectAnomaly mock to detectTelemetryAnomalies",
+      "tier": "Medium",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 622,
+      "title": "[Testing] Add getAnalyticsSummary to rbac.matrix analytics mock",
+      "tier": "Easy",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 621,
+      "title": "[Testing] Expand shipments.service mock surface to full controller import list",
+      "tier": "Easy",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 619,
+      "title": "[Storage] Remove deprecated mockStorageService shim after doc/test alignment",
+      "tier": "Easy",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 618,
+      "title": "[Telemetry] Remove dead legacy getTelemetryThresholds function",
+      "tier": "Easy",
+      "domain": "Telemetry",
+      "status": "closed"
+    },
+    {
+      "number": 617,
+      "title": "[Shipments] Backfill contract-matrix gaps against AGENTS §4",
+      "tier": "Medium",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 616,
+      "title": "[RBAC] Derive matrix expectations from route metadata; purge any/console/duplicate-keys from tests",
+      "tier": "Medium",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 615,
+      "title": "[Testing] Split multi-domain issue-bundle test files",
+      "tier": "Medium",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 614,
+      "title": "[Testing] Replace sleep-based synchronization with deterministic waits",
+      "tier": "Medium",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 613,
+      "title": "[Testing] Consolidate duplicated fixtures into tests/fixtures/factories.ts",
+      "tier": "Medium",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 605,
+      "title": "[Docker] Add resource limits and logging configuration to services",
+      "tier": "Easy",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 604,
+      "title": "[Docs] Publish Docker quickstart and topology documentation in README",
+      "tier": "Easy",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 603,
+      "title": "[CI] Add compose smoke-test job to ci.yml",
+      "tier": "Medium",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 602,
+      "title": "[DX] Provide dev compose override with hot-reload app target",
+      "tier": "Easy",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 601,
+      "title": "[Docker] Modernize compose file: obsolete version key, fixed names, host-published infra ports",
+      "tier": "Easy",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 600,
+      "title": "[Architecture] Decide and implement worker topology for Stellar workers",
+      "tier": "Medium",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 599,
+      "title": "[Docker] Wire database migrations into deployment lifecycle",
+      "tier": "Medium",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 598,
+      "title": "[Docker] Manage secrets via env_file instead of inline compose values",
+      "tier": "Easy",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 597,
+      "title": "[Docker] Enable MongoDB authentication for the compose stack",
+      "tier": "Easy",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 596,
+      "title": "[Docker] Add persistent Redis volume with appendonly",
+      "tier": "Medium",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 578,
+      "title": "[CI] Install @redocly/cli and gate swagger.yaml with an openapi-lint job",
+      "tier": "Medium",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 577,
+      "title": "[Docs] Housekeeping: CHANGELOG headings + AGENTS.md chain-port boundary row",
+      "tier": "Easy",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 576,
+      "title": "[Docs] Update PAGINATION.md: users dual-mode live, payments variance, timeline row",
+      "tier": "Easy",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 575,
+      "title": "[Docs] Update DATABASE.md: migrations workflow and index coverage",
+      "tier": "Easy",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 574,
+      "title": "[Docs] Update environment-variables.md matrix",
+      "tier": "Easy",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 573,
+      "title": "[Docs] Update websockets.md: raw-JWT handshake, full enum, dead notification:new",
+      "tier": "Easy",
+      "domain": "WebSockets",
+      "status": "closed"
+    },
+    {
+      "number": 572,
+      "title": "[Docs] Update auth-model.md: DRIVER role, persona claim, Sessions, 2FA, register-company",
+      "tier": "Medium",
+      "domain": "Auth",
+      "status": "closed"
+    },
+    {
+      "number": 571,
+      "title": "[Docs] Update telemetry-pipeline.md: kill legacy-85/90 myth, document real anomaly engine",
+      "tier": "Medium",
+      "domain": "Telemetry",
+      "status": "closed"
+    },
+    {
+      "number": 570,
+      "title": "[Docs] Restructure blockchain.md around ChainAdapter and seed chain-interface.md",
+      "tier": "Medium",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 569,
+      "title": "[Docs] Rewrite storage-adapter.md as current-state reference",
+      "tier": "Medium",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 568,
+      "title": "[Docs] Rewrite ERROR_CODES.md as an accurate registry",
+      "tier": "Medium",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 567,
+      "title": "[Swagger] Dedupe /auth/2fa/setup; add operationIds and machine-readable roles",
+      "tier": "Medium",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 566,
+      "title": "[Swagger] Add missing response schemas, payments query params, login email format",
+      "tier": "Easy",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 565,
+      "title": "[Swagger] Rename ledger filter param eventType→milestoneEvent",
+      "tier": "Easy",
+      "domain": "Shipments",
+      "status": "closed"
+    },
+    {
+      "number": 564,
+      "title": "[Swagger] Populate empty organizations path objects",
+      "tier": "Medium",
+      "domain": "Users",
+      "status": "closed"
+    },
+    {
+      "number": 563,
+      "title": "[Swagger] Model the error contract: ErrorResponse gains error.code and details",
+      "tier": "Medium",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 562,
+      "title": "[Swagger] Add missing paths: auth/refresh, company/api-keys CRUD, shipments/export, anomalies/stats",
+      "tier": "Medium",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 561,
+      "title": "[Swagger] Remove ghost paths never mounted in Express",
+      "tier": "Easy",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 560,
+      "title": "[Swagger] Deduplicate settlements blocks and repair corrupted /settlements/{id}",
+      "tier": "Medium",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 559,
+      "title": "[Swagger] Rewrite notifications section: live routes replace NOT_IMPLEMENTED stubs",
+      "tier": "Medium",
+      "domain": "Users",
+      "status": "closed"
+    },
+    {
+      "number": 548,
+      "title": "[Auth] Align #147 signup tests with VIEWER-always policy and add escalation guard",
+      "tier": "Medium",
+      "domain": "Auth",
+      "status": "closed"
+    },
+    {
+      "number": 547,
+      "title": "[Events/SSE] Fix mock lifecycle contamination: reset→mock→import ordering",
+      "tier": "Medium",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 546,
+      "title": "[Sockets] Await realtime events by shared constants instead of stale string literals",
+      "tier": "Medium",
+      "domain": "WebSockets",
+      "status": "closed"
+    },
+    {
+      "number": 545,
+      "title": "[RBAC] Replace vacuous multi-status positive assertions with exact intended statuses",
+      "tier": "Medium",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 544,
+      "title": "[Testing] Use real ObjectIds in anomaly threshold tests so the custom path executes",
+      "tier": "Medium",
+      "domain": "Telemetry",
+      "status": "closed"
+    },
+    {
+      "number": 543,
+      "title": "[Shipments] Fix settlement ledger-block precondition (DELIVERED→DELIVERED no-op)",
+      "tier": "Easy",
+      "domain": "Shipments",
+      "status": "closed"
+    },
+    {
+      "number": 542,
+      "title": "[Telemetry] Update thresholds response-shape assertion to {shipmentType, thresholds}",
+      "tier": "Easy",
+      "domain": "Telemetry",
+      "status": "closed"
+    },
+    {
+      "number": 541,
+      "title": "[Users] Drop total from cursor-mode meta assertion in users.list tests",
+      "tier": "Easy",
+      "domain": "Users",
+      "status": "closed"
+    },
+    {
+      "number": 540,
+      "title": "[Invitations] Correct status-code expectations and remove expect.fail anti-pattern",
+      "tier": "Medium",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 539,
+      "title": "[Shipments] Fix spec-violating empty-array expectation in bulk-status MANAGER test",
+      "tier": "Easy",
+      "domain": "Shipments",
+      "status": "closed"
+    },
+    {
+      "number": 538,
+      "title": "[Testing] Canonicalize storage URL scheme in deliveryProof assertions and add 401/403 cases",
+      "tier": "Easy",
+      "domain": "Shipments",
+      "status": "closed"
+    },
+    {
+      "number": 537,
+      "title": "[Testing] Update rateLimiter tests to evolved envelope and real strictLimiter",
+      "tier": "Medium",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 536,
+      "title": "[Testing] Mock Anomaly.aggregate in analytics.cache suite to drop MongoMemoryServer dependency",
+      "tier": "Medium",
+      "domain": "Telemetry",
+      "status": "closed"
+    },
+    {
+      "number": 535,
+      "title": "[Testing] Point storage mock at services/storage/upload.js specifier actually imported",
+      "tier": "Medium",
+      "domain": "Shipments",
+      "status": "closed"
+    },
+    {
+      "number": 534,
+      "title": "[Testing] Return option()-capable aggregate builder from Shipment mock (#356)",
+      "tier": "Easy",
+      "domain": "Telemetry",
+      "status": "closed"
+    },
+    {
+      "number": 533,
+      "title": "[Testing] Implement Shipment.findByIdAndUpdate in milestone-ledger Shipment stub",
+      "tier": "Easy",
+      "domain": "Shipments",
+      "status": "closed"
+    },
+    {
+      "number": 532,
+      "title": "[Testing] Correct aggregate $facet fixture shape and severity casing for anomaly stats",
+      "tier": "Medium",
+      "domain": "Telemetry",
+      "status": "closed"
+    },
+    {
+      "number": 531,
+      "title": "[Testing] Add .limit() to shipment export find-chain mock",
+      "tier": "Easy",
+      "domain": "Shipments",
+      "status": "closed"
+    },
+    {
+      "number": 530,
+      "title": "[Testing] Fix refreshToken user stub shape and wire dead mockFindById",
+      "tier": "Easy",
+      "domain": "Auth",
+      "status": "closed"
+    },
+    {
+      "number": 529,
+      "title": "[Testing] Implement .lean() chain in invitations UserModel mock",
+      "tier": "Easy",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 528,
+      "title": "[Webhooks] Migrate iot.webhook tests from dead detectAnomaly mock to detectTelemetryAnomalies",
+      "tier": "Medium",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 527,
+      "title": "[Testing] Add getAnalyticsSummary to rbac.matrix analytics mock",
+      "tier": "Easy",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 526,
+      "title": "[Testing] Expand shipments.service mock surface to full controller import list",
+      "tier": "Easy",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 525,
+      "title": "[Testing] Add findUserById to users.repo mocks across four suites",
+      "tier": "Easy",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 524,
+      "title": "[Testing] Provide refreshToken/registerCompany/setup2fa in auth.service mocks",
+      "tier": "Easy",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 523,
+      "title": "[Testing] Sync organizations + shipments.bulk-status model mocks with current repo surface",
+      "tier": "Easy",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 504,
+      "title": "[Conventions] Resolve husky/lint-staged: wire the pre-commit hook or remove the deps",
+      "tier": "Easy",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 503,
+      "title": "[CI] Apply branch protection: required status checks for main",
+      "tier": "Medium",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 502,
+      "title": "[CI] Add Dependabot config for npm and GitHub Actions ecosystems",
+      "tier": "Easy",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 501,
+      "title": "[Build] Tighten .dockerignore build context",
+      "tier": "Easy",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 500,
+      "title": "[Docker] Add mongo/redis healthchecks and depends_on conditions",
+      "tier": "Medium",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 499,
+      "title": "[Docker] Set NODE_ENV=production in the runner image stage",
+      "tier": "Easy",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 498,
+      "title": "[Docker] Run app container as non-root user",
+      "tier": "Easy",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 497,
+      "title": "[Docker] Fix docker-compose JWT_SECRET crash-loop (env requires min 32 chars)",
+      "tier": "Easy",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 496,
+      "title": "[Testing] Migrate twoFactor.service tests to otplib v13 named API",
+      "tier": "Easy",
+      "domain": "Auth",
+      "status": "closed"
+    },
+    {
+      "number": 495,
+      "title": "[Testing] Scope heavy integration bootstrap out of the 30s beforeAll cap",
+      "tier": "Easy",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 494,
+      "title": "[Testing] Fix template module test: import depth and non-functional auth tokens",
+      "tier": "Easy",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 493,
+      "title": "[Testing] Fix env-validation harness that resolves specifiers against CWD",
+      "tier": "Easy",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 492,
+      "title": "[Testing] Adopt requireActual-spread mock factory convention for unstable_mockModule",
+      "tier": "Medium",
+      "domain": "API-QA",
+      "status": "closed"
+    },
+    {
+      "number": 491,
+      "title": "[Testing] Add shared chainable fake-model helper at tests/helpers/fakeModel.ts",
+      "tier": "Medium",
+      "domain": "API-QA",
+      "status": "closed"
+    }
   ]
 }

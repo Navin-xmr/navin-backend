@@ -8,24 +8,29 @@
 
 import { jest } from '@jest/globals';
 import { UserRole } from '../../../shared/constants/index.js';
+import {
+  createEmailServiceMock,
+  createUsersModelMock,
+  createUsersRepoMock,
+} from '../../../../tests/helpers/mocks.js';
+import { createMockOrganization, createMockUser } from '../../../../tests/fixtures/factories.js';
+import { AppError, ErrorCodes } from '../../../shared/http/errors.js';
 
 // ---------------------------------------------------------------------------
 // Mock users.repo — must be declared before any dynamic import of the service
 // ---------------------------------------------------------------------------
-const mockFindUsersByOrganizationId = jest.fn();
+jest.resetModules();
 
-jest.unstable_mockModule('../users.repo.js', () => ({
-  findUsersByOrganizationId: mockFindUsersByOrganizationId,
-  createUser: jest.fn(),
-  findUserByEmail: jest.fn(),
-  findUserById: jest.fn(),
-}));
+const usersRepoMock = createUsersRepoMock();
+const mockFindUsersByOrganizationId = usersRepoMock.findUsersByOrganizationId;
 
-// Mock email service to prevent network calls
-jest.unstable_mockModule('../../../services/email.service.js', () => ({
-  sendEmail: jest.fn(),
-  invitationEmailHtml: jest.fn(() => '<p>invite</p>'),
-}));
+jest.unstable_mockModule('../users.repo.js', () => usersRepoMock);
+jest.unstable_mockModule('../users.model.js', () => createUsersModelMock());
+
+// Mock email service to prevent network calls. The shared factory provides every
+// named export (incl. resetPasswordEmailHtml, imported transitively via auth.service)
+// with deterministic, SMTP-free implementations.
+jest.unstable_mockModule('../../../services/email.service.js', () => createEmailServiceMock());
 
 // ---------------------------------------------------------------------------
 // Dynamic imports after mocks are set up
@@ -35,25 +40,12 @@ const { listOrganizationUsers } = await import('../users.service.js');
 // ---------------------------------------------------------------------------
 // Shared fixtures
 // ---------------------------------------------------------------------------
-const ORG_ID = '000000000000000000000001';
+const ORG_ID = createMockOrganization()._id;
 const CALLER_ADMIN = { role: UserRole.ADMIN, organizationId: ORG_ID };
 const CALLER_VIEWER = { role: UserRole.VIEWER, organizationId: ORG_ID };
 
-function makeUser(overrides: Record<string, unknown> = {}) {
-  return {
-    _id: '000000000000000000000010',
-    email: 'alice@example.com',
-    name: 'Alice',
-    role: UserRole.MANAGER,
-    organizationId: ORG_ID,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    ...overrides,
-  };
-}
-
 beforeEach(() => {
-  jest.clearAllMocks();
+  jest.resetAllMocks();
 });
 
 // ---------------------------------------------------------------------------
@@ -62,8 +54,8 @@ beforeEach(() => {
 describe('listOrganizationUsers — offset pagination', () => {
   it('returns { page, limit, total } meta when page param is provided', async () => {
     const users = [
-      makeUser(),
-      makeUser({ _id: '000000000000000000000011', email: 'bob@example.com', name: 'Bob' }),
+      createMockUser({ organizationId: ORG_ID, role: UserRole.MANAGER }),
+      createMockUser({ organizationId: ORG_ID, email: 'bob@example.com', name: 'Bob' }),
     ];
 
     mockFindUsersByOrganizationId.mockResolvedValueOnce({ data: users, total: 42 });
@@ -76,6 +68,7 @@ describe('listOrganizationUsers — offset pagination', () => {
 
     expect(result.isOffsetMode).toBe(true);
     expect(result.data).toHaveLength(2);
+    expect(result.data).toEqual(users);
     expect(result.page).toBe(2);
     expect(result.limit).toBe(20);
     expect(result.total).toBe(42);
@@ -94,8 +87,9 @@ describe('listOrganizationUsers — offset pagination', () => {
 // ---------------------------------------------------------------------------
 describe('listOrganizationUsers — cursor pagination', () => {
   it('returns nextCursor and hasMore when cursor mode is used', async () => {
-    const users = [makeUser()];
-    const NEXT = '000000000000000000000099';
+    const users = [createMockUser({ organizationId: ORG_ID })];
+    const NEXT = createMockUser()._id;
+    const cursor = createMockUser()._id;
 
     mockFindUsersByOrganizationId.mockResolvedValueOnce({
       data: users,
@@ -107,17 +101,23 @@ describe('listOrganizationUsers — cursor pagination', () => {
     const result = await listOrganizationUsers({
       ...CALLER_ADMIN,
       limit: 1,
+      cursor,
     });
 
     expect(result.isOffsetMode).toBe(false);
     expect(result.hasMore).toBe(true);
     expect(result.nextCursor).toBe(NEXT);
     expect(result.data).toHaveLength(1);
+    expect(result.data).toEqual(users);
+    expect(mockFindUsersByOrganizationId).toHaveBeenCalledWith(
+      ORG_ID,
+      expect.objectContaining({ cursor, limit: 1 })
+    );
   });
 
   it('returns nextCursor null on last cursor page', async () => {
     mockFindUsersByOrganizationId.mockResolvedValueOnce({
-      data: [makeUser()],
+      data: [createMockUser({ organizationId: ORG_ID })],
       total: 1,
       hasMore: false,
       nextCursor: null,
@@ -136,7 +136,9 @@ describe('listOrganizationUsers — cursor pagination', () => {
 // ---------------------------------------------------------------------------
 describe('listOrganizationUsers — search filter', () => {
   it('forwards search param to repo so result set is reduced', async () => {
-    const matching = [makeUser({ email: 'charlie@example.com', name: 'Charlie' })];
+    const matching = [
+      createMockUser({ organizationId: ORG_ID, email: 'charlie@example.com', name: 'Charlie' }),
+    ];
 
     mockFindUsersByOrganizationId.mockResolvedValueOnce({
       data: matching,
@@ -151,6 +153,7 @@ describe('listOrganizationUsers — search filter', () => {
     });
 
     expect(result.data).toHaveLength(1);
+    expect(result.data).toEqual(matching);
     expect(mockFindUsersByOrganizationId).toHaveBeenCalledWith(
       ORG_ID,
       expect.objectContaining({ search: 'charlie' })
@@ -163,7 +166,7 @@ describe('listOrganizationUsers — search filter', () => {
 // ---------------------------------------------------------------------------
 describe('listOrganizationUsers — role filter', () => {
   it('forwards filterRole to the repo query', async () => {
-    const drivers = [makeUser({ role: UserRole.DRIVER })];
+    const drivers = [createMockUser({ organizationId: ORG_ID, role: UserRole.DRIVER })];
 
     mockFindUsersByOrganizationId.mockResolvedValueOnce({
       data: drivers,
@@ -178,6 +181,7 @@ describe('listOrganizationUsers — role filter', () => {
     });
 
     expect(result.data).toHaveLength(1);
+    expect(result.data).toEqual(drivers);
     expect(mockFindUsersByOrganizationId).toHaveBeenCalledWith(
       ORG_ID,
       expect.objectContaining({ role: UserRole.DRIVER })
@@ -186,7 +190,7 @@ describe('listOrganizationUsers — role filter', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 5. 401 / no org — missing organizationId
+// 5. Missing organizationId
 // ---------------------------------------------------------------------------
 describe('listOrganizationUsers — auth guard', () => {
   it('throws 403 when organizationId is missing', async () => {
@@ -214,5 +218,17 @@ describe('listOrganizationUsers — role guard', () => {
     await expect(
       listOrganizationUsers({ organizationId: ORG_ID, role: undefined })
     ).rejects.toMatchObject({ statusCode: 403 });
+
+    expect(mockFindUsersByOrganizationId).not.toHaveBeenCalled();
+  });
+});
+
+describe('listOrganizationUsers — repository errors', () => {
+  it('propagates repository failures without returning a successful page', async () => {
+    const error = new AppError(503, 'Users repository unavailable', ErrorCodes.INTERNAL_ERROR);
+    mockFindUsersByOrganizationId.mockRejectedValueOnce(error);
+
+    await expect(listOrganizationUsers({ ...CALLER_ADMIN })).rejects.toBe(error);
+    expect(mockFindUsersByOrganizationId).toHaveBeenCalledTimes(1);
   });
 });

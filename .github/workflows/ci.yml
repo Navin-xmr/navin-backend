@@ -93,7 +93,6 @@ jobs:
   openapi-lint:
     name: OpenAPI Lint
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -175,6 +174,8 @@ jobs:
         run: |
           echo "=== docker compose ps ==="
           docker compose -p smoke-positive -f docker-compose.yml ps
+          echo "=== migrate logs ==="
+          docker compose -p smoke-positive -f docker-compose.yml logs migrate || true
           echo "=== app logs ==="
           docker compose -p smoke-positive -f docker-compose.yml logs app || true
           echo "=== stellar-worker logs ==="

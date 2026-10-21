@@ -89,7 +89,7 @@ Modules stay self-contained. Cross-module imports only along these lines:
 | `analytics` | `shipments`, `payments` |
 | `events` | `infra/redis` |
 | `notifications` | `users` (preferences) |
-| `telemetry`/`payments`/`shipments`/`webhooks` | `src/services/chain` (**port types only** — planned per TODO Part 3; never import Stellar implementations directly) |
+| `telemetry`/`payments`/`shipments`/`webhooks`/workers | `src/services/chain` — **port types (`types.ts`) + `factory.ts` (`getChainAdapter`) only**; never import an adapter implementation or Stellar SDK directly |
 
 Prefer domain events over direct service calls. Never import a sibling controller. Avoid circular deps — pull shared logic into `src/shared/` or emit events. When you add a new dependency, note it here and in the consumer module's `AGENTS.md`.
 
@@ -101,6 +101,7 @@ Prefer domain events over direct service calls. Never import a sibling controlle
 - [ ] Zod schemas export inferred types · models use `isoDatePlugin` + soft-delete
 - [ ] Swagger updated · `npm run build` passes · touched-module tests pass (see §4 baseline note)
 - [ ] **AGENTS.md reviewed if conventions, boundaries, or module structure changed**
+- [ ] **Chain spec drift:** if `docs/chain-interface.md` changed, `src/shared/types/chain.ts` (+ `CHAIN_SPEC_VERSION`) and `tests/fixtures/chain/*.json` (`spec_version`) changed in the same PR — and vice versa. Chain shapes are imported only from `src/shared/types/chain.ts`.
 
 ### Clean-Install Build Triage (hard rule)
 

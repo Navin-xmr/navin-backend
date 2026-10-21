@@ -12,11 +12,18 @@ function isTestEnv(): boolean {
   return process.env.NODE_ENV === 'test' || typeof process.env.JEST_WORKER_ID !== 'undefined';
 }
 
-export function getRedisClient(): Redis {
+/**
+ * Redis client for the raw list-push paths (`alert_queue`).
+ *
+ * Deliberately module-private: `connection.ts` owns the single shared, teardown-
+ * tracked client, and re-exporting a second `getRedisClient()` from here would
+ * give call sites two identically-named accessors (AGENTS.md §8 — no duplicate
+ * declarations). In tests it delegates to the shared in-memory client so queue and
+ * alert paths never open a real socket.
+ */
+function getQueueRedisClient(): Redis {
   if (!redisClient) {
     if (isTestEnv()) {
-      // Delegate to the shared in-memory client so queue/alert paths never
-      // open a real socket in tests.
       redisClient = getSharedRedisClient();
       return redisClient;
     }
@@ -70,7 +77,7 @@ export async function pushAlertJob(anomaly: {
   severity: string;
   message: string;
 }) {
-  const client = getRedisClient();
+  const client = getQueueRedisClient();
   await client.lpush('alert_queue', JSON.stringify(anomaly));
 }
 

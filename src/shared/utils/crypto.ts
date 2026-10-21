@@ -35,3 +35,28 @@ export function generateDataHash(payload: unknown): string {
   const compact = serialized.replace(/\s+/g, '');
   return createHash('sha256').update(compact).digest('hex');
 }
+
+/**
+ * Canonical payload builder for all shipment/ledger event domains (#654).
+ * Defines exactly which bytes are hashed so telemetry, status changes,
+ * milestones, proofs and settlements share one deterministic scheme.
+ */
+export function buildCanonicalShipmentPayload(input: {
+  shipmentId: string;
+  event: string;
+  actor?: string;
+  timestamp?: Date | string;
+  metadata?: Record<string, unknown>;
+}): Record<string, unknown> {
+  return {
+    actor: input.actor ?? null,
+    event: input.event,
+    metadata: input.metadata ?? {},
+    shipmentId: input.shipmentId,
+    timestamp:
+      input.timestamp instanceof Date
+        ? input.timestamp.toISOString()
+        : (input.timestamp ?? new Date(0).toISOString()),
+    v: 1,
+  };
+}

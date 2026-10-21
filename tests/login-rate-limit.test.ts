@@ -1,7 +1,7 @@
 import { jest, describe, beforeAll, it, expect } from '@jest/globals';
 import request from 'supertest';
 import type { Application } from 'express';
-import { createSocketIoMock, createStellarServiceMock, createUsersModelMock } from './helpers/mocks.js';
+import { createChainFactoryMock, createSocketIoMock, createUsersModelMock } from './helpers/mocks.js';
 
 type UserRecord = { _id: string; email: string; passwordHash: string; role: string } & Record<
   string,
@@ -28,7 +28,7 @@ await jest.unstable_mockModule('../src/modules/users/users.model.js', () =>
   })
 );
 
-await jest.unstable_mockModule('../src/services/stellar.service.js', () => createStellarServiceMock());
+await jest.unstable_mockModule('../src/services/chain/factory.js', () => createChainFactoryMock());
 
 await jest.unstable_mockModule('../src/infra/socket/io.js', () => createSocketIoMock());
 

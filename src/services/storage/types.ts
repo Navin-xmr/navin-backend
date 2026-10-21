@@ -57,15 +57,25 @@ export interface StorageConfig {
 
 /**
  * Provider-agnostic storage error.
+ *
+ * Carries a registered `ERR_FILE_*` code from
+ * `src/shared/http/errors.ts` so callers can branch on the cause instead of
+ * matching on message text. `code` is optional so the many existing
+ * `new StorageError(msg, provider, status)` call sites stay valid; when it is
+ * omitted, `errorMiddleware` falls back to its generic handling.
  */
 export class StorageError extends Error {
+  readonly code?: string;
+
   constructor(
     message: string,
     readonly provider: string,
     readonly statusCode: number = 500,
-    readonly originalError?: Error
+    readonly originalError?: Error,
+    code?: string
   ) {
     super(message);
     this.name = 'StorageError';
+    this.code = code;
   }
 }

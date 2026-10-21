@@ -70,12 +70,6 @@ await jest.unstable_mockModule('../src/infra/redis/tokenBlocklist.js', () => ({
   blockToken: jest.fn(),
 }));
 
-await jest.unstable_mockModule('../src/services/stellar.service.js', () => ({
-  tokenizeShipment: jest.fn(),
-  releaseEscrow: jest.fn(),
-  getStellarExplorerUrl: jest.fn(() => 'https://stellar.expert/explorer/testnet/tx/mock'),
-}));
-
 await jest.unstable_mockModule('../src/infra/socket/io.js', () => ({
   emitStatusUpdate: jest.fn(),
   emitAnomalyDetected: jest.fn(),

@@ -8,13 +8,21 @@ export interface ILedgerBlock {
   timestamp: Date;
   shipmentId: Types.ObjectId;
   shipmentReference?: string;
+  /** Canonical event field.  Always populated; never null after migration #661. */
   milestoneEvent: MilestoneEvent;
+  /**
+   * SHA-256 hex digest of the payload committed by the on-chain transaction.
+   * Allows independent verification that `transactionHash` covers the expected data.
+   */
+  dataHash?: string;
+  /**
+   * Exact deterministic payload that was hashed into `dataHash`.
+   * Persisted alongside every dataHash so verifiers never re-guess bytes.
+   */
+  canonicalPayload?: Record<string, unknown>;
   transactionHash?: string;
   ledger: number;
   verified: boolean;
-
-  // Backward-compatible fields
-  eventType?: MilestoneEvent;
   actor?: string;
   metadata?: Record<string, unknown>;
   deletedAt?: Date;
@@ -47,12 +55,9 @@ const LedgerBlockSchema = new Schema(
       enum: Object.values(MilestoneEvent),
       required: true,
     },
-    eventType: {
-      type: String,
-      enum: Object.values(MilestoneEvent),
-      required: false,
-    },
     transactionHash: { type: String },
+    dataHash: { type: String },
+    canonicalPayload: { type: Schema.Types.Mixed },
     ledger: {
       type: Number,
       required: true,
@@ -75,8 +80,8 @@ LedgerBlockSchema.plugin(isoDatePlugin);
 // Optimizes querying ledger blocks for a specific shipment, newest first.
 LedgerBlockSchema.index({ shipmentId: 1, milestoneEvent: 1, createdAt: -1 });
 
-// Optimizes filtering by event type across shipments.
-LedgerBlockSchema.index({ eventType: 1, createdAt: -1 });
+// Allows fast lookup / deduplication by on-chain data hash.
+LedgerBlockSchema.index({ dataHash: 1 }, { sparse: true });
 
 // Soft delete middleware
 LedgerBlockSchema.pre(['find', 'findOne', 'findOneAndUpdate', 'countDocuments'], function () {

@@ -6,6 +6,7 @@ import { PublicTrackingParamSchema } from './publicTracking.validation.js';
 
 export const publicTrackingRouter = Router();
 
+// PUBLIC: unauthenticated shipment lookup by tracking number (rate-limited in app.ts via strictLimiter)
 publicTrackingRouter.get(
   '/:trackingNumber',
   validateRequest({ params: PublicTrackingParamSchema }),

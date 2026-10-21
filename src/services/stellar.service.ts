@@ -9,9 +9,12 @@ import {
 } from '@stellar/stellar-sdk';
 import { config } from '../config/index.js';
 import { AppError, ErrorCodes } from '../shared/http/errors.js';
-import { logger } from '../shared/logger/logger.js';
+import { getChainAdapter } from './chain/factory.js';
+import { generateDataHash } from '../shared/utils/crypto.js';
 
-const horizon = new Horizon.Server(config.horizonUrl);
+export function getHorizonServer(url: string = config.horizonUrl): Horizon.Server {
+  return new Horizon.Server(url);
+}
 
 /**
  * Creates a Stellar manage-data transaction for a shipment and returns token metadata.
@@ -30,6 +33,7 @@ export async function tokenizeShipment(shipmentData: {
     throw new AppError(500, 'STELLAR_SECRET_KEY is not configured', ErrorCodes.STELLAR_CONFIG);
   }
 
+  const horizon = getHorizonServer(config.horizonUrl);
   const keypair = Keypair.fromSecret(secretKey);
   const account = await horizon.loadAccount(keypair.publicKey());
 
@@ -82,13 +86,12 @@ export async function anchorTelemetryHash(telemetryData: {
     throw new AppError(400, 'dataHash must be a non-empty string', ErrorCodes.STELLAR_INVALID_HASH);
   }
 
+  const horizon = getHorizonServer(config.horizonUrl);
   const keypair = Keypair.fromSecret(secretKey);
   const account = await horizon.loadAccount(keypair.publicKey());
 
   const network = config.stellarNetwork === 'public' ? Networks.PUBLIC : Networks.TESTNET;
 
-  // We must include a Memo to embed the hash, and at least one operation
-  // for the transaction to be valid.
   const transaction = new TransactionBuilder(account, {
     fee: BASE_FEE,
     networkPassphrase: network,
@@ -110,54 +113,31 @@ export async function anchorTelemetryHash(telemetryData: {
 
   return { stellarTxHash: txHash };
 }
+
 /**
- * Releases escrow on Stellar by recording a release event on-chain.
- * @param {{paymentId: string; shipmentId: string}} escrowData - Escrow release metadata.
- * @returns {Promise<{success: boolean; transactionHash?: string}>} Release status and optional transaction hash.
+ * Releases escrow on Stellar via ChainAdapter release_escrow call.
+ * Rejects with AppError codes on failure (no error swallowing).
  */
 export async function releaseEscrow(escrowData: {
   paymentId: string;
   shipmentId: string;
-}): Promise<{ success: boolean; transactionHash?: string }> {
-  try {
-    const secretKey = config.stellarSecretKey;
-    if (!secretKey) {
-      throw new Error('STELLAR_SECRET_KEY is not configured');
-    }
+  proofHash?: string;
+}): Promise<{ success: boolean; transactionHash?: string; simulated?: boolean }> {
+  const adapter = getChainAdapter();
+  const proofHash =
+    escrowData.proofHash ??
+    generateDataHash({ paymentId: escrowData.paymentId, shipmentId: escrowData.shipmentId });
 
-    const keypair = Keypair.fromSecret(secretKey);
-    const account = await horizon.loadAccount(keypair.publicKey());
+  const result = await adapter.releaseEscrow({
+    payment_id: escrowData.paymentId,
+    proof_hash: proofHash,
+  });
 
-    const network = config.stellarNetwork === 'public' ? Networks.PUBLIC : Networks.TESTNET;
-
-    // Build a transaction to release the escrow by recording the release event on-chain
-    const transaction = new TransactionBuilder(account, {
-      fee: BASE_FEE,
-      networkPassphrase: network,
-    })
-      .addOperation(
-        Operation.manageData({
-          name: `release:${escrowData.paymentId}`,
-          value: escrowData.shipmentId,
-        })
-      )
-      .addMemo(Memo.text(`escrow-release:${escrowData.paymentId}`))
-      .setTimeout(30)
-      .build();
-
-    transaction.sign(keypair);
-
-    const result = await horizon.submitTransaction(transaction);
-    const txHash = result.hash;
-
-    return {
-      success: true,
-      transactionHash: txHash,
-    };
-  } catch (error) {
-    logger.error({ err: error }, 'Error releasing escrow');
-    return { success: false };
-  }
+  return {
+    success: true,
+    transactionHash: result.txHash,
+    simulated: result.simulated,
+  };
 }
 
 export function getStellarExplorerUrl(txHash: string): string {

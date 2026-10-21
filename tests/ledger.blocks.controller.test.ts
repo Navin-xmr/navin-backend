@@ -138,4 +138,96 @@ describe('GET /api/ledger/blocks controller', () => {
       },
     });
   });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // dataHash field tests (issue #660)
+  // ──────────────────────────────────────────────────────────────────────────
+
+  it('getLedgerBlockById returns dataHash when present on the block', async () => {
+    const block = {
+      _id: 'lb2',
+      shipmentId: '507f1f77bcf86cd799439012',
+      milestoneEvent: 'PROOF_SUBMITTED',
+      blockNumber: 5,
+      ledger: 5,
+      verified: false,
+      transactionHash: 'stellar-tx-abc',
+      dataHash: 'a'.repeat(64), // 64-char hex SHA-256 digest
+    };
+
+    getLedgerBlockByIdServiceMock.mockResolvedValue(block);
+
+    const req = { params: { id: 'lb2' } } as any;
+    const res = {
+      status: jest.fn().mockReturnThis(),
+      json: jest.fn(),
+    } as any;
+
+    await getLedgerBlockById(req, res);
+
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        success: true,
+        data: expect.objectContaining({ dataHash: 'a'.repeat(64) }),
+      }),
+    );
+  });
+
+  it('getLedgerBlockById omits dataHash when absent from the block', async () => {
+    const block = {
+      _id: 'lb3',
+      shipmentId: '507f1f77bcf86cd799439013',
+      milestoneEvent: 'IN_TRANSIT',
+      blockNumber: 2,
+      ledger: 2,
+      verified: false,
+      // no dataHash — pre-existing block
+    };
+
+    getLedgerBlockByIdServiceMock.mockResolvedValue(block);
+
+    const req = { params: { id: 'lb3' } } as any;
+    const res = {
+      status: jest.fn().mockReturnThis(),
+      json: jest.fn(),
+    } as any;
+
+    await getLedgerBlockById(req, res);
+
+    const payload = (res.json as jest.Mock).mock.calls[0][0];
+    expect(payload.data).not.toHaveProperty('dataHash');
+  });
+
+  it('getLedgerBlocks surfaces dataHash on each block in the page', async () => {
+    const hash = 'b'.repeat(64);
+    getLedgerBlocksServiceMock.mockResolvedValue({
+      data: [
+        {
+          _id: 'lb4',
+          shipmentId: '507f1f77bcf86cd799439014',
+          milestoneEvent: 'DELIVERED',
+          blockNumber: 10,
+          ledger: 10,
+          verified: true,
+          transactionHash: 'stellar-tx-def',
+          dataHash: hash,
+        },
+      ],
+      nextCursor: null,
+      hasMore: false,
+      total: 1,
+    });
+
+    const req = { query: { limit: '10' } } as any;
+    const res = {
+      status: jest.fn().mockReturnThis(),
+      json: jest.fn(),
+    } as any;
+
+    await getLedgerBlocks(req, res);
+
+    const payload = (res.json as jest.Mock).mock.calls[0][0];
+    expect(payload.data[0]).toHaveProperty('dataHash', hash);
+  });
 });

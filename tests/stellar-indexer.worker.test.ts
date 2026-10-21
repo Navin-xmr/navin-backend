@@ -1,17 +1,10 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
-import { createMockTelemetry } from './fixtures/factories.js';
-import { TelemetryAnchorStatus } from '../src/shared/types/telemetry.js';
+import type { ChainAdapter } from '../src/services/chain/types.js';
+import { CHAIN_EVENT_NAMES } from '../src/shared/types/chain.js';
+import type { ChainEvent } from '../src/shared/types/chain.js';
+import { createMockPayment, createMockShipment } from './fixtures/factories.js';
 
-const paymentFindMock = jest.fn();
 const ledgerUpdateOneMock = jest.fn();
-const telemetryFindMock = jest.fn();
-const telemetryUpdateOneMock = jest.fn();
-
-await jest.unstable_mockModule('../src/modules/payments/payments.model.js', () => ({
-  PaymentModel: {
-    find: paymentFindMock,
-  },
-}));
 
 await jest.unstable_mockModule('../src/modules/ledger/ledger.model.js', () => ({
   LedgerBlock: {
@@ -19,239 +12,113 @@ await jest.unstable_mockModule('../src/modules/ledger/ledger.model.js', () => ({
   },
 }));
 
-await jest.unstable_mockModule('../src/modules/telemetry/telemetry.model.js', () => ({
-  Telemetry: {
-    find: telemetryFindMock,
-    updateOne: telemetryUpdateOneMock,
-  },
-  TelemetryModel: {
-    find: telemetryFindMock,
-    updateOne: telemetryUpdateOneMock,
-  },
-  TelemetryAnchorStatus: {
-    PENDING_ANCHOR: 'PENDING_ANCHOR',
-    ANCHORED: 'ANCHORED',
-    ANCHOR_FAILED: 'ANCHOR_FAILED',
-    VERIFIED: 'VERIFIED',
-  },
-}));
-
 const { indexStellarTransactions } = await import('../src/workers/stellar-indexer.worker.js');
 
-describe('stellar indexer worker', () => {
+const CONTRACT_ID = 'CACAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAINCW';
+const PAYEE = 'GAAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQDZ7H';
+
+function adapterStreaming(events: ChainEvent[]): ChainAdapter {
+  return {
+    async anchorEvent() {
+      throw new Error('Not implemented');
+    },
+    async releaseEscrow() {
+      throw new Error('Not implemented');
+    },
+    async *streamEvents() {
+      yield* events;
+    },
+  };
+}
+
+/** The `$set` stage of the n-th (0-based) LedgerBlock upsert. */
+function nthSet(n: number): Record<string, unknown> {
+  const [, update] = ledgerUpdateOneMock.mock.calls[n] as [
+    unknown,
+    { $set: Record<string, unknown> },
+  ];
+  return update.$set;
+}
+
+describe('stellar indexer worker - event driven', () => {
   beforeEach(() => {
-    paymentFindMock.mockReset();
     ledgerUpdateOneMock.mockReset();
-    telemetryFindMock.mockReset();
-    telemetryUpdateOneMock.mockReset();
-
-    paymentFindMock.mockReturnValue({
-      select: () => ({
-        lean: async () => [],
-      }),
-    });
-    telemetryFindMock.mockReturnValue({
-      select: () => ({
-        lean: async () => [],
-      }),
-    });
-  });
-
-  it('creates/upserts a ledger block from mocked Stellar transaction data', async () => {
-    paymentFindMock.mockReturnValue({
-      select: () => ({
-        lean: async () => [{ shipmentId: '507f1f77bcf86cd799439011', stellarTxHash: 'tx-1' }],
-      }),
-    });
-
     ledgerUpdateOneMock.mockResolvedValue({ upsertedCount: 1 });
-
-    const client = {
-      getLatestLedger: async () => 105,
-      getTransaction: async () => ({ hash: 'tx-1', ledger: 100, memo: 'SETTLEMENT_COMPLETED' }),
-    };
-
-    const result = await indexStellarTransactions(client);
-
-    expect(result.processed).toBe(1);
-    expect(result.upserted).toBe(1);
-    expect(result.verified).toBe(1);
-    expect(ledgerUpdateOneMock).toHaveBeenCalledTimes(1);
   });
 
-  it('handles duplicate transaction hashes idempotently', async () => {
-    paymentFindMock.mockReturnValue({
-      select: () => ({
-        lean: async () => [
-          { shipmentId: '507f1f77bcf86cd799439011', stellarTxHash: 'tx-dup' },
-          { shipmentId: '507f1f77bcf86cd799439012', stellarTxHash: 'tx-dup' },
-        ],
-      }),
-    });
-
-    ledgerUpdateOneMock.mockResolvedValue({ upsertedCount: 1 });
-
-    const client = {
-      getLatestLedger: async () => 101,
-      getTransaction: async () => ({ hash: 'tx-dup', ledger: 100, memo: 'SETTLEMENT_COMPLETED' }),
-    };
-
-    const result = await indexStellarTransactions(client);
-
-    expect(result.processed).toBe(1);
-    expect(ledgerUpdateOneMock).toHaveBeenCalledTimes(1);
-  });
-
-  it('throws when chain query fails so BullMQ can retry with backoff', async () => {
-    paymentFindMock.mockReturnValue({
-      select: () => ({
-        lean: async () => [{ shipmentId: '507f1f77bcf86cd799439011', stellarTxHash: 'tx-fail' }],
-      }),
-    });
-
-    const client = {
-      getLatestLedger: async () => 100,
-      getTransaction: async () => {
-        throw new Error('horizon unavailable');
-      },
-    };
-
-    await expect(indexStellarTransactions(client)).rejects.toThrow('horizon unavailable');
-  });
-
-  it('covers telemetry anchor verification path with confirmation metadata and verified flip', async () => {
-    const telemetryFixture = createMockTelemetry({
-      shipmentId: '507f1f77bcf86cd799439011',
-      stellarTxHash: 'tx-telemetry-1',
-      anchorStatus: TelemetryAnchorStatus.ANCHORED,
-      verified: false,
-    });
-
-    telemetryFindMock.mockReturnValue({
-      select: () => ({
-        lean: async () => [telemetryFixture],
-      }),
-    });
-
-    telemetryUpdateOneMock.mockResolvedValue({ modifiedCount: 1 });
-    ledgerUpdateOneMock.mockResolvedValue({ upsertedCount: 1 });
-
-    const client = {
-      getLatestLedger: async () => 105,
-      getTransaction: async () => ({
-        hash: 'tx-telemetry-1',
-        ledger: 100,
-        memo: 'TELEMETRY_ANCHOR',
-      }),
-    };
-
-    const result = await indexStellarTransactions(client);
-
-    expect(result.processed).toBe(1);
-    expect(result.upserted).toBe(1);
-    expect(result.verified).toBe(1);
-
-    expect(telemetryUpdateOneMock).toHaveBeenCalledWith(
-      { _id: telemetryFixture._id },
+  it('streams an anchor event and upserts its ledger block', async () => {
+    const shipment = createMockShipment();
+    const mockEvents: ChainEvent[] = [
       {
-        $set: {
-          verified: true,
-          confirmationMetadata: {
-            blockNumber: 100,
-            ledger: 100,
-            confirmations: 5,
-            verified: true,
-            memo: 'TELEMETRY_ANCHOR',
-            indexedAt: expect.any(String),
-          },
-          metadata: {
-            blockNumber: 100,
-            ledger: 100,
-            confirmations: 5,
-            verified: true,
-            memo: 'TELEMETRY_ANCHOR',
-            indexedAt: expect.any(String),
-          },
-        },
-      }
-    );
+        id: 'evt-1',
+        contract_id: CONTRACT_ID,
+        tx_hash: '11'.repeat(32),
+        ledger: 100,
+        ledger_closed_at: '2026-09-27T10:00:00Z',
+        name: CHAIN_EVENT_NAMES.ANCHOR,
+        topic: [CHAIN_EVENT_NAMES.ANCHOR, shipment._id],
+        data: ['a'.repeat(64), 100],
+      },
+    ];
 
+    const result = await indexStellarTransactions(adapterStreaming(mockEvents));
+
+    expect(result.processed).toBe(1);
+    expect(result.upserted).toBe(1);
+    expect(result.lastCursor).toBe('evt-1');
     expect(ledgerUpdateOneMock).toHaveBeenCalledWith(
-      { transactionHash: 'tx-telemetry-1' },
+      { transactionHash: mockEvents[0].tx_hash },
       expect.objectContaining({
         $setOnInsert: {
-          shipmentId: '507f1f77bcf86cd799439011',
-          eventType: 'IN_TRANSIT',
-          transactionHash: 'tx-telemetry-1',
+          shipmentId: shipment._id,
+          milestoneEvent: 'IN_TRANSIT',
+          transactionHash: mockEvents[0].tx_hash,
           actor: 'stellar-indexer',
         },
         $set: expect.objectContaining({
-          metadata: expect.objectContaining({
-            blockNumber: 100,
-            ledger: 100,
-            confirmations: 5,
-            verified: true,
-          }),
+          milestoneEvent: 'IN_TRANSIT',
+          dataHash: 'a'.repeat(64),
         }),
       }),
       { upsert: true }
     );
   });
 
-  it('does not flip verified when confirmations are below minimum threshold', async () => {
-    const telemetryFixture = createMockTelemetry({
-      shipmentId: '507f1f77bcf86cd799439011',
-      stellarTxHash: 'tx-telemetry-pending',
-      anchorStatus: TelemetryAnchorStatus.ANCHORED,
-      verified: false,
-    });
-
-    telemetryFindMock.mockReturnValue({
-      select: () => ({
-        lean: async () => [telemetryFixture],
-      }),
-    });
-
-    telemetryUpdateOneMock.mockResolvedValue({ modifiedCount: 1 });
-    ledgerUpdateOneMock.mockResolvedValue({ upsertedCount: 1 });
-
-    const client = {
-      getLatestLedger: async () => 101,
-      getTransaction: async () => ({
-        hash: 'tx-telemetry-pending',
-        ledger: 100,
-        memo: 'TELEMETRY_ANCHOR',
-      }),
+  it('writes the anchor data hash to the top-level indexed dataHash field', async () => {
+    const shipment = createMockShipment();
+    const anchor: ChainEvent = {
+      id: 'evt-anchor',
+      contract_id: CONTRACT_ID,
+      tx_hash: '22'.repeat(32),
+      ledger: 101,
+      ledger_closed_at: '2026-09-27T10:01:00Z',
+      name: CHAIN_EVENT_NAMES.ANCHOR,
+      topic: [CHAIN_EVENT_NAMES.ANCHOR, shipment._id],
+      data: ['b'.repeat(64), 101],
     };
 
-    const result = await indexStellarTransactions(client, 3);
+    await indexStellarTransactions(adapterStreaming([anchor]));
 
-    expect(result.processed).toBe(1);
-    expect(result.verified).toBe(0);
+    const block = nthSet(0);
+    expect(block.dataHash).toBe(anchor.data[0]);
+    expect(block.metadata).toEqual(expect.objectContaining({ dataHash: anchor.data[0] }));
+  });
 
-    expect(telemetryUpdateOneMock).toHaveBeenCalledWith(
-      { _id: telemetryFixture._id },
-      {
-        $set: {
-          verified: false,
-          confirmationMetadata: {
-            blockNumber: 100,
-            ledger: 100,
-            confirmations: 1,
-            verified: false,
-            memo: 'TELEMETRY_ANCHOR',
-            indexedAt: expect.any(String),
-          },
-          metadata: {
-            blockNumber: 100,
-            ledger: 100,
-            confirmations: 1,
-            verified: false,
-            memo: 'TELEMETRY_ANCHOR',
-            indexedAt: expect.any(String),
-          },
-        },
-      }
-    );
+  it('leaves dataHash unset for non-anchor events', async () => {
+    const payment = createMockPayment();
+    const release: ChainEvent = {
+      id: 'evt-release',
+      contract_id: CONTRACT_ID,
+      tx_hash: '33'.repeat(32),
+      ledger: 102,
+      ledger_closed_at: '2026-09-27T10:02:00Z',
+      name: CHAIN_EVENT_NAMES.ESCROW_RELEASE,
+      topic: [CHAIN_EVENT_NAMES.ESCROW_RELEASE, payment._id],
+      data: ['c'.repeat(64), PAYEE, '1500000000'],
+    };
+
+    await indexStellarTransactions(adapterStreaming([release]));
+
+    expect(nthSet(0)).not.toHaveProperty('dataHash');
   });
 });

@@ -1,4 +1,5 @@
 import { jest, describe, beforeAll, beforeEach, it, expect } from '@jest/globals';
+import { createChainFactoryMock } from './helpers/mocks.js';
 import request from 'supertest';
 import { signToken } from './fixtures/factories.js';
 import type { Application } from 'express';
@@ -102,14 +103,9 @@ await jest.unstable_mockModule('../src/modules/shipments/shipments.model.js', ()
 });
 
 // Mock other dependencies
-await jest.unstable_mockModule('../src/services/stellar.service.js', () => ({
-  tokenizeShipment: jest.fn(() =>
-    Promise.resolve({ stellarTokenId: 'test', stellarTxHash: 'test' })
-  ),
-  anchorTelemetryHash: jest.fn(() => Promise.resolve({ stellarTxHash: 'test' })),
-  releaseEscrow: jest.fn(() => Promise.resolve({ success: true, transactionHash: 'test' })),
-  getStellarExplorerUrl: jest.fn(() => 'https://stellar.expert/explorer/testnet/tx/mock'),
-}));
+await jest.unstable_mockModule('../src/services/chain/factory.js', () =>
+  createChainFactoryMock()
+);
 
 await jest.unstable_mockModule('../src/infra/socket/io.js', () => ({
   emitStatusUpdate: jest.fn(),

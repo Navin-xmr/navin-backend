@@ -3,7 +3,8 @@
 /**
  * Generate roadmap dashboard HTML from issue data
  * 
- * This script generates a visual roadmap dashboard that tracks the 60-issue wave progress.
+ * This script generates a visual roadmap dashboard that tracks the 100-issue wave
+ * program (P1–P6) plus later phase batches recorded in issues-data.json.
  * It reads from issues-data.json and creates an HTML dashboard with:
  * - Tier distribution (Easy/Medium/Hard) - donut chart
  * - Domain breakdown - stacked bar chart
@@ -492,11 +493,12 @@ function generateDashboardHTML(data) {
 <body>
   <div class="container">
     <div class="header">
-      <h1>🚀 60-Issue Wave Roadmap</h1>
-      <p>Navin Backend Development Progress</p>
+      <h1>🚀 100-Issue Wave Roadmap</h1>
+      <p>Navin Backend Development Progress (P1–P6 core + later phases)</p>
       <div class="meta">
         <strong>Generated:</strong> ${generatedDate}<br>
         <strong>Coverage:</strong> Issues #${data.issueRange}
+        ${data.waveProgram ? `<br><strong>Program:</strong> ${data.waveProgram.coreIssueCount} core (P1–P6) + ${data.waveProgram.phase7Batch} phase-7` : ''}
       </div>
     </div>
 
