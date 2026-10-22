@@ -14,17 +14,26 @@
 
 import { jest, describe, it, expect, beforeEach } from '@jest/globals';
 import { Types } from 'mongoose';
+import {
+  buildCanonicalShipmentPayload,
+  generateDataHash,
+} from '../src/shared/utils/crypto.js';
 
 // Register mock BEFORE any dynamic import of the module under test.
 const createMock = jest.fn<(...args: unknown[]) => Promise<unknown>>();
+const findByIdMock = jest.fn();
 
 await jest.unstable_mockModule('../src/modules/ledger/ledger.model.js', () => ({
   LedgerBlock: {
     create: createMock,
+    findById: findByIdMock,
   },
 }));
 
 const { createLedgerBlock } = await import('../src/modules/ledger/ledger.repo.js');
+const { getLedgerBlockVerificationService } = await import(
+  '../src/modules/ledger/ledger.service.js'
+);
 
 // ─── Repo tests ───────────────────────────────────────────────────────────────
 
@@ -105,6 +114,114 @@ describe('createLedgerBlock — dataHash persistence (issue #660)', () => {
       }),
     );
   });
+});
+
+// ─── canonicalPayload persistence + hash integrity (issue #971) ───────────────
+
+describe('createLedgerBlock — canonicalPayload persistence (issue #971)', () => {
+  const shipmentId = new Types.ObjectId().toHexString();
+
+  beforeEach(() => {
+    createMock.mockReset();
+  });
+
+  it('stores top-level canonicalPayload on status-change blocks with sha256(canonicalPayload) === dataHash', async () => {
+    const canonical = buildCanonicalShipmentPayload({
+      shipmentId,
+      event: 'IN_TRANSIT',
+      actor: 'user-1',
+      timestamp: new Date('2026-09-27T10:00:00.000Z'),
+      metadata: { previousStatus: 'CREATED' },
+    });
+    const hash = generateDataHash(canonical);
+
+    createMock.mockResolvedValueOnce({
+      _id: new Types.ObjectId().toHexString(),
+      milestoneEvent: 'IN_TRANSIT',
+      dataHash: hash,
+      canonicalPayload: canonical,
+    });
+
+    await createLedgerBlock({
+      shipmentId,
+      milestoneEvent: 'IN_TRANSIT' as never,
+      dataHash: hash,
+      canonicalPayload: canonical,
+      actor: 'user-1',
+      metadata: { previousStatus: 'CREATED' },
+    });
+
+    const callArg = (createMock.mock.calls[0] as [Record<string, unknown>])[0];
+    expect(callArg).toHaveProperty('canonicalPayload', canonical);
+    expect(generateDataHash(callArg.canonicalPayload)).toBe(callArg.dataHash);
+  });
+
+  it('stores top-level canonicalPayload on settlement blocks with sha256(canonicalPayload) === dataHash', async () => {
+    const canonical = buildCanonicalShipmentPayload({
+      shipmentId,
+      event: 'SETTLEMENT_INITIATED',
+      actor: 'user-1',
+      timestamp: new Date('2026-09-27T10:00:00.000Z'),
+      metadata: { paymentId: new Types.ObjectId().toHexString() },
+    });
+    const hash = generateDataHash(canonical);
+
+    createMock.mockResolvedValueOnce({
+      _id: new Types.ObjectId().toHexString(),
+      milestoneEvent: 'SETTLEMENT_INITIATED',
+      dataHash: hash,
+      canonicalPayload: canonical,
+    });
+
+    await createLedgerBlock({
+      shipmentId,
+      milestoneEvent: 'SETTLEMENT_INITIATED' as never,
+      dataHash: hash,
+      canonicalPayload: canonical,
+      actor: 'user-1',
+    });
+
+    const callArg = (createMock.mock.calls[0] as [Record<string, unknown>])[0];
+    expect(callArg).toHaveProperty('canonicalPayload', canonical);
+    expect(generateDataHash(callArg.canonicalPayload)).toBe(callArg.dataHash);
+  });
+});
+
+describe('getLedgerBlockVerificationService — canonicalPayload presence (issue #971)', () => {
+  beforeEach(() => {
+    findByIdMock.mockReset();
+  });
+
+  it.each([['IN_TRANSIT'], ['SETTLEMENT_INITIATED'], ['SETTLEMENT_COMPLETED']])(
+    'returns non-null canonicalPayload with matching dataHash for %s blocks',
+    async milestoneEvent => {
+      const canonical = buildCanonicalShipmentPayload({
+        shipmentId: new Types.ObjectId().toHexString(),
+        event: milestoneEvent,
+        actor: 'user-1',
+        timestamp: new Date('2026-09-27T10:00:00.000Z'),
+      });
+      const hash = generateDataHash(canonical);
+      findByIdMock.mockReturnValueOnce({
+        lean: async () => ({
+          _id: new Types.ObjectId().toHexString(),
+          milestoneEvent,
+          canonicalPayload: canonical,
+          dataHash: hash,
+          transactionHash: 'stellar-tx-abc',
+          ledger: 5,
+        }),
+      });
+
+      const verification = await getLedgerBlockVerificationService(
+        new Types.ObjectId().toHexString(),
+      );
+
+      expect(verification.canonicalPayload).toEqual(canonical);
+      expect(verification.canonicalPayload).not.toBeNull();
+      expect(generateDataHash(verification.canonicalPayload)).toBe(verification.dataHash);
+    },
+  );
 });
 
 // ─── Migration smoke tests ────────────────────────────────────────────────────
