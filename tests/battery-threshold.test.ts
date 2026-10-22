@@ -190,7 +190,7 @@ describe('Issue #168: Battery Threshold Detection at 20%', () => {
           timestamp: new Date(),
           temperature: 20,
           humidity: 50,
-          batteryLevel: null as any,
+          batteryLevel: null as unknown as number,
         },
         thresholds
       );
@@ -203,7 +203,7 @@ describe('Issue #168: Battery Threshold Detection at 20%', () => {
           timestamp: new Date(),
           temperature: 20,
           humidity: 50,
-          batteryLevel: undefined as any,
+          batteryLevel: undefined as unknown as number,
         },
         thresholds
       );

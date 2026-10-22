@@ -2,7 +2,15 @@ import { jest, describe, it, expect, beforeEach, beforeAll } from '@jest/globals
 import crypto from 'crypto';
 
 // Mock data
-const invitations: Record<string, unknown>[] = [];
+type InvitationRecord = Record<string, unknown> & {
+  email?: string;
+  organizationId?: string;
+  status?: string;
+  tokenHash?: string;
+  createdAt?: Date;
+};
+
+const invitations: InvitationRecord[] = [];
 const users: Record<string, unknown>[] = [];
 const organizations: Record<string, unknown>[] = [];
 
@@ -20,7 +28,7 @@ await jest.unstable_mockModule('../src/modules/users/users.model.js', () => {
     findById: (id: string) => Promise.resolve(users.find(u => u._id === id)),
     findOne: ({ email }: { email: string }) =>
       Promise.resolve(users.find(u => u.email === email) ?? null),
-    create: jest.fn().mockImplementation(async (data) => {
+    create: jest.fn().mockImplementation(async (data: Record<string, unknown>) => {
       const created = {
         _id: `user-${Date.now()}`,
         ...data,
@@ -50,7 +58,7 @@ await jest.unstable_mockModule('../src/modules/invitations/invitations.model.js'
   };
 
   const InvitationModel = {
-    create: jest.fn().mockImplementation(async (data) => {
+    create: jest.fn().mockImplementation(async (data: Record<string, unknown>) => {
       const created = {
         _id: `inv-${Date.now()}`,
         ...data,
@@ -59,7 +67,7 @@ await jest.unstable_mockModule('../src/modules/invitations/invitations.model.js'
       return created;
     }),
     findOne: (query: Record<string, unknown>) => {
-      const match = invitations.find((inv: any) => {
+      const match = invitations.find(inv => {
         if (query.email && inv.email !== query.email) return false;
         if (query.organizationId && inv.organizationId !== query.organizationId) return false;
         if (query.status && inv.status !== query.status) return false;
@@ -80,7 +88,7 @@ await jest.unstable_mockModule('../src/modules/invitations/invitations.model.js'
     findOneAndUpdate: jest
       .fn()
       .mockImplementation(async (query: Record<string, unknown>, updates: Record<string, unknown>) => {
-        const inv = invitations.find((i: any) => {
+      const inv = invitations.find(i => {
           if (query.tokenHash && i.tokenHash !== query.tokenHash) return false;
           return true;
         });
@@ -90,16 +98,16 @@ await jest.unstable_mockModule('../src/modules/invitations/invitations.model.js'
       }),
     find: jest.fn().mockImplementation(async (query: Record<string, unknown>) => {
       return invitations
-        .filter((inv: any) => {
+        .filter(inv => {
           if (query.organizationId && inv.organizationId !== query.organizationId) return false;
           if (query.status && inv.status !== query.status) return false;
           return true;
         })
-        .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+        .sort((a, b) => new Date(b.createdAt ?? 0).getTime() - new Date(a.createdAt ?? 0).getTime())
         .slice(0, 21);
     }),
     countDocuments: jest.fn().mockImplementation(async (query: Record<string, unknown>) => {
-      return invitations.filter((inv: any) => {
+      return invitations.filter(inv => {
         if (query.organizationId && inv.organizationId !== query.organizationId) return false;
         if (query.status && inv.status !== query.status) return false;
         return true;
@@ -339,7 +347,7 @@ describe('#352 - Persistent Invitations Model', () => {
 
     // Manually expire the invitation in database
     const inv = invitations[0] as Record<string, unknown>;
-    (inv as any).expiresAt = new Date(Date.now() - 1000); // Past date
+    inv.expiresAt = new Date(Date.now() - 1000); // Past date
 
     try {
       await getInvitationInfo(token.token);

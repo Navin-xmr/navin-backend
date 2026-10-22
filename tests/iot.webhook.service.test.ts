@@ -57,7 +57,9 @@ describe('processIotWebhook', () => {
 
     const { processIotWebhook } = await import('../src/modules/webhooks/iot.service.js');
 
-    const result = await processIotWebhook(payload as any);
+    const result = await processIotWebhook(
+      payload as unknown as Parameters<typeof processIotWebhook>[0]
+    );
     await new Promise(resolve => setImmediate(resolve));
 
     expect(result).toBeDefined();
@@ -121,7 +123,7 @@ describe('processIotWebhook', () => {
 
     const { processIotWebhook } = await import('../src/modules/webhooks/iot.service.js');
 
-    await processIotWebhook(payload as any);
+    await processIotWebhook(payload as unknown as Parameters<typeof processIotWebhook>[0]);
     await new Promise(resolve => setImmediate(resolve));
 
     expect(emitAnomalyDetected).toHaveBeenCalledTimes(1);
@@ -159,6 +161,8 @@ describe('processIotWebhook', () => {
 
     const { processIotWebhook } = await import('../src/modules/webhooks/iot.service.js');
 
-    await expect(processIotWebhook(payload as any)).rejects.toThrow('Database down');
+    await expect(
+      processIotWebhook(payload as unknown as Parameters<typeof processIotWebhook>[0])
+    ).rejects.toThrow('Database down');
   });
 });

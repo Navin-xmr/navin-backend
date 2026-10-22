@@ -1,11 +1,8 @@
 import { jest, describe, it, expect, beforeAll } from '@jest/globals';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const mockBlockToken = jest.fn() as any;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const mockIsTokenBlocked = jest.fn() as any;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const mockSendEmail = jest.fn() as any;
+const mockBlockToken = jest.fn();
+const mockIsTokenBlocked = jest.fn();
+const mockSendEmail = jest.fn();
 
 await jest.unstable_mockModule('../src/modules/users/users.model.js', () => {
   const users: Record<string, unknown>[] = [];
@@ -15,8 +12,7 @@ await jest.unstable_mockModule('../src/modules/users/users.model.js', () => {
     findById: (id: string) => {
       const found = users.find(u => u._id === id);
       if (!found) return Promise.resolve(null);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return Promise.resolve({ ...found, save: jest.fn<any>().mockResolvedValue(undefined) });
+      return Promise.resolve({ ...found, save: jest.fn().mockResolvedValue(undefined) });
     },
     _users: users,
   };
@@ -67,8 +63,7 @@ describe('#285 - Password Reset Flow', () => {
 
     it('should return silently for existing email', async () => {
       const usersModule = await import('../src/modules/users/users.model.js');
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (usersModule.UserModel as any)._users.push({
+      (usersModule.UserModel as unknown as { _users: Record<string, unknown>[] })._users.push({
         _id: 'user1',
         email: 'existing@test.com',
         passwordHash: 'hash',
@@ -89,8 +84,7 @@ describe('#285 - Password Reset Flow', () => {
     it('should include a valid reset link in the email', async () => {
       mockSendEmail.mockClear();
       await forgotPassword('existing@test.com');
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const call = (mockSendEmail.mock.calls as any)[0] as [{ to: string; subject: string; html: string }];
+      const call = mockSendEmail.mock.calls[0] as [{ to: string; subject: string; html: string }];
       expect(call[0].html).toContain('/reset-password?token=');
     });
   });
@@ -141,14 +135,12 @@ describe('#285 - Password Reset Flow', () => {
 
     it('should successfully reset password for valid token', async () => {
       const usersModule = await import('../src/modules/users/users.model.js');
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (usersModule.UserModel as any)._users.push({
+      (usersModule.UserModel as unknown as { _users: Record<string, unknown>[] })._users.push({
         _id: 'user2',
         email: 'reset@test.com',
         passwordHash: 'oldhash',
         role: 'VIEWER',
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        save: jest.fn<any>().mockResolvedValue(undefined),
+        save: jest.fn().mockResolvedValue(undefined),
       });
 
       const token = jwt.sign(

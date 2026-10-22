@@ -12,6 +12,23 @@ type AnomalyRecord = { _id: string; shipmentId: string; severity?: string } & Re
   unknown
 >;
 type UserRecord = { _id: string; role?: string; walletAddress?: string } & Record<string, unknown>;
+type SnapshotQuery = {
+  _id?: { $lt?: string | number };
+  status?: string;
+  shipmentId?: string;
+  severity?: string;
+};
+type ShipmentConstructorMock = {
+  new (doc: Record<string, unknown>): ShipmentRecord;
+  find: (query?: SnapshotQuery) => {
+    sort: () => {
+      skip: (skip: number) => { limit: (limit: number) => { lean: () => Promise<ShipmentRecord[]> } };
+      limit: (limit: number) => { lean: () => Promise<ShipmentRecord[]> };
+    };
+  };
+  countDocuments: () => Promise<number>;
+  deleteMany: () => Promise<void>;
+};
 
 const shipmentsData: ShipmentRecord[] = [];
 const anomaliesData: AnomalyRecord[] = [];
@@ -21,9 +38,9 @@ await jest.unstable_mockModule('../src/modules/shipments/shipments.model.js', ()
   const ShipmentConstructor = function (this: ShipmentRecord, doc: Record<string, unknown>) {
     Object.assign(this, doc);
     this.milestones = [];
-  } as any;
+  } as unknown as ShipmentConstructorMock;
 
-  ShipmentConstructor.find = (query: any = {}) => {
+  ShipmentConstructor.find = (query: SnapshotQuery = {}) => {
     const cursor = query?._id?.$lt;
     const status = query?.status;
     const arr = shipmentsData
@@ -62,7 +79,7 @@ await jest.unstable_mockModule('../src/modules/shipments/shipments.model.js', ()
 
 await jest.unstable_mockModule('../src/modules/anomaly/anomaly.model.js', () => {
   const AnomalyConstructor = {
-    find: (query: any = {}) => {
+    find: (query: SnapshotQuery = {}) => {
       const cursor = query?._id?.$lt;
       const shipmentId = query?.shipmentId;
       const severity = query?.severity;
