@@ -5,6 +5,7 @@ import { createServer, Server } from 'http';
 import jwt from 'jsonwebtoken';
 import { randomUUID } from 'crypto';
 import { generateDataHash } from '../src/shared/utils/crypto.js';
+import { SOCKET_EVENTS } from '../src/shared/types/socketEvents.js';
 import type { Application } from 'express';
 
 type TelemetryCreateResult = {
@@ -205,18 +206,16 @@ describe('Socket.io Client Integration Tests', () => {
   });
 
   describe('HTTP-to-WebSocket Pipeline', () => {
-    it('should receive telemetry_update event after joining shipment room and triggering webhook', async () => {
+    it(`should receive ${SOCKET_EVENTS.LOCATION_UPDATE} after joining shipment room and triggering webhook`, async () => {
       // Step 1: Join the shipment room
       socketClient.emit('join_shipment', TEST_SHIPMENT_ID);
 
       // Wait for room join
       await new Promise(resolve => setTimeout(resolve, 100));
 
-      // Step 2: Set up event listener for telemetry_update
+      // Step 2: Set up event listener for the location update
       const telemetryUpdatePromise = new Promise<unknown>(resolve => {
-        socketClient.on('telemetry_update', (data: any) => {
-          resolve(data);
-        });
+        socketClient.on(SOCKET_EVENTS.LOCATION_UPDATE, (data: unknown) => resolve(data));
       });
 
       // Step 3: Trigger the IoT webhook HTTP endpoint
@@ -259,9 +258,13 @@ describe('Socket.io Client Integration Tests', () => {
       // Don't join this shipment room
       const eventReceived: { received: boolean } = { received: false };
 
-      socketClient.on('telemetry_update', (data: any) => {
-        // Check if this is for a shipment we didn't join
-        if ((data as { shipmentId: string }).shipmentId === differentShipmentId) {
+      socketClient.on(SOCKET_EVENTS.LOCATION_UPDATE, (data: unknown) => {
+        if (
+          typeof data === 'object' &&
+          data !== null &&
+          'shipmentId' in data &&
+          data.shipmentId === differentShipmentId
+        ) {
           eventReceived.received = true;
         }
       });

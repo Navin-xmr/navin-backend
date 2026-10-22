@@ -8,8 +8,14 @@
  *   - 404 missing settlement
  */
 import { jest, describe, it, beforeEach, expect } from '@jest/globals';
+import { Types } from 'mongoose';
 import type { Request, Response } from 'express';
 import { createStellarServiceMock } from './helpers/mocks.js';
+
+const SETTLEMENT_ID = new Types.ObjectId().toString();
+const SHIPMENT_ID = new Types.ObjectId().toString();
+const ORGANIZATION_ID = new Types.ObjectId().toString();
+const USER_ID = new Types.ObjectId().toString();
 
 // ── Repo mock ────────────────────────────────────────────────────────────────
 const getPaymentByIdMock = jest.fn<(id: string) => Promise<unknown>>();
@@ -54,9 +60,9 @@ const {
 
 function makeSettlement(overrides: Record<string, unknown> = {}) {
   return {
-    _id: '507f1f77bcf86cd799439011',
-    shipmentId: '507f1f77bcf86cd799439012',
-    organizationId: '507f1f77bcf86cd799439013',
+    _id: SETTLEMENT_ID,
+    shipmentId: SHIPMENT_ID,
+    organizationId: ORGANIZATION_ID,
     amount: 500,
     token: 'USDC',
     tokenType: 'USDC',
@@ -75,7 +81,7 @@ function makeReq(params: Record<string, string> = {}, body: Record<string, unkno
   return {
     params,
     body,
-    user: { organizationId: 'org-123', userId: 'user-1', role },
+    user: { organizationId: ORGANIZATION_ID, userId: USER_ID, role },
   } as unknown as Request;
 }
 
@@ -96,10 +102,10 @@ describe('getPaymentByIdService', () => {
     const settlement = makeSettlement();
     getPaymentByIdMock.mockResolvedValue(settlement);
 
-    const result = await getPaymentByIdService('507f1f77bcf86cd799439011');
+    const result = await getPaymentByIdService(SETTLEMENT_ID);
 
     expect(result).toMatchObject({
-      _id: '507f1f77bcf86cd799439011',
+      _id: SETTLEMENT_ID,
       amount: 500,
       token: 'USDC',
       payerAddress: 'G-PAYER',
@@ -139,13 +145,13 @@ describe('disputeSettlementService', () => {
     getPaymentByIdMock.mockResolvedValue(original);
     disputePaymentMock.mockResolvedValue(updated);
 
-    const result = await disputeSettlementService('507f1f77bcf86cd799439011', {
+    const result = await disputeSettlementService(SETTLEMENT_ID, {
       reason: 'goods not delivered',
       notes: 'see invoice #42',
     });
 
     expect(disputePaymentMock).toHaveBeenCalledWith(
-      '507f1f77bcf86cd799439011',
+      SETTLEMENT_ID,
       'goods not delivered',
       'see invoice #42'
     );
@@ -285,7 +291,7 @@ describe('requireRole VIEWER cannot dispute', () => {
     const middleware = requireRole('ADMIN', 'MANAGER');
 
     const req = {
-      user: { role: 'VIEWER', userId: 'v1', organizationId: 'org-1' },
+      user: { role: 'VIEWER', userId: new Types.ObjectId().toString(), organizationId: ORGANIZATION_ID },
     } as unknown as Request;
     const { res } = makeRes();
     const next = jest.fn();

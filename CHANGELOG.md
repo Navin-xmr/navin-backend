@@ -21,6 +21,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Replaced explicit `any` in test fixtures, standardized realtime event constants, and used ObjectId fixtures across test suites (#982, #981, #980, #979)
 - Documented Horizon escrow fallback and Soroban integration plan in `docs/blockchain.md` (#395)
 - Documented storage adapter contract in `docs/storage-adapter.md` and expanded JSDoc on `mockStorageService` (#397)
 - Added `reports/generate-coverage.js` and `reports/API_SURFACE_COVERAGE.html` to detect swagger.yaml vs Express route drift (#399)

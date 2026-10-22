@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 import jwt from 'jsonwebtoken';
+import { Types } from 'mongoose';
 import request from 'supertest';
 import type { Request, Response, NextFunction } from 'express';
 import { EventEmitter } from 'events';
@@ -11,8 +12,12 @@ import {
   resetSseHubForTest,
 } from '../src/infra/sse/sseHub.js';
 import type { RealtimeEvent } from '../src/shared/types/realtimeEvents.js';
+import { SOCKET_EVENTS } from '../src/shared/types/socketEvents.js';
 
 const JWT_SECRET = 'test-jwt-secret-key-at-least-32-chars-long!';
+const TEST_USER_ID = new Types.ObjectId().toString();
+const TEST_ORGANIZATION_ID = new Types.ObjectId().toString();
+const TEST_SHIPMENT_ID = new Types.ObjectId().toString();
 
 function createMockResponse(): Response & EventEmitter {
   const emitter = new EventEmitter();
@@ -39,9 +44,9 @@ function createMockResponse(): Response & EventEmitter {
 function signToken(overrides: Record<string, unknown> = {}): string {
   return jwt.sign(
     {
-      userId: 'user-123',
+      userId: TEST_USER_ID,
       role: 'ADMIN',
-      organizationId: 'org-456',
+      organizationId: TEST_ORGANIZATION_ID,
       jti: '550e8400-e29b-41d4-a716-446655440000',
       ...overrides,
     },
@@ -118,7 +123,7 @@ describe('GET /api/events — SSE endpoint', () => {
       await requireSseAuth(req, {} as Response, next);
 
       expect(next).toHaveBeenCalledWith();
-      expect(req.user?.userId).toBe('user-123');
+      expect(req.user?.userId).toBe(TEST_USER_ID);
     });
 
     it('accepts JWT via ?token= query parameter', async () => {
@@ -133,14 +138,14 @@ describe('GET /api/events — SSE endpoint', () => {
       await requireSseAuth(req, {} as Response, next);
 
       expect(next).toHaveBeenCalledWith();
-      expect(req.user?.userId).toBe('user-123');
+      expect(req.user?.userId).toBe(TEST_USER_ID);
     });
   });
 
   describe('SSE stream behavior', () => {
     it('sets text/event-stream headers and sends connected comment', () => {
       const res = createMockResponse();
-      registerSseClient('user-123', res);
+      registerSseClient(TEST_USER_ID, res);
 
       expect(res.writeHead).toHaveBeenCalledWith(
         200,
@@ -151,31 +156,31 @@ describe('GET /api/events — SSE endpoint', () => {
         })
       );
       expect(res.chunks.join('')).toContain(': connected');
-      expect(getSseClientCount('user-123')).toBe(1);
+      expect(getSseClientCount(TEST_USER_ID)).toBe(1);
     });
 
     it('delivers typed events to connected clients', () => {
       const res = createMockResponse();
-      registerSseClient('user-123', res);
+      registerSseClient(TEST_USER_ID, res);
 
       const event: RealtimeEvent = {
-        type: 'shipment:status',
-        shipmentId: 'ship-1',
+        type: SOCKET_EVENTS.SHIPMENT_STATUS,
+        shipmentId: TEST_SHIPMENT_ID,
         newStatus: 'IN_TRANSIT',
         timestamp: '2026-01-15T12:00:00.000Z',
       };
 
-      deliverToUserForTest('user-123', event);
+      deliverToUserForTest(TEST_USER_ID, event);
 
       const output = res.chunks.join('');
-      expect(output).toContain('event: shipment:status');
+      expect(output).toContain(`event: ${SOCKET_EVENTS.SHIPMENT_STATUS}`);
       expect(output).toContain('"newStatus":"IN_TRANSIT"');
     });
 
     it('sends heartbeat comments every 30 seconds', () => {
       jest.useFakeTimers();
       const res = createMockResponse();
-      registerSseClient('user-123', res);
+      registerSseClient(TEST_USER_ID, res);
 
       const initialChunks = res.chunks.length;
       jest.advanceTimersByTime(30_000);
@@ -188,11 +193,11 @@ describe('GET /api/events — SSE endpoint', () => {
 
     it('removes client on close', () => {
       const res = createMockResponse();
-      registerSseClient('user-123', res);
-      expect(getSseClientCount('user-123')).toBe(1);
+      registerSseClient(TEST_USER_ID, res);
+      expect(getSseClientCount(TEST_USER_ID)).toBe(1);
 
       res.emit('close');
-      expect(getSseClientCount('user-123')).toBe(0);
+      expect(getSseClientCount(TEST_USER_ID)).toBe(0);
     });
   });
 });

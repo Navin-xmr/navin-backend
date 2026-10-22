@@ -1,5 +1,6 @@
 import { jest, describe, beforeEach, it, expect } from '@jest/globals';
 import { PaymentStatus } from '../src/modules/payments/payments.model.js';
+import { SOCKET_EVENTS } from '../src/shared/types/socketEvents.js';
 
 const mockGetPaymentById = jest.fn<() => Promise<unknown>>();
 const mockUpdatePaymentStatus = jest.fn<() => Promise<unknown>>();
@@ -25,12 +26,12 @@ await jest.unstable_mockModule('../src/infra/socket/io.js', () => ({
 
 const { updatePaymentStatusService } = await import('../src/modules/payments/payments.service.js');
 
-describe('updatePaymentStatusService WebSocket emission', () => {
+describe(`updatePaymentStatusService ${SOCKET_EVENTS.SETTLEMENT_STATUS} emission`, () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
-  it('emits payment_status_changed after a successful update', async () => {
+  it(`emits ${SOCKET_EVENTS.SETTLEMENT_STATUS} after a successful update`, async () => {
     mockGetPaymentById.mockResolvedValue({
       _id: 'pay1',
       shipmentId: { toString: () => 'ship1' },

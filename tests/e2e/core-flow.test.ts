@@ -3,6 +3,7 @@ import request from 'supertest';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import mongoose from 'mongoose';
 import type { Application } from 'express';
+import { SOCKET_EVENTS } from '../../src/shared/types/socketEvents.js';
 
 /**
  * E2E Test Suite: Core Shipment Lifecycle Workflow
@@ -17,6 +18,11 @@ import type { Application } from 'express';
  */
 
 describe('E2E: Shipment Lifecycle (Hash and Emit Pipeline)', () => {
+  const TEST_ORGANIZATION_ID = new mongoose.Types.ObjectId().toString();
+  const TEST_SHIPMENT_ID = new mongoose.Types.ObjectId().toString();
+  const SECOND_SHIPMENT_ID = new mongoose.Types.ObjectId().toString();
+  const E2E_SHIPMENT_ID = new mongoose.Types.ObjectId().toString();
+  const TEST_API_KEY_ID = new mongoose.Types.ObjectId().toString();
   let app: Application;
   let mongoServer: MongoMemoryServer;
 
@@ -32,13 +38,17 @@ describe('E2E: Shipment Lifecycle (Hash and Emit Pipeline)', () => {
   });
 
   const mockEmitTelemetryUpdate = jest.fn((shipmentId: unknown, payload: unknown) => {
-    socketEmissions.push({ event: 'telemetryUpdate', payload: { shipmentId, payload } });
+    socketEmissions.push({ event: SOCKET_EVENTS.LOCATION_UPDATE, payload: { shipmentId, payload } });
   });
 
   const mockValidateApiKey = jest.fn(() =>
     Promise.resolve({
       isValid: true,
-      apiKeyDoc: { _id: 'api-key', organizationId: 'org', shipmentId: '' },
+      apiKeyDoc: {
+        _id: TEST_API_KEY_ID,
+        organizationId: TEST_ORGANIZATION_ID,
+        shipmentId: TEST_SHIPMENT_ID,
+      },
     })
   );
 
@@ -139,7 +149,7 @@ describe('E2E: Shipment Lifecycle (Hash and Emit Pipeline)', () => {
         email: 'test@example.com',
         name: 'Test User',
         password: 'Test123!',
-        organizationId: 'org-id-123',
+        organizationId: TEST_ORGANIZATION_ID,
       });
 
       // Endpoint should respond (201 success or 422 validation)
@@ -182,7 +192,7 @@ describe('E2E: Shipment Lifecycle (Hash and Emit Pipeline)', () => {
     it('should accept IoT webhook endpoint', async () => {
       const res = await request(app).post('/api/webhooks/iot').set('x-api-key', 'test-key').send({
         sensorId: 'sensor-abc-001',
-        shipmentId: 'ship-123',
+        shipmentId: TEST_SHIPMENT_ID,
         temperature: 22.5,
         humidity: 55,
         latitude: 40.7,
@@ -206,7 +216,7 @@ describe('E2E: Shipment Lifecycle (Hash and Emit Pipeline)', () => {
 
       mockPushStellarAnchorJob({
         telemetryId: 'tel-123',
-        shipmentId: 'ship-456',
+        shipmentId: SECOND_SHIPMENT_ID,
         dataHash: 'hash-abc',
       });
 
@@ -224,10 +234,10 @@ describe('E2E: Shipment Lifecycle (Hash and Emit Pipeline)', () => {
     it('should capture telemetry update events', () => {
       socketEmissions.length = 0;
 
-      mockEmitTelemetryUpdate('ship-123', { temperature: 22.5 });
+      mockEmitTelemetryUpdate(TEST_SHIPMENT_ID, { temperature: 22.5 });
 
       expect(socketEmissions.length).toBe(1);
-      expect(socketEmissions[0].event).toBe('telemetryUpdate');
+      expect(socketEmissions[0].event).toBe(SOCKET_EVENTS.LOCATION_UPDATE);
     });
   });
 
@@ -240,12 +250,12 @@ describe('E2E: Shipment Lifecycle (Hash and Emit Pipeline)', () => {
       const dataHash = 'hash-value-123';
       mockPushStellarAnchorJob({
         telemetryId: 'tel-e2e',
-        shipmentId: 'ship-e2e',
+        shipmentId: E2E_SHIPMENT_ID,
         dataHash,
       });
 
       // Simulate: Emit Socket.io event
-      mockEmitTelemetryUpdate('ship-e2e', { temperature: 22.5, humidity: 55 });
+      mockEmitTelemetryUpdate(E2E_SHIPMENT_ID, { temperature: 22.5, humidity: 55 });
 
       // Verify Hash step
       expect(queuedJobs.length).toBe(1);
@@ -254,7 +264,7 @@ describe('E2E: Shipment Lifecycle (Hash and Emit Pipeline)', () => {
 
       // Verify Emit step
       expect(socketEmissions.length).toBe(1);
-      expect(socketEmissions[0].event).toBe('telemetryUpdate');
+      expect(socketEmissions[0].event).toBe(SOCKET_EVENTS.LOCATION_UPDATE);
 
       // Verify data consistency
       const eventPayload = socketEmissions[0].payload as Record<string, unknown>;

@@ -1,4 +1,5 @@
 import { jest, describe, it, expect, beforeEach } from '@jest/globals';
+import { Types } from 'mongoose';
 
 const mockAdd = jest.fn(async () => undefined);
 
@@ -11,6 +12,8 @@ jest.unstable_mockModule('../../infra/redis/connection.js', () => ({
 }));
 
 describe('dispatchAlert', () => {
+  const FIRST_SHIPMENT_ID = new Types.ObjectId().toString();
+  const SECOND_SHIPMENT_ID = new Types.ObjectId().toString();
   let dispatchAlert: (data: {
     type: 'ANOMALY' | 'STATUS_CHANGE';
     message: string;
@@ -29,13 +32,13 @@ describe('dispatchAlert', () => {
   });
 
   it('calls queue.add with alert payload', async () => {
-    const payload = { type: 'ANOMALY' as const, message: 'Temp spike', shipmentId: 'ship-1' };
+    const payload = { type: 'ANOMALY' as const, message: 'Temp spike', shipmentId: FIRST_SHIPMENT_ID };
     await dispatchAlert(payload);
     expect(mockAdd).toHaveBeenCalledWith('alert', payload);
   });
 
   it('calls queue.add for STATUS_CHANGE type', async () => {
-    const payload = { type: 'STATUS_CHANGE' as const, message: 'Delivered', shipmentId: 'ship-2' };
+    const payload = { type: 'STATUS_CHANGE' as const, message: 'Delivered', shipmentId: SECOND_SHIPMENT_ID };
     await dispatchAlert(payload);
     expect(mockAdd).toHaveBeenCalledWith('alert', payload);
   });

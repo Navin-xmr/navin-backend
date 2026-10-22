@@ -1,4 +1,8 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
+import { Types } from 'mongoose';
+
+const FIRST_SHIPMENT_ID = new Types.ObjectId().toString();
+const SECOND_SHIPMENT_ID = new Types.ObjectId().toString();
 
 const paymentFindMock = jest.fn();
 const ledgerUpdateOneMock = jest.fn();
@@ -26,7 +30,7 @@ describe('stellar indexer worker', () => {
   it('creates/upserts a ledger block from mocked Stellar transaction data', async () => {
     paymentFindMock.mockReturnValue({
       select: () => ({
-        lean: async () => [{ shipmentId: '507f1f77bcf86cd799439011', stellarTxHash: 'tx-1' }],
+        lean: async () => [{ shipmentId: FIRST_SHIPMENT_ID, stellarTxHash: 'tx-1' }],
       }),
     });
 
@@ -49,8 +53,8 @@ describe('stellar indexer worker', () => {
     paymentFindMock.mockReturnValue({
       select: () => ({
         lean: async () => [
-          { shipmentId: '507f1f77bcf86cd799439011', stellarTxHash: 'tx-dup' },
-          { shipmentId: '507f1f77bcf86cd799439012', stellarTxHash: 'tx-dup' },
+          { shipmentId: FIRST_SHIPMENT_ID, stellarTxHash: 'tx-dup' },
+          { shipmentId: SECOND_SHIPMENT_ID, stellarTxHash: 'tx-dup' },
         ],
       }),
     });
@@ -71,7 +75,7 @@ describe('stellar indexer worker', () => {
   it('throws when chain query fails so BullMQ can retry with backoff', async () => {
     paymentFindMock.mockReturnValue({
       select: () => ({
-        lean: async () => [{ shipmentId: '507f1f77bcf86cd799439011', stellarTxHash: 'tx-fail' }],
+        lean: async () => [{ shipmentId: FIRST_SHIPMENT_ID, stellarTxHash: 'tx-fail' }],
       }),
     });
 

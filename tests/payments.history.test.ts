@@ -1,6 +1,14 @@
 import { jest, describe, it, beforeEach, expect } from '@jest/globals';
+import { Types } from 'mongoose';
 import type { Request, Response } from 'express';
 import { createStellarServiceMock } from './helpers/mocks.js';
+
+const PAYMENT_ID = new Types.ObjectId().toString();
+const SHIPMENT_ID = new Types.ObjectId().toString();
+const ORGANIZATION_ID = new Types.ObjectId().toString();
+const EMPTY_ORGANIZATION_ID = new Types.ObjectId().toString();
+const SCOPED_ORGANIZATION_ID = new Types.ObjectId().toString();
+const USER_ID = new Types.ObjectId().toString();
 
 // ── Repo mock ────────────────────────────────────────────────────────────────
 const getPaymentsByOrganizationMock =
@@ -25,9 +33,9 @@ const { getPaymentsController } = await import('../src/modules/payments/payments
 // ── Helpers ──────────────────────────────────────────────────────────────────
 function makePayment(overrides: Record<string, unknown> = {}) {
   return {
-    _id: '507f1f77bcf86cd799439011',
-    shipmentId: '507f1f77bcf86cd799439012',
-    organizationId: '507f1f77bcf86cd799439013',
+    _id: PAYMENT_ID,
+    shipmentId: SHIPMENT_ID,
+    organizationId: ORGANIZATION_ID,
     amount: 100,
     tokenType: 'USDC',
     status: 'Pending',
@@ -48,10 +56,10 @@ function makePage(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function makeReqRes(query: Record<string, unknown> = {}, orgId = 'org-123') {
+function makeReqRes(query: Record<string, unknown> = {}, orgId = ORGANIZATION_ID) {
   const req = {
     query,
-    user: { organizationId: orgId, userId: 'user-1', role: 'MANAGER' },
+    user: { organizationId: orgId, userId: USER_ID, role: 'MANAGER' },
   } as unknown as Request;
 
   const json = jest.fn();
@@ -71,9 +79,9 @@ describe('getPaymentsService', () => {
   it('returns paginated data with metadata', async () => {
     getPaymentsByOrganizationMock.mockResolvedValue(makePage());
 
-    const result = await getPaymentsService({ organizationId: 'org-1' });
+    const result = await getPaymentsService({ organizationId: ORGANIZATION_ID });
 
-    expect(getPaymentsByOrganizationMock).toHaveBeenCalledWith('org-1', {
+    expect(getPaymentsByOrganizationMock).toHaveBeenCalledWith(ORGANIZATION_ID, {
       status: undefined,
       limit: undefined,
       cursor: undefined,
@@ -88,13 +96,13 @@ describe('getPaymentsService', () => {
     getPaymentsByOrganizationMock.mockResolvedValue(makePage({ data: [], total: 0 }));
 
     await getPaymentsService({
-      organizationId: 'org-1',
+      organizationId: ORGANIZATION_ID,
       status: 'Released' as never,
       limit: 5,
       cursor: 'abc',
     });
 
-    expect(getPaymentsByOrganizationMock).toHaveBeenCalledWith('org-1', {
+    expect(getPaymentsByOrganizationMock).toHaveBeenCalledWith(ORGANIZATION_ID, {
       status: 'Released',
       limit: 5,
       cursor: 'abc',
@@ -105,7 +113,7 @@ describe('getPaymentsService', () => {
     const payment = makePayment({ stellarTxHash: 'tx-hash-123' });
     getPaymentsByOrganizationMock.mockResolvedValue(makePage({ data: [payment] }));
 
-    const result = await getPaymentsService({ organizationId: 'org-1' });
+    const result = await getPaymentsService({ organizationId: ORGANIZATION_ID });
 
     expect((result.data[0] as unknown as Record<string, unknown>).explorerUrl).toContain(
       'tx-hash-123'
@@ -115,7 +123,7 @@ describe('getPaymentsService', () => {
   it('returns empty data array when no payments exist', async () => {
     getPaymentsByOrganizationMock.mockResolvedValue(makePage({ data: [], total: 0 }));
 
-    const result = await getPaymentsService({ organizationId: 'org-empty' });
+    const result = await getPaymentsService({ organizationId: EMPTY_ORGANIZATION_ID });
 
     expect(result.data).toHaveLength(0);
     expect(result.total).toBe(0);
@@ -127,7 +135,7 @@ describe('getPaymentsService', () => {
       makePage({ hasMore: true, nextCursor: 'cursor-abc', total: 50 })
     );
 
-    const result = await getPaymentsService({ organizationId: 'org-1', limit: 20 });
+    const result = await getPaymentsService({ organizationId: ORGANIZATION_ID, limit: 20 });
 
     expect(result.hasMore).toBe(true);
     expect(result.nextCursor).toBe('cursor-abc');
@@ -142,7 +150,7 @@ describe('getPaymentByIdService', () => {
   it('returns payment when found', async () => {
     getPaymentByIdMock.mockResolvedValue(makePayment());
 
-    const result = await getPaymentByIdService('507f1f77bcf86cd799439011');
+    const result = await getPaymentByIdService(PAYMENT_ID);
 
     expect(result).toMatchObject({ amount: 100, tokenType: 'USDC' });
   });
@@ -186,11 +194,11 @@ describe('getPaymentsController', () => {
   it('scopes query to authenticated user organizationId', async () => {
     getPaymentsByOrganizationMock.mockResolvedValue(makePage({ data: [], total: 0 }));
 
-    const { req, res } = makeReqRes({}, 'org-scoped-123');
+    const { req, res } = makeReqRes({}, SCOPED_ORGANIZATION_ID);
     await getPaymentsController(req, res, jest.fn() as never);
 
     expect(getPaymentsByOrganizationMock).toHaveBeenCalledWith(
-      'org-scoped-123',
+      SCOPED_ORGANIZATION_ID,
       expect.any(Object)
     );
   });

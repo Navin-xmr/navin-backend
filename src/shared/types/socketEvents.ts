@@ -114,6 +114,15 @@ export interface SocketEventMap {
   'notification:new': NotificationPayload;
 }
 
+export const SOCKET_EVENTS = {
+  LOCATION_UPDATE: 'location:update',
+  ANOMALY_DETECTED: 'anomaly:detected',
+  SHIPMENT_STATUS: 'shipment:status',
+  SHIPMENT_MILESTONE: 'shipment:milestone',
+  SETTLEMENT_STATUS: 'settlement:status',
+  NOTIFICATION_NEW: 'notification:new',
+} as const;
+
 /**
  * Type-safe socket event emitter helpers.
  */
