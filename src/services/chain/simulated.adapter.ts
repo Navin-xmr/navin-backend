@@ -7,7 +7,7 @@
  *
  * Mapping (legacy stellar.service.ts → port):
  * - anchorTelemetryHash → anchorEvent: manage-data `telemetry:<shipment_id>` = data_hash, hash memo
- * - tokenizeShipment    → anchorEvent: via toTokenizeAnchorInput() (hash of the tokenized fields)
+ * - tokenizeShipment    → anchorEvent: tokenized fields anchored as a SHA-256 hash (hash-and-emit)
  * - releaseEscrow       → releaseEscrow: manage-data `release:<payment_id>` = proof_hash, hash memo.
  *   (The legacy `Memo.text('escrow-release:<id>')` exceeds Stellar's 28-byte text-memo limit for
  *   ObjectId payment ids, so it is not reproduced here.) Failures reject with AppError instead of
@@ -42,7 +42,6 @@ import {
   parseChainEvent,
 } from '../../shared/types/chain.js';
 import type { ChainEvent } from '../../shared/types/chain.js';
-import { generateDataHash } from '../../shared/utils/crypto.js';
 
 import { KeyedSerializer } from './serializer.js';
 import type {
@@ -56,7 +55,7 @@ import type {
 } from './types.js';
 
 /** Sentinel contract id for simulated events (all-zero contract strkey) — no contract exists. */
-export const SIMULATED_CONTRACT_ID = StrKey.encodeContract(Buffer.alloc(32));
+const SIMULATED_CONTRACT_ID = StrKey.encodeContract(Buffer.alloc(32));
 
 const ANCHOR_KEY_PREFIX = 'telemetry:';
 const RELEASE_KEY_PREFIX = 'release:';
@@ -67,21 +66,22 @@ const MAX_BAD_SEQ_RETRIES = 2;
 const accountSerializer = new KeyedSerializer();
 
 /**
- * Unit-test seam: the symbols below stay exported only for the adapter's own
- * chain.* suites (fake Horizon, event assertions). Domain modules must depend
- * on the port (./types.ts) via getChainAdapter() — never import this file.
+ * Module-private Horizon plumbing (#814): nothing below is exported — only
+ * `SimulatedAdapter` leaves this file. Domain modules must depend on the port
+ * (./types.ts) via getChainAdapter(); the chain.* suites inject their own fake
+ * Horizon instead of importing these internals.
  *
  * isBadSequence: Horizon rejects a stale sequence with
  * `extras.result_codes.transaction === 'tx_bad_seq'`.
  */
-export function isBadSequence(err: unknown): boolean {
+function isBadSequence(err: unknown): boolean {
   const data = (err as { response?: { data?: unknown } } | null)?.response?.data as
     { extras?: { result_codes?: { transaction?: string } } } | undefined;
   return data?.extras?.result_codes?.transaction === 'tx_bad_seq';
 }
 
 /** Horizon transaction record fields the adapter reads. */
-export interface HorizonTxRecord {
+interface HorizonTxRecord {
   paging_token: string;
   hash: string;
   ledger_attr: number;
@@ -91,7 +91,7 @@ export interface HorizonTxRecord {
 }
 
 /** Narrow Horizon surface — injectable for tests. */
-export interface HorizonClient {
+interface HorizonClient {
   loadAccount(publicKey: string): Promise<Account>;
   submitTransaction(tx: Transaction): Promise<{ hash: string; ledger: number }>;
   /** Ascending, successful-only transactions for `publicKey`, strictly after `cursor`. */
@@ -119,26 +119,6 @@ function createHorizonClient(horizonUrl: string = config.horizonUrl): HorizonCli
       const page = await query.call();
       return page.records;
     },
-  };
-}
-
-/**
- * Map legacy `tokenizeShipment` data onto `anchorEvent`: the tokenized fields are
- * anchored as a deterministic SHA-256 (hash-and-emit) instead of raw manage-data values.
- */
-export function toTokenizeAnchorInput(
-  shipment: { shipmentId: string; trackingNumber: string; origin: string; destination: string },
-  actor: string
-): AnchorEventInput {
-  return {
-    shipment_id: shipment.shipmentId,
-    data_hash: generateDataHash({
-      shipmentId: shipment.shipmentId,
-      trackingNumber: shipment.trackingNumber,
-      origin: shipment.origin,
-      destination: shipment.destination,
-    }),
-    actor,
   };
 }
 

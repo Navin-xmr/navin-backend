@@ -196,7 +196,6 @@ export const loginLimiter = rateLimit({
   legacyHeaders: false,
   skipSuccessfulRequests: true,
   store: new RedisRateLimitStore(loginWindowMs, 'rl:login:'),
-  handler: createRateLimitHandler('Too many login attempts, please try again later.'),
   handler: createRateLimitHandler(
     'Too many login attempts from this IP, please try again after 15 minutes.'
   ),

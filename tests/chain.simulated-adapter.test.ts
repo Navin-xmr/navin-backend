@@ -2,12 +2,7 @@ import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { Account, Keypair, Networks, StrKey } from '@stellar/stellar-sdk';
 import type { Transaction } from '@stellar/stellar-sdk';
 
-import {
-  SIMULATED_CONTRACT_ID,
-  SimulatedAdapter,
-  toTokenizeAnchorInput,
-} from '../src/services/chain/simulated.adapter.js';
-import type { HorizonClient, HorizonTxRecord } from '../src/services/chain/simulated.adapter.js';
+import { SimulatedAdapter } from '../src/services/chain/simulated.adapter.js';
 import { AppError, ErrorCodes } from '../src/shared/http/errors.js';
 import { ChainEventSchema } from '../src/shared/types/chain.js';
 import type { ChainEvent } from '../src/shared/types/chain.js';
@@ -19,6 +14,19 @@ const SHIPMENT_ID = '65f1a2b3c4d5e6f708192a3b';
 const PAYMENT_ID = '66a0b1c2d3e4f50617283940';
 const HASH_A = generateDataHash({ reading: 'a' });
 const HASH_B = generateDataHash({ reading: 'b' });
+
+/** Sentinel contract id the adapter must emit — all-zero contract strkey (#814 keeps its constant module-private). */
+const SIMULATED_CONTRACT_ID = StrKey.encodeContract(Buffer.alloc(32));
+
+/** Horizon tx fields the adapter's streamEvents reads — its Horizon types are module-private (#814). */
+interface HorizonTxRecord {
+  paging_token: string;
+  hash: string;
+  ledger_attr: number;
+  created_at: string;
+  envelope_xdr: string;
+  successful: boolean;
+}
 
 /** In-memory Horizon: records every submitted tx so streamEvents can replay it. */
 function createFakeHorizon() {
@@ -45,7 +53,7 @@ function createFakeHorizon() {
       const start = cursor ? records.findIndex(r => r.paging_token === cursor) + 1 : 0;
       return records.slice(start, start + limit);
     }),
-  } satisfies HorizonClient;
+  };
 
   return { client, submitted, records };
 }
@@ -102,31 +110,6 @@ describe('SimulatedAdapter', () => {
         })
       ).rejects.toMatchObject({ statusCode: 422, code: ErrorCodes.CHAIN_INVALID_HASH });
       expect(horizon.client.loadAccount).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('tokenize → anchorEvent mapping', () => {
-    const shipment = {
-      shipmentId: SHIPMENT_ID,
-      trackingNumber: 'NVN-123456',
-      origin: 'Lagos',
-      destination: 'Accra',
-    };
-
-    it('anchors a deterministic hash of the tokenized fields', async () => {
-      const input = toTokenizeAnchorInput(shipment, signer.publicKey());
-      expect(input).toEqual({
-        shipment_id: SHIPMENT_ID,
-        data_hash: generateDataHash(shipment),
-        actor: signer.publicKey(),
-      });
-      expect(toTokenizeAnchorInput({ ...shipment }, signer.publicKey())).toEqual(input);
-
-      const result = await adapter.anchorEvent(input);
-      expect(result.simulated).toBe(true);
-      expect(manageDataOps(horizon.submitted[0]!)).toEqual([
-        { name: `telemetry:${SHIPMENT_ID}`, value: input.data_hash },
-      ]);
     });
   });
 
@@ -250,10 +233,5 @@ describe('SimulatedAdapter', () => {
         code: ErrorCodes.CHAIN_UNKNOWN,
       });
     });
-  });
-
-  it('uses the all-zero contract strkey as the simulated contract id', () => {
-    expect(StrKey.isValidContract(SIMULATED_CONTRACT_ID)).toBe(true);
-    expect(StrKey.decodeContract(SIMULATED_CONTRACT_ID).equals(Buffer.alloc(32))).toBe(true);
   });
 });

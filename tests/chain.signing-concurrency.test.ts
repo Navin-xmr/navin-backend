@@ -19,8 +19,7 @@ import {
 import type { Transaction } from '@stellar/stellar-sdk';
 
 import { KeyedSerializer } from '../src/services/chain/serializer.js';
-import { SimulatedAdapter, isBadSequence } from '../src/services/chain/simulated.adapter.js';
-import type { HorizonClient } from '../src/services/chain/simulated.adapter.js';
+import { SimulatedAdapter } from '../src/services/chain/simulated.adapter.js';
 import { ErrorCodes } from '../src/shared/http/errors.js';
 import { generateDataHash } from '../src/shared/utils/crypto.js';
 
@@ -35,7 +34,8 @@ const badSeqError = () =>
     response: { data: { extras: { result_codes: { transaction: 'tx_bad_seq' } } } },
   });
 
-class SequencedHorizon implements HorizonClient {
+/** Structurally matches the adapter's private Horizon port; checked when injected below. */
+class SequencedHorizon {
   sequence = BigInt(5_000);
   ledger = 100;
   badSeqFailures = 0;
@@ -182,10 +182,21 @@ describe('signing safety load gate', () => {
     expect(horizon.submitTransaction).toHaveBeenCalledTimes(1);
   });
 
-  it('isBadSequence recognises only Horizon tx_bad_seq responses', () => {
-    expect(isBadSequence(badSeqError())).toBe(true);
-    expect(isBadSequence(new Error('tx_bad_seq'))).toBe(false);
-    expect(isBadSequence(null)).toBe(false);
+  it('does not retry an error that merely names tx_bad_seq without Horizon structure', async () => {
+    const horizon = new SequencedHorizon();
+    const signer = Keypair.random();
+    const adapter = new SimulatedAdapter({
+      horizon,
+      secretKey: signer.secret(),
+      networkPassphrase: PASSPHRASE,
+    });
+    horizon.submitTransaction.mockRejectedValueOnce(new Error('tx_bad_seq'));
+
+    await expect(adapter.anchorEvent(anchorInput(0, 0, signer.publicKey()))).rejects.toMatchObject({
+      statusCode: 502,
+      code: ErrorCodes.CHAIN_UNKNOWN,
+    });
+    expect(horizon.submitTransaction).toHaveBeenCalledTimes(1);
   });
 });
 
