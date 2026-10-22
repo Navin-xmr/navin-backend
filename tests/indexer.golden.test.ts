@@ -11,9 +11,24 @@ import type { ChainEvent } from '../src/shared/types/chain.js';
 
 const ledgerUpdateOneMock = jest.fn();
 const paymentFindMock = jest.fn(() => ({ lean: async () => [] }));
+const paymentFindOneAndUpdateMock = jest.fn((): { lean: () => Promise<unknown> } => ({
+  lean: async () => null,
+}));
 const telemetryFindMock = jest.fn(() => ({ lean: async () => [] }));
-const paymentModelMock = createPaymentModelMock({ PaymentModel: { find: paymentFindMock } });
-const telemetryModelMock = createTelemetryModelMock({ Telemetry: { find: telemetryFindMock } });
+const telemetryFindOneAndUpdateMock = jest.fn((): { lean: () => Promise<unknown> } => ({
+  lean: async () => null,
+}));
+const telemetryUpdateOneMock = jest.fn();
+const paymentModelMock = createPaymentModelMock({
+  PaymentModel: { find: paymentFindMock, findOneAndUpdate: paymentFindOneAndUpdateMock },
+});
+const telemetryModelMock = createTelemetryModelMock({
+  Telemetry: {
+    find: telemetryFindMock,
+    findOneAndUpdate: telemetryFindOneAndUpdateMock,
+    updateOne: telemetryUpdateOneMock,
+  },
+});
 const socketIoMock = createSocketIoMock();
 
 await jest.unstable_mockModule('../src/modules/ledger/ledger.model.js', () => ({
@@ -162,5 +177,17 @@ describe('Event-driven indexer golden fixtures replay', () => {
     expect(anchorBlock.dataHash).toBe(events[0].data[0]);
     expect(initBlock).not.toHaveProperty('dataHash');
     expect(releaseBlock).not.toHaveProperty('dataHash');
+
+    // Canonical field assertions (#970): milestoneEvent (never legacy eventType)
+    // in every $set/$setOnInsert, and the anchor's top-level dataHash equals the event hash.
+    for (const [, update] of ledgerUpdateOneMock.mock.calls as Array<
+      [unknown, { $set: Record<string, unknown>; $setOnInsert: Record<string, unknown> }]
+    >) {
+      expect(update.$setOnInsert).toHaveProperty('milestoneEvent');
+      expect(update.$setOnInsert).not.toHaveProperty('eventType');
+      expect(update.$set.milestoneEvent).toBe(update.$setOnInsert.milestoneEvent);
+      expect(update.$set).not.toHaveProperty('eventType');
+    }
+    expect(anchorBlock.dataHash).toBe((events[0].data as unknown[])[0]);
   });
 });

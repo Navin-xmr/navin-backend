@@ -148,6 +148,50 @@ describe('stellar indexer worker - event driven', () => {
       }),
       { upsert: true }
     );
+
+    // Tightened field assertions (#970): milestoneEvent (never legacy eventType)
+    // in both operators, and top-level dataHash matching the event hash.
+    const [, anchorUpdate] = ledgerUpdateOneMock.mock.calls[0] as [
+      unknown,
+      { $set: Record<string, unknown>; $setOnInsert: Record<string, unknown> },
+    ];
+    expect(anchorUpdate.$setOnInsert.milestoneEvent).toBe('IN_TRANSIT');
+    expect(anchorUpdate.$setOnInsert).not.toHaveProperty('eventType');
+    expect(anchorUpdate.$set.milestoneEvent).toBe('IN_TRANSIT');
+    expect(anchorUpdate.$set).not.toHaveProperty('eventType');
+    expect(anchorUpdate.$set.dataHash).toBe(mockEvents[0].data[0]);
+    expect(anchorUpdate.$set.dataHash).toBe('a'.repeat(64));
+  });
+
+  it('writes milestoneEvent (not eventType) with no top-level dataHash for esc_init', async () => {
+    const initEvent: ChainEvent = {
+      id: 'evt-init-1',
+      contract_id: CONTRACT_ID,
+      tx_hash: '44'.repeat(32),
+      ledger: 101,
+      ledger_closed_at: '2026-09-27T10:00:00Z',
+      name: 'esc_init',
+      topic: ['esc_init', '66a0b1c2d3e4f50617283940'],
+      data: [
+        '65f1a2b3c4d5e6f708192a3b',
+        PAYEE,
+        'GABAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEJXA',
+        CONTRACT_ID,
+        '1500000000',
+      ],
+    };
+
+    await indexStellarTransactions(makeAdapter([initEvent]));
+
+    const [, update] = ledgerUpdateOneMock.mock.calls[0] as [
+      unknown,
+      { $set: Record<string, unknown>; $setOnInsert: Record<string, unknown> },
+    ];
+    expect(update.$setOnInsert.milestoneEvent).toBe('SETTLEMENT_INITIATED');
+    expect(update.$setOnInsert).not.toHaveProperty('eventType');
+    expect(update.$set.milestoneEvent).toBe('SETTLEMENT_INITIATED');
+    expect(update.$set).not.toHaveProperty('eventType');
+    expect(update.$set).not.toHaveProperty('dataHash');
   });
 
   it('verifies anchored telemetry only after three ledger confirmations', async () => {
