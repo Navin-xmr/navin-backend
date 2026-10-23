@@ -124,7 +124,9 @@ describe('loginLimiter', () => {
     const res = await request(app).post('/login');
     expect(res.status).toBe(429);
     expect(res.body.success).toBe(false);
-    expect(res.body.message).toBe('Too many login attempts, please try again later.');
+    expect(res.body.message).toBe(
+      'Too many login attempts from this IP, please try again after 15 minutes.'
+    );
     expect(res.headers['retry-after']).toBeDefined();
     expect(Number(res.body.retryAfter)).toBeGreaterThan(0);
   });

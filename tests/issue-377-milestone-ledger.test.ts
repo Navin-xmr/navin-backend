@@ -77,6 +77,25 @@ const { updateShipmentStatusService, uploadShipmentProofService } =
   await import('../src/modules/shipments/shipments.service.js');
 
 const { multerFile } = await import('./fixtures/factories.js');
+const { generateDataHash } = await import('../src/shared/utils/crypto.js');
+
+/** First createLedgerBlockService call matching `event` (eventType or milestoneEvent). */
+function ledgerCallFor(event: string): Record<string, unknown> | undefined {
+  return createLedgerBlockMock.mock.calls
+    .map(([arg]) => arg as Record<string, unknown>)
+    .find(arg => arg.eventType === event || arg.milestoneEvent === event);
+}
+
+/**
+ * Verifier contract: canonicalPayload is stored top-level (not in metadata)
+ * and hashes to dataHash, so GET /ledger/blocks/:id/verification can serve it.
+ */
+function expectVerifiableCanonicalPayload(block: Record<string, unknown> | undefined) {
+  expect(block).toBeDefined();
+  expect(block?.canonicalPayload).toEqual(expect.any(Object));
+  expect(generateDataHash(block?.canonicalPayload)).toBe(block?.dataHash);
+  expect(block?.metadata).not.toHaveProperty('canonical');
+}
 
 describe('Ledger block creation on lifecycle events', () => {
   beforeEach(() => {
@@ -123,11 +142,12 @@ describe('Ledger block creation on lifecycle events', () => {
     expect(createLedgerBlockMock).toHaveBeenCalledWith(
       expect.objectContaining({
         shipmentId: 'ship-1',
-        eventType: 'IN_TRANSIT',
+        milestoneEvent: 'IN_TRANSIT',
         dataHash: expect.stringMatching(/^[0-9a-f]{64}$/),
         actor: 'user-1',
       })
     );
+    expectVerifiableCanonicalPayload(ledgerCallFor('IN_TRANSIT'));
   });
 
   it('status-change ledger block carries no transactionHash (simulated placeholder, not stale creation tx)', async () => {
@@ -192,6 +212,7 @@ describe('Ledger block creation on lifecycle events', () => {
         dataHash: expect.stringMatching(/^[0-9a-f]{64}$/),
       })
     );
+    expectVerifiableCanonicalPayload(ledgerCallFor('PROOF_SUBMITTED'));
   });
 
   it('settlement initiation creates a SETTLEMENT_INITIATED ledger block', async () => {
@@ -259,12 +280,19 @@ describe('Ledger block creation on lifecycle events', () => {
     expect(createLedgerBlockMock).toHaveBeenCalledWith(
       expect.objectContaining({
         shipmentId: 'ship-1',
-        eventType: 'SETTLEMENT_INITIATED',
+        milestoneEvent: 'SETTLEMENT_INITIATED',
         transactionHash: 'stellar-tx-hash-abc',
         dataHash: expect.stringMatching(/^[0-9a-f]{64}$/),
         metadata: expect.objectContaining({ paymentId: 'pay-1', simulated: true }),
       })
     );
+    const settlementBlock = ledgerCallFor('SETTLEMENT_INITIATED');
+    expectVerifiableCanonicalPayload(settlementBlock);
+    expect(settlementBlock?.canonicalPayload).toMatchObject({
+      event: 'SETTLEMENT_INITIATED',
+      shipmentId: 'ship-1',
+      metadata: { paymentId: 'pay-1' },
+    });
     expect(chainAdapter.releaseEscrow).toHaveBeenCalledWith({
       payment_id: 'pay-1',
       proof_hash: expect.stringMatching(/^[0-9a-f]{64}$/),
