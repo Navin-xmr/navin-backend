@@ -12,8 +12,16 @@ import type { ChainEvent } from '../src/shared/types/chain.js';
 const ledgerUpdateOneMock = jest.fn();
 const paymentFindMock = jest.fn(() => ({ lean: async () => [] }));
 const telemetryFindMock = jest.fn(() => ({ lean: async () => [] }));
-const paymentModelMock = createPaymentModelMock({ PaymentModel: { find: paymentFindMock } });
-const telemetryModelMock = createTelemetryModelMock({ Telemetry: { find: telemetryFindMock } });
+// The worker chains `.lean()` on findOneAndUpdate results (recordTelemetryConfirmation,
+// recordPaymentConfirmation), so the mocks must return a lean-able query object.
+const paymentFindOneAndUpdateMock = jest.fn(() => ({ lean: async () => null }));
+const telemetryFindOneAndUpdateMock = jest.fn(() => ({ lean: async () => null }));
+const paymentModelMock = createPaymentModelMock({
+  PaymentModel: { find: paymentFindMock, findOneAndUpdate: paymentFindOneAndUpdateMock },
+});
+const telemetryModelMock = createTelemetryModelMock({
+  Telemetry: { find: telemetryFindMock, findOneAndUpdate: telemetryFindOneAndUpdateMock },
+});
 const socketIoMock = createSocketIoMock();
 
 await jest.unstable_mockModule('../src/modules/ledger/ledger.model.js', () => ({
