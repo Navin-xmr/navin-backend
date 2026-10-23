@@ -38,7 +38,7 @@ In `src/services/stellar.service.ts:157–160`, `releaseEscrow` catches any subm
 
 ### Event Indexing & Confirmation Tracking
 
-A background BullMQ worker (`src/workers/stellar-indexer.worker.ts:112–132`) runs on a 30-second interval (`STELLAR_INDEXER_JOB`). It calls `indexStellarTransactions`, polling Horizon account operations to verify on-chain confirmations and update settlement records in MongoDB.
+A background BullMQ worker (`src/workers/stellar-indexer.worker.ts`) runs on a 30-second interval (`STELLAR_INDEXER_JOB`). It calls `indexStellarTransactions`, tracks transaction confirmation counts, and verifies anchored telemetry and released settlements after three ledgers; simulated-chain confirmations are immediate.
 
 ### Why this is a fallback
 

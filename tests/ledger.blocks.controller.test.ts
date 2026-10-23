@@ -4,13 +4,15 @@ import { createLedgerBlock } from '../src/modules/ledger/ledger.repo.js';
 
 const getLedgerBlocksServiceMock = jest.fn();
 const getLedgerBlockByIdServiceMock = jest.fn();
+const getLedgerBlockVerificationServiceMock = jest.fn();
 
 await jest.unstable_mockModule('../src/modules/ledger/ledger.service.js', () => ({
   getLedgerBlocksService: getLedgerBlocksServiceMock,
   getLedgerBlockByIdService: getLedgerBlockByIdServiceMock,
+  getLedgerBlockVerificationService: getLedgerBlockVerificationServiceMock,
 }));
 
-const { getLedgerBlocks, getLedgerBlockById } = await import(
+const { getLedgerBlocks, getLedgerBlockById, getLedgerBlockVerification } = await import(
   '../src/modules/ledger/ledger.controller.js',
 );
 
@@ -18,6 +20,7 @@ describe('GET /api/ledger/blocks controller', () => {
   beforeEach(() => {
     getLedgerBlocksServiceMock.mockReset();
     getLedgerBlockByIdServiceMock.mockReset();
+    getLedgerBlockVerificationServiceMock.mockReset();
   });
 
   it('passes the validated ledger block id parameter to the service', async () => {
@@ -229,5 +232,43 @@ describe('GET /api/ledger/blocks controller', () => {
 
     const payload = (res.json as jest.Mock).mock.calls[0][0];
     expect(payload.data[0]).toHaveProperty('dataHash', hash);
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Verification endpoint tests (GET /api/ledger/blocks/:id/verification)
+  // ──────────────────────────────────────────────────────────────────────────
+
+  it('GET /api/ledger/blocks/:id/verification includes network field', async () => {
+    getLedgerBlockVerificationServiceMock.mockResolvedValue({
+      canonicalPayload: { shipmentId: 'ship-1', event: 'DELIVERED' },
+      dataHash: 'c'.repeat(64),
+      txHash: 'stellar-tx-hash-123',
+      transactionHash: 'stellar-tx-hash-123',
+      ledger: 12345,
+      network: 'testnet',
+    });
+
+    const req = { params: { id: 'lb5' } } as any;
+    const res = {
+      status: jest.fn().mockReturnThis(),
+      json: jest.fn(),
+    } as any;
+
+    await getLedgerBlockVerification(req, res);
+
+    expect(getLedgerBlockVerificationServiceMock).toHaveBeenCalledWith('lb5');
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        success: true,
+        message: 'Ledger block verification retrieved',
+        data: expect.objectContaining({
+          network: 'testnet',
+          txHash: 'stellar-tx-hash-123',
+          dataHash: 'c'.repeat(64),
+          ledger: 12345,
+        }),
+      }),
+    );
   });
 });

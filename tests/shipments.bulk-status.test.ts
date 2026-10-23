@@ -114,14 +114,18 @@ await jest.unstable_mockModule('../src/modules/users/users.model.js', () => ({
 
 await jest.unstable_mockModule('../src/services/chain/factory.js', () => createChainFactoryMock());
 
-await jest.unstable_mockModule('../src/infra/socket/io.js', () => ({
+// Shared mock fns: the factory closure returns this same object on every
+// evaluation, so assertions below observe the exact calls the app makes.
+const ioMocks = {
   initSocketIO: jest.fn(),
   getIO: jest.fn(),
   emitStatusUpdate: jest.fn(),
   emitPaymentStatusChange: jest.fn(),
   emitAnomalyDetected: jest.fn(),
   emitTelemetryUpdate: jest.fn(),
-}));
+};
+
+await jest.unstable_mockModule('../src/infra/socket/io.js', () => ioMocks);
 
 await jest.unstable_mockModule('../src/modules/analytics/analytics.cache.js', () => ({
   invalidateAnalyticsPerformanceCache: jest.fn(),
@@ -278,7 +282,6 @@ describe('Bulk Status Update API', () => {
 
   it(`should emit ${SOCKET_EVENTS.SHIPMENT_STATUS} events for successful updates`, async () => {
     const token = generateToken({ userId: 'admin-1', role: 'ADMIN', organizationId: 'org1' });
-    const ioModule = await import('../src/infra/socket/io.js');
 
     shipmentsData.push({
       _id: 's1',
@@ -288,11 +291,13 @@ describe('Bulk Status Update API', () => {
       milestones: [],
     });
 
-    await request(app)
+    const res = await request(app)
       .patch('/api/shipments/bulk/status')
       .set('Authorization', `Bearer ${token}`)
       .send({ shipmentIds: ['s1'], status: 'IN_TRANSIT' });
 
-    expect(ioModule.emitStatusUpdate).toHaveBeenCalled();
+    expect(res.status).toBe(200);
+    expect(res.body.data.updated).toBe(1);
+    expect(ioMocks.emitStatusUpdate).toHaveBeenCalled();
   });
 });
