@@ -41,6 +41,7 @@ export function waitForSocketEvent<T = unknown>(
       socket.off(event, handler);
       reject(new Error(`Timed out waiting for socket event "${event}" after ${timeoutMs}ms`));
     }, timeoutMs);
+    timer.unref();
 
     function handler(payload: T) {
       clearTimeout(timer);
@@ -65,6 +66,7 @@ export function disconnectClient(socket: Socket, timeoutMs = 5_000): Promise<voi
     const timer = setTimeout(() => {
       reject(new Error(`Socket did not disconnect within ${timeoutMs}ms`));
     }, timeoutMs);
+    timer.unref();
 
     socket.once('disconnect', () => {
       clearTimeout(timer);
@@ -91,6 +93,7 @@ export async function teardownSocketSuite(params: {
       // Forcibly disconnect if the graceful await times out.
       socketClient.disconnect();
     });
+    socketClient.close();
   }
 
   try {
@@ -101,6 +104,12 @@ export async function teardownSocketSuite(params: {
   }
 
   if (httpServer?.listening) {
+    if (
+      typeof (httpServer as unknown as { closeAllConnections?: () => void }).closeAllConnections ===
+      'function'
+    ) {
+      (httpServer as unknown as { closeAllConnections: () => void }).closeAllConnections?.();
+    }
     await new Promise<void>((resolve, reject) => {
       httpServer.close((err?: Error) => (err ? reject(err) : resolve()));
     });

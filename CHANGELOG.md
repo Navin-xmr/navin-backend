@@ -9,9 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Three-ledger Stellar confirmation tracking for released payments and telemetry anchors, with immediate confirmations in simulated mode (#838, #837).
+
 **Phase 6 — Hash-and-Emit chain architecture**
 
-- `ChainAdapter` port (`src/services/chain/types.ts`) with `anchorEvent`, `releaseEscrow`, `streamEvents` and the `AnchorResult` / `EscrowResult` / `ChainEvent` shapes; domain modules may depend on the port and the factory only, never on an adapter implementation or the Stellar SDK (#650).
+- `ChainAdapter` port (`src/services/chain/types.ts`) with `anchorEvent`, `releaseEscrow`, `streamEvents`, `getConfirmationCount` and the `AnchorResult` / `EscrowResult` / `ChainEvent` shapes; domain modules may depend on the port and the factory only, never on an adapter implementation or the Stellar SDK (#650).
 - `SimulatedAdapter` (`src/services/chain/simulated.adapter.ts`) — Horizon `manageData` anchors and releases with `simulated: true` receipts; every result is explicitly flagged so demos never imply a real escrow (#650).
 - `SorobanAdapter` (`src/services/chain/soroban.adapter.ts`) — live contract execution over Soroban RPC via `simulateTransaction` → `assembleTransaction` → sign → `sendTransaction` → poll, wired into `createChainAdapter()` (#656).
 - Config-selected adapter factory `getChainAdapter()` / `createChainAdapter()` driven by the `SOROBAN_ADAPTER` env var (`simulated` | `soroban`), with `resetChainAdapter()` as a test seam (#653).
@@ -46,6 +48,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **Phase 6 — Hash-and-Emit chain architecture**
 
+- `simulated.adapter.ts` now exports only `SimulatedAdapter`; its implementation helpers remain private (#839).
 - Stellar writes moved behind the `ChainAdapter` port: `telemetry` / `payments` / `shipments` / `webhooks` and the workers now import `types.ts` + `getChainAdapter()` only, and no longer construct Horizon transactions directly (#650).
 - `releaseEscrow()` manage-data marker replaced by a real `adapter.releaseEscrow()` delegation (#657).
 - `stellar-indexer.worker.ts` rewritten to consume `adapter.streamEvents()` instead of inferring events from memo text (#662).
