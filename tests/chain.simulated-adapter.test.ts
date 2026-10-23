@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
-import { Account, Keypair, Networks } from '@stellar/stellar-sdk';
+import { Account, Keypair, Networks, StrKey } from '@stellar/stellar-sdk';
 import type { Transaction } from '@stellar/stellar-sdk';
 
 import { SimulatedAdapter } from '../src/services/chain/simulated.adapter.js';

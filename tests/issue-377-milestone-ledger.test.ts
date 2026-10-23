@@ -142,7 +142,7 @@ describe('Ledger block creation on lifecycle events', () => {
     expect(createLedgerBlockMock).toHaveBeenCalledWith(
       expect.objectContaining({
         shipmentId: 'ship-1',
-        eventType: 'IN_TRANSIT',
+        milestoneEvent: 'IN_TRANSIT',
         dataHash: expect.stringMatching(/^[0-9a-f]{64}$/),
         actor: 'user-1',
       })
@@ -280,7 +280,7 @@ describe('Ledger block creation on lifecycle events', () => {
     expect(createLedgerBlockMock).toHaveBeenCalledWith(
       expect.objectContaining({
         shipmentId: 'ship-1',
-        eventType: 'SETTLEMENT_INITIATED',
+        milestoneEvent: 'SETTLEMENT_INITIATED',
         transactionHash: 'stellar-tx-hash-abc',
         dataHash: expect.stringMatching(/^[0-9a-f]{64}$/),
         metadata: expect.objectContaining({ paymentId: 'pay-1', simulated: true }),

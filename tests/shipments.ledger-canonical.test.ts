@@ -247,7 +247,7 @@ describe('#801 settlement ledger blocks include top-level canonicalPayload', () 
 // ─── Tests: #802 createShipmentService uses ChainAdapter port ────────────────
 
 describe('#802 createShipmentService anchors through getChainAdapter().anchorEvent()', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     jest.clearAllMocks();
 
     const MOCK_TX_HASH = 'c'.repeat(64);
