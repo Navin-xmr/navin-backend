@@ -268,15 +268,13 @@ describe('#802 createShipmentService anchors through getChainAdapter().anchorEve
     };
     shipmentSaveMock.mockResolvedValue(undefined);
 
-    // Mock `new Shipment(...)` via the constructor path
-    // The service calls `new Shipment(...)` directly so we need to mock the class
-    const { Shipment } = jest.mocked(
-      await import('../src/modules/shipments/shipments.model.js') as never
-    ) as unknown as { Shipment: { new (data: unknown): typeof shipDoc } };
-    jest.spyOn(Shipment as never, 'bind').mockReturnValue(undefined as never);
+    // NOTE: `new Shipment(...)` cannot be constructor-mocked here — the Shipment
+    // mock is a plain object, so these tests assert the port contract and source
+    // shape only. Real anchoring behavior is covered in
+    // tests/shipments.create-chain-adapter.test.ts.
+    await import('../src/modules/shipments/shipments.model.js');
 
-    // Inject via the constructor mock — the Shipment mock is a plain object;
-    // reuse shipmentCreateMock to return the doc
+    // Keep the doc factory warm for the anchoring-behavior suite.
     shipmentCreateMock.mockReturnValue(shipDoc);
   });
 
