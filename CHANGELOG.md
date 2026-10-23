@@ -46,7 +46,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-**Phase 6 — Hash-and-Emit chain architecture**
+- Corrected `docs/PAGINATION.md` pagination strategy table: users dual-mode is live, documented the payments `total` meta variance, added shipment timeline to the cursor list (#576)
+- Refactored `loginLimiter` in `src/shared/middleware/rateLimiter.ts` to reuse `createRateLimitHandler()`, removing the duplicated inline 429 handler (#815)
 
 - `simulated.adapter.ts` now exports only `SimulatedAdapter`; its implementation helpers remain private (#839).
 - Stellar writes moved behind the `ChainAdapter` port: `telemetry` / `payments` / `shipments` / `webhooks` and the workers now import `types.ts` + `getChainAdapter()` only, and no longer construct Horizon transactions directly (#650).
