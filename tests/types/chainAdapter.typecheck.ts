@@ -26,6 +26,7 @@ assertType<Equals<ChainEventCursor, string>>();
 assertType<Equals<Awaited<ReturnType<ChainAdapter['anchorEvent']>>, AnchorResult>>();
 assertType<Equals<Awaited<ReturnType<ChainAdapter['releaseEscrow']>>, EscrowResult>>();
 assertType<Equals<ReturnType<ChainAdapter['streamEvents']>, AsyncIterable<ChainEvent>>>();
+assertType<Equals<Awaited<ReturnType<ChainAdapter['getConfirmationCount']>>, number>>();
 
 // ─── Error codes are restricted to ERR_CHAIN_* ──────────────────────────────
 const chainCode: ChainErrorCode = ErrorCodes.CHAIN_ESCROW_NOT_FOUND;
@@ -59,6 +60,10 @@ export class MockChainAdapter implements ChainAdapter {
     const start = cursor ? this.events.findIndex(e => e.id === cursor) + 1 : 0;
     yield* this.events.slice(start);
   }
+
+  async getConfirmationCount(_ledger: number): Promise<number> {
+    return 3;
+  }
 }
 
 export const literalAdapter = {
@@ -72,6 +77,7 @@ export const literalAdapter = {
   async *streamEvents() {
     yield* [] as ChainEvent[];
   },
+  getConfirmationCount: async () => 3,
 } satisfies ChainAdapter;
 
 // ─── Contract violations are rejected ───────────────────────────────────────

@@ -7,6 +7,7 @@
 
 import { jest } from '@jest/globals';
 import { UserRole } from '../../../shared/constants/index.js';
+import { createEmailServiceMock } from '../../../../tests/helpers/mocks.js';
 
 // ---------------------------------------------------------------------------
 // Mock users.repo — must be declared before any dynamic import of the service
@@ -58,10 +59,7 @@ jest.unstable_mockModule('../../auth/auth.service.js', () => ({
 }));
 
 // Mock email service to prevent network calls
-jest.unstable_mockModule('../../../services/email.service.js', () => ({
-  sendEmail: jest.fn(),
-  invitationEmailHtml: jest.fn(() => '<p>invite</p>'),
-}));
+jest.unstable_mockModule('../../../services/email.service.js', () => createEmailServiceMock());
 
 // ---------------------------------------------------------------------------
 // Dynamic imports after mocks are set up
