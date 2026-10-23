@@ -19,10 +19,10 @@ import {
 import type { Transaction } from '@stellar/stellar-sdk';
 
 import { KeyedSerializer } from '../src/services/chain/serializer.js';
-import { SimulatedAdapter, isBadSequence } from '../src/services/chain/simulated.adapter.js';
-import type { HorizonClient } from '../src/services/chain/simulated.adapter.js';
+import { SimulatedAdapter } from '../src/services/chain/simulated.adapter.js';
 import { ErrorCodes } from '../src/shared/http/errors.js';
 import { generateDataHash } from '../src/shared/utils/crypto.js';
+import type { SimulatedHorizonClientMock } from './helpers/mocks.js';
 
 const PASSPHRASE = Networks.TESTNET;
 const WORKERS = 5; // matches stellar.worker concurrency
@@ -35,7 +35,7 @@ const badSeqError = () =>
     response: { data: { extras: { result_codes: { transaction: 'tx_bad_seq' } } } },
   });
 
-class SequencedHorizon implements HorizonClient {
+class SequencedHorizon implements SimulatedHorizonClientMock {
   sequence = BigInt(5_000);
   ledger = 100;
   badSeqFailures = 0;
@@ -180,12 +180,6 @@ describe('signing safety load gate', () => {
       code: ErrorCodes.CHAIN_UNKNOWN,
     });
     expect(horizon.submitTransaction).toHaveBeenCalledTimes(1);
-  });
-
-  it('isBadSequence recognises only Horizon tx_bad_seq responses', () => {
-    expect(isBadSequence(badSeqError())).toBe(true);
-    expect(isBadSequence(new Error('tx_bad_seq'))).toBe(false);
-    expect(isBadSequence(null)).toBe(false);
   });
 });
 

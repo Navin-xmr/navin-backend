@@ -201,6 +201,7 @@ chmod +x .husky/pre-commit
 
 - Deps audit · Typecheck · Build (`verify`)
 - Lint (`lint`)
+- Tests (`test`) — full `npm test` suite against MongoDB + Redis service containers
 - Docker image build (`docker`) — when applicable
 
 Admin enforcement is enabled. PRs cannot be merged until all required checks are green.
@@ -232,12 +233,12 @@ All PRs must pass the following CI checks before they can be merged:
 | Type check | `npm run typecheck` | Runs `tsc --noEmit` with strict mode — zero errors required |
 | Build | `npm run build` | Compiles TypeScript to `dist/` — must succeed cleanly |
 | Lint | `npm run lint` | ESLint over `src/` — zero errors |
-| Tests | `npm test` | Full test suite |
+| Tests | `npm test` | Full test suite (runs against MongoDB + Redis in CI) |
 
-> [!NOTE]
-> CI currently enforces dependency audit + typecheck + build. The lint and full-suite
-> gates are being stabilized — see `TODO.md` Part 1 before assuming a red suite is your fault.
-> Run `npm run lint && npm test` locally for changes touching `src/`.
+> [!IMPORTANT]
+> Tests are an **enforced gate**: the `test` job in `.github/workflows/ci.yml` runs the full
+> suite on every PR and a red suite blocks merge. Run `npm run lint && npm test` locally
+> before pushing changes that touch `src/` or `tests/`.
 
 ### Clean-Install Build Triage
 
