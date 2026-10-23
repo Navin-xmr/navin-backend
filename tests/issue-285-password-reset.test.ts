@@ -1,12 +1,11 @@
 import { jest, describe, it, expect, beforeAll } from '@jest/globals';
-import type { sendEmail } from '../src/services/email.service.js';
 import { createEmailServiceMock } from './helpers/mocks.js';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mockBlockToken = jest.fn() as any;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mockIsTokenBlocked = jest.fn() as any;
-const mockSendEmail = jest.fn<typeof sendEmail>().mockResolvedValue(undefined);
+const emailServiceMock = createEmailServiceMock();
 
 await jest.unstable_mockModule('../src/modules/users/users.model.js', () => {
   const users: Record<string, unknown>[] = [];
@@ -45,9 +44,7 @@ await jest.unstable_mockModule('../src/infra/redis/connection.js', () => ({
   connectRedis: jest.fn(),
 }));
 
-await jest.unstable_mockModule('../src/services/email.service.js', () =>
-  createEmailServiceMock({ sendEmail: mockSendEmail })
-);
+await jest.unstable_mockModule('../src/services/email.service.js', () => emailServiceMock);
 
 const jwt = await import('jsonwebtoken');
 const { forgotPassword, resetPassword } = await import('../src/modules/auth/auth.service.js');
@@ -77,18 +74,18 @@ describe('#285 - Password Reset Flow', () => {
     });
 
     it('should trigger email send for existing user', async () => {
-      mockSendEmail.mockClear();
+      emailServiceMock.sendEmail.mockClear();
       await forgotPassword('existing@test.com');
-      expect(mockSendEmail).toHaveBeenCalledTimes(1);
-      expect(mockSendEmail).toHaveBeenCalledWith(
-        expect.objectContaining({ to: 'existing@test.com' }),
+      expect(emailServiceMock.sendEmail).toHaveBeenCalledTimes(1);
+      expect(emailServiceMock.sendEmail).toHaveBeenCalledWith(
+        expect.objectContaining({ to: 'existing@test.com' })
       );
     });
 
     it('should include a valid reset link in the email', async () => {
-      mockSendEmail.mockClear();
+      emailServiceMock.sendEmail.mockClear();
       await forgotPassword('existing@test.com');
-      const [params] = mockSendEmail.mock.calls[0];
+      const [params] = emailServiceMock.sendEmail.mock.calls[0];
       expect(params.html).toContain('/reset-password?token=');
     });
   });

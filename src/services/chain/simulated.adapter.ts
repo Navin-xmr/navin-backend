@@ -7,7 +7,7 @@
  *
  * Mapping (legacy stellar.service.ts → port):
  * - anchorTelemetryHash → anchorEvent: manage-data `telemetry:<shipment_id>` = data_hash, hash memo
- * - tokenizeShipment    → anchorEvent: tokenized fields anchored as a SHA-256 hash (hash-and-emit)
+ * - tokenizeShipment    → anchorEvent: hash of the tokenized shipment fields
  * - releaseEscrow       → releaseEscrow: manage-data `release:<payment_id>` = proof_hash, hash memo.
  *   (The legacy `Memo.text('escrow-release:<id>')` exceeds Stellar's 28-byte text-memo limit for
  *   ObjectId payment ids, so it is not reproduced here.) Failures reject with AppError instead of
@@ -42,7 +42,6 @@ import {
   parseChainEvent,
 } from '../../shared/types/chain.js';
 import type { ChainEvent } from '../../shared/types/chain.js';
-
 import { KeyedSerializer } from './serializer.js';
 import type {
   AnchorEventInput,
@@ -65,15 +64,7 @@ const MAX_BAD_SEQ_RETRIES = 2;
 /** Process-wide: every adapter instance signing for an account shares its queue. */
 const accountSerializer = new KeyedSerializer();
 
-/**
- * Module-private Horizon plumbing (#814): nothing below is exported — only
- * `SimulatedAdapter` leaves this file. Domain modules must depend on the port
- * (./types.ts) via getChainAdapter(); the chain.* suites inject their own fake
- * Horizon instead of importing these internals.
- *
- * isBadSequence: Horizon rejects a stale sequence with
- * `extras.result_codes.transaction === 'tx_bad_seq'`.
- */
+/** Horizon rejects a stale sequence with `tx_bad_seq`. */
 function isBadSequence(err: unknown): boolean {
   const data = (err as { response?: { data?: unknown } } | null)?.response?.data as
     { extras?: { result_codes?: { transaction?: string } } } | undefined;
@@ -178,6 +169,10 @@ export class SimulatedAdapter implements ChainAdapter {
       }
       if (records.length < PAGE_SIZE) return;
     }
+  }
+
+  async getConfirmationCount(_ledger: number): Promise<number> {
+    return 3;
   }
 
   private signer(): Keypair {
