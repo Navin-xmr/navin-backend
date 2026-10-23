@@ -32,13 +32,21 @@ describe('dispatchAlert', () => {
   });
 
   it('calls queue.add with alert payload', async () => {
-    const payload = { type: 'ANOMALY' as const, message: 'Temp spike', shipmentId: FIRST_SHIPMENT_ID };
+    const payload = {
+      type: 'ANOMALY' as const,
+      message: 'Temp spike',
+      shipmentId: FIRST_SHIPMENT_ID,
+    };
     await dispatchAlert(payload);
     expect(mockAdd).toHaveBeenCalledWith('alert', payload);
   });
 
   it('calls queue.add for STATUS_CHANGE type', async () => {
-    const payload = { type: 'STATUS_CHANGE' as const, message: 'Delivered', shipmentId: SECOND_SHIPMENT_ID };
+    const payload = {
+      type: 'STATUS_CHANGE' as const,
+      message: 'Delivered',
+      shipmentId: SECOND_SHIPMENT_ID,
+    };
     await dispatchAlert(payload);
     expect(mockAdd).toHaveBeenCalledWith('alert', payload);
   });

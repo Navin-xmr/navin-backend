@@ -1,33 +1,24 @@
 import { MongoMemoryServer } from 'mongodb-memory-server';
-import { connectMongo, disconnectMongo } from '../src/infra/mongo/connection.js';
 
-let mongoServer: MongoMemoryServer;
+/**
+ * Starts ONE MongoDB Memory Server for the whole Jest run and publishes its
+ * URI via `process.env.MONGO_URI` (workers are forked after this completes,
+ * so every test file sees it). Per-file servers in `tests/setup.ts` are only
+ * a fallback when this file is bypassed.
+ *
+ * The instance is stashed on `globalThis` (same main process) for
+ * `tests/globalTeardown.ts` to stop. Set `SKIP_MONGO_MEMORY=1` to skip
+ * entirely (fully mocked unit runs / no MMS binary).
+ */
+export default async function globalSetup(): Promise<void> {
+  if (process.env.SKIP_MONGO_MEMORY === '1') {
+    return;
+  }
 
-export default async function globalSetup() {
-  console.log('[Global Setup] Starting MongoDB Memory Server...');
-
-  mongoServer = await MongoMemoryServer.create({
-    instance: {
-      port: undefined, // Let the system assign a free port
-      dbName: 'navin-test',
-    },
-    binary: {
-      version: '7.0.14',
-    },
+  const server = await MongoMemoryServer.create({
+    binary: { checkMD5: false },
   });
-
-  const mongoUri = mongoServer.getUri();
-  console.log(`[Global Setup] MongoDB Memory Server running at: ${mongoUri}`);
-
-  // Set the MongoDB URI in environment for all tests
-  process.env.MONGO_URI = mongoUri;
-
-  // Connect once to verify the server is working
-  await connectMongo(mongoUri);
-  console.log('[Global Setup] Connected to MongoDB Memory Server');
-
-  await disconnectMongo();
-  console.log('[Global Setup] Disconnected for test isolation');
+  process.env.MONGO_URI = server.getUri();
+  process.env.MONGO_MEMORY_SHARED = '1';
+  (globalThis as Record<string, unknown>).__MONGO_MEMORY_SERVER__ = server;
 }
-
-export { mongoServer };

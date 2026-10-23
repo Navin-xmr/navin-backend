@@ -13,67 +13,132 @@ The backend service powers the off-chain layer of the platform, handling API log
 
 ## Table of Contents
 
-- [Quick Start](#quick-start)
+- [Docker Quickstart](#docker-quickstart)
 - [Authentication](#authentication)
 - [API Response Envelope](#api-response-envelope)
 - [Pagination](#pagination)
-- [Error Handling](#error-handling)
-- [Real-time Features](#real-time-features)
-- [Available Endpoints](#available-endpoints)
-- [Environment Variables](#environment-variables)
 - [Scripts](#scripts)
-- [Contributing](#contributing)
 
 ---
 
-## Quick Start
+## Docker Quickstart
 
-Get the Navin Backend running in **less than 5 minutes**:
+This is the shortest path to a complete local stack. It runs the API, MongoDB,
+Redis, and both Stellar workers on the Compose network.
+
+**1. Clone the repository**
 
 ```bash
-# 1. Clone the repository
 git clone https://github.com/Navin-xmr/navin-backend.git
 cd navin-backend
-
-# 2. Install dependencies (reproducible clean install)
-npm ci
-
-# 3. Create environment file
-cp .env.example .env
-# A development JWT_SECRET is pre-filled in .env.example.
-# Edit MONGO_URI if your MongoDB is not on the default localhost:27017.
-
-# 4. Start MongoDB and Redis (required — Redis powers queues, SSE and caches)
-docker run -d -p 27017:27017 --name navin_mongo mongo:6.0
-docker run -d -p 6379:6379 --name navin_redis redis:7-alpine
-
-# 5. Start the development server (with hot reload)
-npm run dev
-
-# Expected output:
-# info: HTTP server listening port=3000
 ```
 
-The API is now available at `http://localhost:3000/api`.
-
-### Docker Compose (mongo + redis + app)
-
-The compose stack boots the API in **production mode** (see `ENV NODE_ENV=production` in the `Dockerfile` runner stage). For hot-reload local development, use `npm run dev` with `.env` instead.
+**2. Create the Compose environment file**
 
 ```bash
-# Optional: override secrets from a local env file (recommended)
-cp .env.example .env
-# JWT_SECRET in .env.example is already ≥32 characters (required by src/env.ts)
-
-docker compose up -d --build
-docker compose logs -f app   # expect: HTTP server listening
-curl http://localhost:3000/api/health
-docker compose exec app whoami   # node (non-root runner)
+cp .env.docker.example .env.docker
+# Replace development secrets before using this stack outside a local machine.
 ```
 
-- **JWT_SECRET:** must be at least 32 characters. Compose provides a dev default; override via `.env` or `JWT_SECRET=... docker compose up`.
-- **Startup order:** `app` waits for healthy `mongo` and `redis` before starting.
-- **Clean reset:** `docker compose down -v && docker compose up -d --build`
+On Windows PowerShell: `Copy-Item .env.docker.example .env.docker`
+
+**3. Build and start the production image and dependencies**
+
+```bash
+docker compose -f docker-compose.yml up -d --build
+```
+
+This uses only `docker-compose.yml` (no override) so the stack runs the
+production image. The `-f docker-compose.yml` flag prevents Docker Compose
+from auto-merging `docker-compose.override.yml`.
+
+**4. Verify the services and API**
+
+```bash
+docker compose -f docker-compose.yml ps
+curl http://localhost:3000/api/health
+```
+
+On Windows PowerShell: `curl.exe http://localhost:3000/api/health`
+
+The health request should return `success: true` and `data.status: "active"`.
+
+The Compose file reads `.env.docker` when it exists. It supplies the internal
+container addresses for MongoDB and Redis, so `MONGO_URI` and `REDIS_URL` in
+`.env.docker` do not need to be changed for this workflow. The API is available at
+`http://localhost:3000/api`.
+
+### Service topology
+
+```mermaid
+flowchart LR
+  client[Client] -->|HTTP :3000| app[app<br/>Express API]
+  app --> mongo[(mongo<br/>MongoDB :27017)]
+  app --> redis[(redis<br/>Redis :6379)]
+  worker[stellar-worker<br/>Stellar anchor worker] --> mongo
+    worker --> redis
+  indexer[stellar-indexer<br/>Confirmation indexer] --> mongo
+    indexer --> redis
+```
+
+`mongo` and `redis` are published on loopback (`127.0.0.1`) for local inspection only. The
+workers publish no ports; they consume the same MongoDB and Redis services as
+the API. The API and workers wait for healthy MongoDB and Redis containers
+before starting.
+
+### Docker development mode
+
+The default Compose discovery rules automatically merge
+`docker-compose.override.yml`, which mounts `src/` and runs `tsx watch`.
+Use this mode when you want hot reload:
+
+```bash
+docker compose up -d --build
+docker compose logs -f app
+```
+
+Use `docker compose -f docker-compose.yml ...` when you need the production
+runner without the development override, as in the quickstart above.
+
+### Environment variables
+
+See [docs/environment-variables.md](docs/environment-variables.md) for the
+complete environment matrix, validation rules, defaults, and optional
+integration settings. `JWT_SECRET` must be at least 32 characters; the example
+file contains a development placeholder that should be replaced locally.
+
+### Docker troubleshooting
+
+- **`app` is unhealthy:** inspect `docker compose -f docker-compose.yml logs app`.
+  The healthcheck calls `/api/health` after a 15-second startup grace period;
+  `docker compose ... ps` shows whether MongoDB and Redis became healthy first.
+- **The API exits immediately:** check `JWT_SECRET` length and the application
+  logs. A missing or invalid required environment value makes the process fail
+  fast during startup.
+- **MongoDB or Redis is stuck in `starting`:** inspect the service logs with
+  `docker compose -f docker-compose.yml logs mongo redis`, then retry after the
+  healthchecks pass. On a clean machine, the first image pulls can take a few
+  minutes.
+- **Port 3000, 27017, or 6379 is already in use:** stop the conflicting
+  process/container or change the published ports in a local Compose override.
+- **Workers restart or show no HTTP healthcheck:** this is expected for the
+  worker services. They do not listen on port 3000 and intentionally disable
+  the inherited app healthcheck; inspect their logs instead.
+- **Reset local state:** `docker compose -f docker-compose.yml down -v` removes
+  the MongoDB volume. Start again with the quickstart command to rebuild the
+  stack from an empty database.
+
+### Local development without Docker
+
+If MongoDB and Redis are already installed locally, run the API directly:
+
+```bash
+# Create .env first, then install dependencies
+npm ci
+
+# Start the development server with hot reload
+npm run dev
+```
 
 ### Verify Installation
 
@@ -494,10 +559,10 @@ Configuration is validated at boot with Zod (`src/env.ts`) — the process **exi
 
 **Core variables:**
 
-| Variable | Required | Default | Description |
+| Variable | Required (Local / Docker) | Default | Description |
 |---|---|---|---|
-| `MONGO_URI` | ✅ Yes | — | MongoDB connection string (`mongodb://…`) |
-| `JWT_SECRET` | ✅ Yes | — | JWT signing secret (**min 32 characters**) |
+| `MONGO_URI` | ✅ Yes / ❌ No | — | MongoDB connection string (`mongodb://…`) |
+| `JWT_SECRET` | ✅ Yes / ❌ No | — | JWT signing secret (**min 32 characters**) |
 | `PORT` | No | `3000` | HTTP listen port |
 | `NODE_ENV` | No | `development` | `development` \| `test` \| `production` |
 | `REDIS_URL` | No | `redis://127.0.0.1:6379` | Redis (BullMQ queues, SSE, caches) |
@@ -525,7 +590,7 @@ The full matrix — SMTP, SendGrid, Twilio, S3/Cloudinary keys, Soroban placehol
 | `npm run check:deps` | Check runtime imports against `package.json` dependencies |
 | `npm run lint` | Run ESLint over `src/` |
 | `npm run lint:fix` | Auto-fix lint issues |
-| `npm test` | Run test suite (Jest with ESM VM modules) |
+| `npm test` | Run test suite (Jest with ESM VM modules) — enforced CI gate on every PR |
 | `npm run test:watch` | Run tests in watch mode |
 | `npm run migrate:up` | Apply pending database migrations (migrate-mongo) |
 | `npm run migrate:down` | Rollback last migration |
@@ -536,6 +601,8 @@ The full matrix — SMTP, SendGrid, Twilio, S3/Cloudinary keys, Soroban placehol
 ## Contributing
 
 We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on branching, commits, pull requests, and our build/test requirements.
+
+CI (`.github/workflows/ci.yml`) gates every PR on deps audit, typecheck, build, lint, OpenAPI lint **and the full test suite** (`npm test` against MongoDB + Redis service containers). A failing test blocks merge.
 
 ## Security
 
@@ -548,3 +615,11 @@ If you discover a security vulnerability, email [navinxmr@gmail.com](mailto:navi
 ---
 
 **Built on the Stellar ecosystem.**
+
+## Handsoff notes
+
+<!-- handsoff-issue-752 -->
+- #752: [Mock drift] Standardize ESM mock registration in users invitation tests
+
+<!-- handsoff-issue-753 -->
+- #753: [Mock drift] Audit user-service ESM mocks for the current repository surface

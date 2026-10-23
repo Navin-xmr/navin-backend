@@ -40,3 +40,21 @@ await mockModule('../src/modules/users/users.repo.js', {
 
 Register mocks after `jest.resetModules()` and before the dynamic import of the
 module under test.
+
+For isolated service tests, use the complete factories in `tests/helpers/mocks.ts`
+instead of loading a real provider module to discover its exports. In particular,
+`createUsersRepoMock()` provides the users repository boundary, while
+`createEmailServiceMock()` supplies email exports without initializing SMTP.
+Arrange each repository response explicitly in the test that needs it.
+
+`createUsersModelMock()` supplies both `UserModel` and `OrganizationModel` with
+chainable lookup/list/update queries. Nested overrides merge with the defaults,
+so overriding one operation preserves the other methods. Use
+`createModelQuery(fixture)` to script direct `await` and `select/sort/skip/limit/lean`
+paths; it reuses `fakeQuery()` from `tests/helpers/fakeModel.ts`. Query modifiers
+record calls but do not perform database filtering or pagination. Use fixtures
+from `tests/fixtures/factories.ts` for valid ObjectIds.
+
+Socket contract helpers delegate to `createSocketIoMock()` so transitive imports
+receive the same complete emitter surface, including payment and notification
+emitters. Bulk telemetry tests assert the shipment and payload for each call.

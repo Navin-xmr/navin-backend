@@ -8,6 +8,7 @@ node_modules/
 .env
 .env.*
 !.env.example
+!.env.docker.example
 
 # logs
 npm-debug.log*
@@ -43,6 +44,9 @@ coverage/
 .agent/
 issue.md
 
+# Redis persistence probe state (scripts/redis-persistence-probe.mjs)
+.redis-persistence-probe.json
+
 # Agent Skills & Prompts
 .agents/*
 !.agents/skills/
@@ -54,3 +58,17 @@ issue.md
 !.agents/skills/cross-check/**
 !.agents/skills/document/
 !.agents/skills/document/**
+
+# Local artifacts (P7-18)
+# Captured output from npm run lint:openapi. Regenerate locally as needed.
+lint_output.txt
+
+# Editor / tool scratch files
+*.tmp
+*.bak
+
+# Test coverage output
+.nyc_output/
+
+# Local IDE state
+.antigravitycli/

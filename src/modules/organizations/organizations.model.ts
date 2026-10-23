@@ -14,8 +14,6 @@ const OrganizationSchema = new mongoose.Schema(
 
 OrganizationSchema.plugin(isoDatePlugin);
 
-OrganizationSchema.index({ name: 1 });
-
 OrganizationSchema.pre(['find', 'findOne', 'findOneAndUpdate', 'countDocuments'], function () {
   this.where({ deletedAt: null });
 });

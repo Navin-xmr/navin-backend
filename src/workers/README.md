@@ -2,6 +2,16 @@
 
 This directory contains BullMQ workers that process background jobs asynchronously.
 
+## Topology (ADR: `docs/adr-worker-topology.md`)
+
+Worker topology is **hybrid / dedicated** — decided and recorded in `docs/adr-worker-topology.md`:
+
+- **In-process** (inside the `app` service): alert reaper and maintenance scheduler, started from `src/main.ts`.
+- **Dedicated** (own compose services, no published ports): `stellar-worker` and `stellar-indexer`, sharing the same env as `app`.
+
+In `docker-compose.yml`, the dedicated workers are separate services that build the same image and run
+`node dist/src/workers/<name>.worker.js` directly. `docker compose config -q` must stay clean.
+
 ## Stellar Worker
 
 The Stellar worker (`stellar.worker.ts`) processes Stellar blockchain anchoring operations in the background, decoupling them from HTTP request/response cycles.
@@ -23,8 +33,12 @@ When IoT sensors send telemetry data to the `/api/webhooks/iot` endpoint, the da
 # Development
 npm run worker:stellar
 
-# Production
-node dist/workers/stellar.worker.js
+# Production (dist path after `npm run build`)
+node dist/src/workers/stellar.worker.js
+
+# Indexer worker (Horizon-backed poller, dedicated service)
+npm run worker:stellar-indexer
+node dist/src/workers/stellar-indexer.worker.js
 ```
 
 ### Configuration
@@ -104,7 +118,7 @@ For production, consider:
   "apps": [
     {
       "name": "stellar-worker",
-      "script": "dist/workers/stellar.worker.js",
+      "script": "dist/src/workers/stellar.worker.js",
       "instances": 2,
       "exec_mode": "cluster",
       "env": {

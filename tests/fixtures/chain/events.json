@@ -1,0 +1,45 @@
+{
+  "spec_version": "1.0.0-draft",
+  "events": {
+    "anchor": {
+      "id": "0002200479567253504-0000000001",
+      "contract_id": "CACAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAINCW",
+      "tx_hash": "2e7d2c03a9507ae265ecf5b5356885a53393a2029d241394997265a1a25aefc6",
+      "ledger": 512345,
+      "ledger_closed_at": "2026-09-27T10:15:30Z",
+      "name": "anchor",
+      "topic": ["anchor", "65f1a2b3c4d5e6f708192a3b"],
+      "data": ["ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb", 512345]
+    },
+    "esc_init": {
+      "id": "0002200479567253505-0000000001",
+      "contract_id": "CACAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAINCW",
+      "tx_hash": "18ac3e7343f016890c510e93f935261169d9e3f565436429830faf0934f4f8e4",
+      "ledger": 512346,
+      "ledger_closed_at": "2026-09-27T10:15:35Z",
+      "name": "esc_init",
+      "topic": ["esc_init", "66a0b1c2d3e4f50617283940"],
+      "data": [
+        "65f1a2b3c4d5e6f708192a3b",
+        "GABAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEJXA",
+        "GABQGAYDAMBQGAYDAMBQGAYDAMBQGAYDAMBQGAYDAMBQGAYDAMBQHGPC",
+        "CACQKBIFAUCQKBIFAUCQKBIFAUCQKBIFAUCQKBIFAUCQKBIFAUCQLC2U",
+        "1500000000"
+      ]
+    },
+    "esc_rel": {
+      "id": "0002200479567253506-0000000001",
+      "contract_id": "CACAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAINCW",
+      "tx_hash": "3f79bb7b435b05321651daefd374cdc681dc06faa65e374e38337b88ca046dea",
+      "ledger": 512400,
+      "ledger_closed_at": "2026-09-27T10:20:10Z",
+      "name": "esc_rel",
+      "topic": ["esc_rel", "66a0b1c2d3e4f50617283940"],
+      "data": [
+        "3e23e8160039594a33894f6564e1b1348bbd7a0088d42c4acb73eeaed59c009d",
+        "GABQGAYDAMBQGAYDAMBQGAYDAMBQGAYDAMBQGAYDAMBQGAYDAMBQHGPC",
+        "1500000000"
+      ]
+    }
+  }
+}

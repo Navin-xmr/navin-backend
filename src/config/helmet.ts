@@ -20,6 +20,9 @@ export function buildHelmetMiddleware() {
     });
   }
 
+  // crossOriginEmbedderPolicy is a valid HelmetOptions key in helmet v8+.
+  // Disabled in non-production to allow Swagger UI and dev tools to load
+  // cross-origin resources without COEP restrictions.
   return helmet({
     contentSecurityPolicy: {
       directives: {
@@ -34,5 +37,5 @@ export function buildHelmetMiddleware() {
       },
     },
     crossOriginEmbedderPolicy: false,
-  } as unknown as Parameters<typeof helmet>[0]);
+  });
 }

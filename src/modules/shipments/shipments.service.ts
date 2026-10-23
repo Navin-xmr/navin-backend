@@ -1,6 +1,8 @@
 import { Shipment } from './shipments.model.js';
 import type { FilterQuery, SortOrder } from 'mongoose';
-import { tokenizeShipment, releaseEscrow } from '../../services/stellar.service.js';
+import { getChainAdapter, getChainActorAddress } from '../../services/chain/factory.js';
+import type { AnchorEventInput, EscrowResult } from '../../services/chain/types.js';
+import { generateDataHash, buildCanonicalShipmentPayload } from '../../shared/utils/crypto.js';
 import { uploadFileToStorage } from '../../services/storage/upload.js';
 import {
   generateProofKey,
@@ -65,6 +67,25 @@ type TelemetryPoint = {
 const ETA_POINTS_WINDOW = 8;
 const MIN_EFFECTIVE_SPEED_KMH = 5;
 const DEFAULT_SINGLE_POINT_SPEED_KMH = 40;
+
+/**
+ * Release escrow for a delivered shipment through the ChainAdapter port.
+ * Rejects with AppError(ERR_CHAIN_*) on failure; results carry `simulated`.
+ */
+function releaseEscrowOnDelivery(
+  shipment: { _id: { toString(): string }; deliveryProof?: { url?: string | null } | null },
+  paymentId: string
+): Promise<EscrowResult> {
+  const shipmentId = shipment._id.toString();
+  return getChainAdapter().releaseEscrow({
+    payment_id: paymentId,
+    proof_hash: generateDataHash({
+      shipmentId,
+      paymentId,
+      deliveryProofUrl: shipment.deliveryProof?.url ?? null,
+    }),
+  });
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
@@ -235,7 +256,11 @@ export const getShipmentsService = async (params: {
   const query: FilterQuery<unknown> = {};
 
   if (filters.organizationId) {
-    query.organizationId = filters.organizationId;
+    query.$or = [
+      { enterpriseId: filters.organizationId },
+      { logisticsId: filters.organizationId },
+      { organizationId: filters.organizationId },
+    ];
   }
 
   if (status) {
@@ -478,7 +503,8 @@ export const getShipmentTimelineService = async (
 };
 
 /**
- * Creates a new shipment record and attempts Stellar tokenization.
+ * Creates a new shipment record and anchors its creation through the ChainAdapter port.
+ * Anchoring is best-effort: a chain failure is logged and the shipment is still returned.
  * @param {object} data - Shipment creation payload.
  * @param {string=} data.trackingNumber - Optional tracking number.
  * @param {string} data.origin - Shipment origin.
@@ -499,17 +525,22 @@ export const createShipmentService = async (data: {
   await shipment.save();
 
   try {
-    const stellar = await tokenizeShipment({
-      trackingNumber: shipment.trackingNumber,
-      origin: shipment.origin,
-      destination: shipment.destination,
-      shipmentId: shipment._id.toString(),
-    });
-    shipment.stellarTokenId = stellar.stellarTokenId;
-    shipment.stellarTxHash = stellar.stellarTxHash;
+    const actor = getChainActorAddress();
+    const anchorInput: AnchorEventInput = {
+      shipment_id: shipment._id.toString(),
+      data_hash: generateDataHash({
+        shipmentId: shipment._id.toString(),
+        trackingNumber: shipment.trackingNumber,
+        origin: shipment.origin,
+        destination: shipment.destination,
+      }),
+      actor,
+    };
+    const receipt = await getChainAdapter().anchorEvent(anchorInput);
+    shipment.stellarTxHash = receipt.txHash;
     await shipment.save();
   } catch (err) {
-    logger.warn({ err, shipmentId: shipment._id.toString() }, 'Stellar tokenization skipped');
+    logger.warn({ err, shipmentId: shipment._id.toString() }, 'Chain tokenization skipped');
   }
 
   auditLog({
@@ -558,6 +589,7 @@ export const updateShipmentStatusService = async (
   validateStatusTransition(shipment.status as ShipmentStatus, status);
 
   const previousStatus = shipment.status;
+  let simulated: boolean | undefined;
   shipment.status = status;
 
   const milestone = {
@@ -604,14 +636,27 @@ export const updateShipmentStatusService = async (
   await invalidateAnalyticsPerformanceCache();
   await invalidateShipmentEtaCache(id);
 
-  // Write ledger block for every status change
+  // Write ledger block for every status change.
+  // transactionHash is intentionally omitted here: the only on-chain tx we have
+  // at this point is the tokenization tx recorded at creation time (stellarTxHash),
+  // which is completely unrelated to a status update.  Citing it would create a
+  // false chain-of-custody link.  Per-event anchoring will populate this field
+  // once real Soroban integration lands (see TODO Part 3 / #358).
   try {
+    const canonical = buildCanonicalShipmentPayload({
+      shipmentId: id,
+      event: status,
+      actor: actor?.userId,
+      timestamp: new Date(),
+      metadata: { previousStatus },
+    });
     await createLedgerBlockService({
       shipmentId: id,
-      eventType: status as unknown as MilestoneEvent,
-      transactionHash: shipment.stellarTxHash ?? undefined,
+      milestoneEvent: status as unknown as MilestoneEvent,
       actor: actor?.userId,
-      metadata: { previousStatus },
+      canonicalPayload: canonical,
+      metadata: { previousStatus, simulated: true },
+      dataHash: generateDataHash(canonical),
     });
   } catch (ledgerErr) {
     logger.warn(
@@ -625,39 +670,47 @@ export const updateShipmentStatusService = async (
     try {
       const payment = await paymentsRepo.getPaymentByShipmentId(shipment._id.toString());
       if (payment) {
-        const releaseResult = await releaseEscrow({
-          paymentId: payment._id.toString(),
-          shipmentId: shipment._id.toString(),
-        });
+        const released = await releaseEscrowOnDelivery(shipment, payment._id.toString());
 
-        if (releaseResult.success && releaseResult.transactionHash) {
-          await paymentsRepo.updatePaymentStatus(
-            payment._id.toString(),
-            PaymentStatus.RELEASED,
-            releaseResult.transactionHash
-          );
+        simulated = released.simulated;
+        await paymentsRepo.updatePaymentStatus(
+          payment._id.toString(),
+          PaymentStatus.RELEASED,
+          released.txHash
+        );
 
-          // Write ledger block for settlement initiation
-          try {
-            await createLedgerBlockService({
-              shipmentId: id,
-              eventType: MilestoneEvent.SETTLEMENT_INITIATED,
-              transactionHash: releaseResult.transactionHash,
-              actor: actor?.userId,
-              metadata: { paymentId: payment._id.toString() },
-            });
-          } catch (settlementLedgerErr) {
-            logger.warn(
-              { err: settlementLedgerErr, shipmentId: id },
-              'Failed to create ledger block for settlement initiation'
-            );
-          }
-
-          logger.info(
-            { shipmentId: id, transactionHash: releaseResult.transactionHash },
-            'Escrow released for shipment'
+        // Write ledger block for settlement initiation
+        try {
+          const canonical = buildCanonicalShipmentPayload({
+            shipmentId: id,
+            event: MilestoneEvent.SETTLEMENT_INITIATED,
+            actor: actor?.userId,
+            timestamp: new Date(),
+            metadata: { paymentId: payment._id.toString() },
+          });
+          await createLedgerBlockService({
+            shipmentId: id,
+            milestoneEvent: MilestoneEvent.SETTLEMENT_INITIATED,
+            transactionHash: released.txHash,
+            dataHash: generateDataHash(canonical),
+            actor: actor?.userId,
+            canonicalPayload: canonical,
+            metadata: {
+              paymentId: payment._id.toString(),
+              simulated: released.simulated,
+            },
+          });
+        } catch (settlementLedgerErr) {
+          logger.warn(
+            { err: settlementLedgerErr, shipmentId: id },
+            'Failed to create ledger block for settlement initiation'
           );
         }
+
+        logger.info(
+          { shipmentId: id, transactionHash: released.txHash, simulated: released.simulated },
+          'Escrow released for shipment'
+        );
       }
     } catch (escrowError) {
       logger.warn({ err: escrowError, shipmentId: id }, 'Failed to trigger escrow release');
@@ -690,6 +743,12 @@ export const updateShipmentStatusService = async (
       shipment.updatedAt instanceof Date ? shipment.updatedAt.toISOString() : shipment.updatedAt,
   });
 
+  if (simulated !== undefined) {
+    const shipmentData =
+      typeof shipment.toObject === 'function' ? shipment.toObject() : { ...shipment };
+    return { ...shipmentData, simulated };
+  }
+
   return shipment;
 };
 
@@ -701,7 +760,7 @@ type BulkUpdateResult = {
 /**
  * Updates multiple shipments' status in bulk. Returns partial results — failures for
  * one shipment never roll back successful updates already applied to others.
- * Each successful update emits a `status_update` WebSocket event.
+ * Each successful update emits a `shipment:status` WebSocket event.
  * @param {BulkStatusUpdateInput} input - Bulk update payload (`shipmentIds`, `status`).
  * @param {string} organizationId - Caller's organization id for ownership validation.
  * @param {{ userId?: string }=} actor - Optional actor metadata for audit/milestone attribution.
@@ -801,22 +860,16 @@ export const bulkUpdateShipmentStatusService = async (
         try {
           const payment = await paymentsRepo.getPaymentByShipmentId(id);
           if (payment) {
-            const releaseResult = await releaseEscrow({
-              paymentId: payment._id.toString(),
-              shipmentId: id,
-            });
-
-            if (releaseResult.success && releaseResult.transactionHash) {
-              await paymentsRepo.updatePaymentStatus(
-                payment._id.toString(),
-                PaymentStatus.RELEASED,
-                releaseResult.transactionHash
-              );
-              logger.info(
-                { shipmentId: id, transactionHash: releaseResult.transactionHash },
-                'Escrow released for shipment'
-              );
-            }
+            const released = await releaseEscrowOnDelivery(shipment, payment._id.toString());
+            await paymentsRepo.updatePaymentStatus(
+              payment._id.toString(),
+              PaymentStatus.RELEASED,
+              released.txHash
+            );
+            logger.info(
+              { shipmentId: id, transactionHash: released.txHash, simulated: released.simulated },
+              'Escrow released for shipment'
+            );
           }
         } catch (escrowError) {
           logger.warn({ err: escrowError, shipmentId: id }, 'Failed to trigger escrow release');
@@ -907,11 +960,23 @@ export const uploadShipmentProofService = async (
 
   // Write PROOF_SUBMITTED ledger block
   try {
+    const canonical = buildCanonicalShipmentPayload({
+      shipmentId: id,
+      event: MilestoneEvent.PROOF_SUBMITTED,
+      actor: proof.actorUserId,
+      timestamp: new Date(),
+      metadata: {
+        proofUrl,
+        recipientSignatureName: proof.recipientSignatureName,
+      },
+    });
     await createLedgerBlockService({
       shipmentId: id,
       milestoneEvent: MilestoneEvent.PROOF_SUBMITTED,
       shipmentReference: shipment?.trackingNumber,
       transactionHash: shipment?.stellarTxHash ?? undefined,
+      dataHash: generateDataHash(canonical),
+      canonicalPayload: canonical,
       metadata: {
         proofUrl,
         recipientSignatureName: proof.recipientSignatureName,

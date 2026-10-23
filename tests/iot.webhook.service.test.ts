@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
+import { flushUntilIdle } from './helpers/flush.js';
 
 describe('processIotWebhook', () => {
   const payload = {
@@ -26,7 +27,7 @@ describe('processIotWebhook', () => {
       batteryLevel: payload.batteryLevel,
       timestamp: payload.timestamp,
     }));
-    const detectAnomaly = jest.fn(async () => ({ detected: false, anomalies: [] }));
+    const detectTelemetryAnomalies = jest.fn(async () => ({ detected: false, anomalies: [] }));
     const emitTelemetryUpdate = jest.fn();
     const emitAnomalyDetected = jest.fn();
     const pushStellarAnchorJob = jest.fn(async () => undefined);
@@ -36,14 +37,13 @@ describe('processIotWebhook', () => {
       createTelemetryRecord,
       findActiveShipmentBySensorId: jest.fn(),
     }));
-    await jest.unstable_mockModule('../src/modules/anomaly/anomaly.service.js', () => ({
-      detectAnomaly,
+    await jest.unstable_mockModule('../src/services/telemetryAnomalyDetection.js', () => ({
+      detectTelemetryAnomalies,
     }));
     await jest.unstable_mockModule('../src/infra/socket/io.js', () => ({
       emitTelemetryUpdate,
       emitAnomalyDetected,
       emitStatusUpdate: jest.fn(),
-     emitPaymentStatusChange: jest.fn(),
       emitPaymentStatusChange: jest.fn(),
       getIO: jest.fn(),
       initSocketIO: jest.fn(),
@@ -57,10 +57,8 @@ describe('processIotWebhook', () => {
 
     const { processIotWebhook } = await import('../src/modules/webhooks/iot.service.js');
 
-    const result = await processIotWebhook(
-      payload as unknown as Parameters<typeof processIotWebhook>[0]
-    );
-    await new Promise(resolve => setImmediate(resolve));
+    const result = await processIotWebhook(payload as any);
+    await new Promise(resolve => setTimeout(resolve, 50));
 
     expect(result).toBeDefined();
     expect(createTelemetryRecord).toHaveBeenCalledTimes(1);
@@ -82,16 +80,10 @@ describe('processIotWebhook', () => {
       batteryLevel: payload.batteryLevel,
       timestamp: payload.timestamp,
     }));
-    const detectAnomaly = jest.fn(async () => ({
-      detected: true,
-      anomalies: [
-        {
-          shipmentId: payload.shipmentId,
-          type: 'TEMPERATURE_ANOMALY',
-          severity: 'HIGH',
-          message: 'High temperature',
-        },
-      ],
+    const detectTelemetryAnomalies = jest.fn(async () => ({
+      isAnomaly: true,
+      anomalyType: 'TEMPERATURE_BREACH',
+      details: ['High temperature'],
     }));
     const emitTelemetryUpdate = jest.fn();
     const emitAnomalyDetected = jest.fn();
@@ -102,14 +94,13 @@ describe('processIotWebhook', () => {
       createTelemetryRecord,
       findActiveShipmentBySensorId: jest.fn(),
     }));
-    await jest.unstable_mockModule('../src/modules/anomaly/anomaly.service.js', () => ({
-      detectAnomaly,
+    await jest.unstable_mockModule('../src/services/telemetryAnomalyDetection.js', () => ({
+      detectTelemetryAnomalies,
     }));
     await jest.unstable_mockModule('../src/infra/socket/io.js', () => ({
       emitTelemetryUpdate,
       emitAnomalyDetected,
       emitStatusUpdate: jest.fn(),
-     emitPaymentStatusChange: jest.fn(),
       emitPaymentStatusChange: jest.fn(),
       getIO: jest.fn(),
       initSocketIO: jest.fn(),
@@ -123,8 +114,8 @@ describe('processIotWebhook', () => {
 
     const { processIotWebhook } = await import('../src/modules/webhooks/iot.service.js');
 
-    await processIotWebhook(payload as unknown as Parameters<typeof processIotWebhook>[0]);
-    await new Promise(resolve => setImmediate(resolve));
+    await processIotWebhook(payload as any);
+    await new Promise(resolve => setTimeout(resolve, 50));
 
     expect(emitAnomalyDetected).toHaveBeenCalledTimes(1);
     expect(pushAlertJob).toHaveBeenCalledTimes(1);
@@ -139,16 +130,14 @@ describe('processIotWebhook', () => {
       createTelemetryRecord,
       findActiveShipmentBySensorId: jest.fn(),
     }));
-    await jest.unstable_mockModule('../src/modules/anomaly/anomaly.service.js', () => ({
-      detectAnomaly: jest.fn(),
+    await jest.unstable_mockModule('../src/services/telemetryAnomalyDetection.js', () => ({
+      detectTelemetryAnomalies: jest.fn(),
     }));
     await jest.unstable_mockModule('../src/infra/socket/io.js', () => ({
       emitTelemetryUpdate: jest.fn(),
       emitPaymentStatusChange: jest.fn(),
       emitAnomalyDetected: jest.fn(),
       emitStatusUpdate: jest.fn(),
-     emitPaymentStatusChange: jest.fn(),
-      emitPaymentStatusChange: jest.fn(),
       getIO: jest.fn(),
       initSocketIO: jest.fn(),
     }));

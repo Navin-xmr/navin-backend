@@ -2,6 +2,7 @@ import rateLimit, { type Store, type IncrementResponse } from 'express-rate-limi
 import type { Request, Response } from 'express';
 import { sendResponse } from '../http/sendResponse.js';
 import { logger } from '../logger/logger.js';
+import { getRedisClient } from '../../infra/redis/connection.js';
 
 const isDev = process.env.NODE_ENV !== 'production';
 
@@ -26,13 +27,11 @@ interface FallbackEntry {
 
 function tryGetRedis(): RedisLike | null {
   try {
-    // Dynamic import via module resolution — works in ESM because we import
-    // the already-resolved module cache reference at call time.
-
-    const mod = require('../../infra/redis/connection.js') as {
-      getRedisClient?: () => RedisLike;
-    };
-    return mod.getRedisClient?.() ?? null;
+    const client = getRedisClient() as unknown as RedisLike;
+    // The in-memory test client and real ioredis both expose incr; anything
+    // else (e.g. a partial test double) falls back to memory.
+    if (typeof client?.incr !== 'function') return null;
+    return client;
   } catch {
     return null;
   }
@@ -142,6 +141,17 @@ class RedisRateLimitStore implements Store {
 
 // ── Handler factory ──────────────────────────────────────────────────────────
 
+/**
+ * Builds the 429 handler shared by every limiter in this module.
+ *
+ * Responds with the standard error envelope `{ success, message, data, retryAfter }`
+ * and sets a `Retry-After` header. The advertised delay is derived from the
+ * limiter's reset time when available, otherwise it falls back to the window
+ * length (1 minute in development, 15 minutes otherwise).
+ *
+ * @param message - Human-readable message returned in the response body.
+ * @returns An Express handler that sends HTTP 429 with the rate-limit envelope.
+ */
 const createRateLimitHandler = (message: string) => (req: Request, res: Response) => {
   const rateLimitState = (req as Request & { rateLimit?: { resetTime?: Date } }).rateLimit;
   const retryAfter = rateLimitState?.resetTime
@@ -186,25 +196,9 @@ export const loginLimiter = rateLimit({
   legacyHeaders: false,
   skipSuccessfulRequests: true,
   store: new RedisRateLimitStore(loginWindowMs, 'rl:login:'),
-  handler: (req: Request, res: Response) => {
-    const rateLimitState = (req as Request & { rateLimit?: { resetTime?: Date } }).rateLimit;
-    const retryAfter = rateLimitState?.resetTime
-      ? Math.max(1, Math.ceil((rateLimitState.resetTime.getTime() - Date.now()) / 1000))
-      : Math.ceil(15 * 60);
-
-    res.setHeader('Retry-After', String(retryAfter));
-    sendResponse(
-      res,
-      429,
-      false,
-      'Too many login attempts, please try again later.',
-      null,
-      undefined,
-      {
-        retryAfter,
-      }
-    );
-  },
+  handler: createRateLimitHandler(
+    'Too many login attempts from this IP, please try again after 15 minutes.'
+  ),
 });
 
 /** OTP / password-reset endpoints — tight limit: 5 req/15 min */

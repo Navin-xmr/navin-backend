@@ -1,27 +1,74 @@
 import { Queue } from 'bullmq';
 import { Redis } from 'ioredis';
 import { config } from '../../config/index.js';
+import { getRedisClient as getSharedRedisClient } from './connection.js';
 
 let redisClient: Redis | null = null;
-let transactionQueue: Queue | null = null;
+type TransactionQueueLike = Pick<Queue, 'add' | 'close'>;
+let transactionQueue: TransactionQueueLike | null = null;
 
-export function getRedisClient(): Redis {
+function isTestEnv(): boolean {
+  // See connection.ts — JEST_WORKER_ID survives suites that mutate NODE_ENV.
+  return process.env.NODE_ENV === 'test' || typeof process.env.JEST_WORKER_ID !== 'undefined';
+}
+
+/**
+ * Redis client for the raw list-push paths (`alert_queue`).
+ *
+ * Deliberately module-private: `connection.ts` owns the single shared, teardown-
+ * tracked client, and re-exporting a second `getRedisClient()` from here would
+ * give call sites two identically-named accessors (AGENTS.md §8 — no duplicate
+ * declarations). In tests it delegates to the shared in-memory client so queue and
+ * alert paths never open a real socket.
+ */
+function getQueueRedisClient(): Redis {
   if (!redisClient) {
+    if (isTestEnv()) {
+      redisClient = getSharedRedisClient();
+      return redisClient;
+    }
     redisClient = new Redis(config.redisUrl);
   }
   return redisClient;
 }
 
-export function getTransactionQueue(): Queue {
+export function getTransactionQueue(): TransactionQueueLike {
   if (!transactionQueue) {
+    if (isTestEnv()) {
+      transactionQueue = {
+        add: (async () => ({ id: 'test-job-id' })) as unknown as Queue['add'],
+        close: (async () => undefined) as unknown as Queue['close'],
+      };
+      return transactionQueue;
+    }
     transactionQueue = new Queue('transaction_queue', {
       connection: {
         host: new URL(config.redisUrl).hostname,
         port: parseInt(new URL(config.redisUrl).port || '6379'),
       },
-    });
+    }) as TransactionQueueLike;
   }
   return transactionQueue;
+}
+
+/** Quits queue clients/queues. Safe to call when nothing was created. */
+export async function disconnectQueueRedis(): Promise<void> {
+  if (transactionQueue) {
+    try {
+      await transactionQueue.close();
+    } catch {
+      // Ignore teardown errors.
+    }
+    transactionQueue = null;
+  }
+  if (redisClient && !isTestEnv()) {
+    try {
+      await redisClient.quit();
+    } catch {
+      // Ignore teardown errors.
+    }
+  }
+  redisClient = null;
 }
 
 export async function pushAlertJob(anomaly: {
@@ -30,7 +77,7 @@ export async function pushAlertJob(anomaly: {
   severity: string;
   message: string;
 }) {
-  const client = getRedisClient();
+  const client = getQueueRedisClient();
   await client.lpush('alert_queue', JSON.stringify(anomaly));
 }
 

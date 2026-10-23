@@ -3,7 +3,7 @@ import { buildApp } from '../src/app.js';
 import { connectMongo, disconnectMongo } from '../src/infra/mongo/connection.js';
 import { UserModel, OrganizationModel } from '../src/modules/users/users.model.js';
 import { Shipment } from '../src/modules/shipments/shipments.model.js';
-import jwt from 'jsonwebtoken';
+import { seedOrg, signToken } from './fixtures/factories.js';
 import { env } from '../src/env.js';
 
 describe('Issues 144, 145, 146, 152 - Combined Tests', () => {
@@ -16,10 +16,7 @@ describe('Issues 144, 145, 146, 152 - Combined Tests', () => {
     app = buildApp();
 
     // Create test organization
-    const org = await OrganizationModel.create({
-      name: 'Test Org',
-      type: 'ENTERPRISE',
-    });
+    const org = await seedOrg();
     orgId = org._id.toString();
 
     // Create admin user
@@ -31,9 +28,7 @@ describe('Issues 144, 145, 146, 152 - Combined Tests', () => {
       organizationId: orgId,
     });
 
-    adminToken = jwt.sign({ userId: adminUser._id.toString(), role: 'ADMIN' }, env.JWT_SECRET, {
-      expiresIn: '1h',
-    });
+    adminToken = signToken({ userId: adminUser._id.toString(), role: 'ADMIN' }, { expiresIn: '1h' });
   });
 
   afterAll(async () => {

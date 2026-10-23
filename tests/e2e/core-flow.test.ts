@@ -1,4 +1,5 @@
 import { describe, expect, beforeAll, beforeEach, afterAll, it, jest } from '@jest/globals';
+import { createChainFactoryMock } from '../helpers/mocks.js';
 import request from 'supertest';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import mongoose from 'mongoose';
@@ -69,19 +70,9 @@ describe('E2E: Shipment Lifecycle (Hash and Emit Pipeline)', () => {
     await mongoose.connect(mongoServer.getUri());
 
     // Setup service mocks before building app
-    await jest.unstable_mockModule('../../src/services/stellar.service.js', () => ({
-      tokenizeShipment: jest.fn(() =>
-        Promise.resolve({
-          stellarTokenId: 'stellar-token-e2e',
-          stellarTxHash: 'stellar-tx-hash-e2e',
-        })
-      ),
-      anchorTelemetryHash: jest.fn(() => Promise.resolve({ stellarTxHash: 'anchor-tx-hash-e2e' })),
-      releaseEscrow: jest.fn(() =>
-        Promise.resolve({ success: true, transactionHash: 'release-tx-hash-e2e' })
-      ),
-      getStellarExplorerUrl: jest.fn(() => 'https://stellar.expert/explorer/testnet/tx/mock'),
-    }));
+    await jest.unstable_mockModule('../../src/services/chain/factory.js', () =>
+      createChainFactoryMock()
+    );
 
     await jest.unstable_mockModule('../../src/modules/auth/apiKey.service.js', () => ({
       validateApiKey: mockValidateApiKey,

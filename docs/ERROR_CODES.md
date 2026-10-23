@@ -8,19 +8,30 @@ All error codes follow the naming convention: `ERR_<DOMAIN>_<DESCRIPTION>` or `E
 
 ## Error Codes Table
 
-| HTTP Status | Error Code | Description | Example Endpoints | When Returned |
-|---|---|---|---|---|
-| **400** | `ERR_BAD_REQUEST` | Invalid request syntax or parameters | All endpoints | Malformed JSON body, invalid query parameters |
-| **400** | `ERR_VALIDATION_FAILED` | Request validation failed (Zod schema) | All endpoints | Missing required fields, invalid field types, constraints violated |
-| **401** | `ERR_AUTH_INVALID` | Missing or invalid authentication token | All protected endpoints | Missing `Authorization` header, malformed JWT, expired token |
-| **401** | `ERR_AUTH_TOKEN_REVOKED` | JWT has been explicitly revoked | All protected endpoints, `GET /api/events` | User logged out; token blocklisted in Redis before natural expiry |
-| **403** | `ERR_PERMISSION_DENIED` | Insufficient role permissions | All role-restricted endpoints | User role not authorized for this endpoint |
-| **404** | `ERR_NOT_FOUND` | Resource not found | `GET /api/*/:id`, `PATCH /api/*/:id`, `DELETE /api/*/:id` | Resource ID does not exist or has been deleted |
-| **404** | `ERR_SHIPMENT_NOT_FOUND` | Shipment resource not found | `GET /api/shipments/:id`, `PATCH /api/shipments/:id` | Shipment ID does not exist |
-| **404** | `ERR_PAYMENT_NOT_FOUND` | Payment resource not found | `GET /api/payments/:id` | Payment ID does not exist |
-| **409** | `ERR_DUPLICATE_KEY` | Unique constraint violation | `POST /api/auth/signup`, `POST /api/users` | Email already registered, duplicate field value |
-| **500** | `ERR_INTERNAL_SERVER_ERROR` | Unhandled server error | All endpoints | Unexpected error in backend processing |
-| **502** | `ERR_EVENTS_POLL_FAILED` | Redis event store unavailable | `GET /api/events/poll` | Redis read failure during polling fallback |
+| HTTP Status | Error Code                        | Description                                                              | Example Endpoints                                                | When Returned                                                                |
+| ----------- | --------------------------------- | ------------------------------------------------------------------------ | ---------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| **400**     | `ERR_BAD_REQUEST`                 | Invalid request syntax or parameters                                     | All endpoints                                                    | Malformed JSON body, invalid query parameters                                |
+| **400**     | `VALIDATION_ERROR`                | Request validation failed (Zod schema)                                   | All endpoints                                                    | Missing required fields, invalid field types, constraints violated           |
+| **400**     | `ERR_AUTH_INVALID_RESET_TOKEN`    | Password-reset token is invalid or expired                               | Auth password-reset endpoint                                     | Token is invalid, expired, wrong type, or references a missing user          |
+| **401**     | `ERR_AUTH_INVALID`                | Missing or invalid authentication token                                  | All protected endpoints                                          | Missing `Authorization` header, malformed JWT, expired token                 |
+| **401**     | `ERR_AUTH_TOKEN_REVOKED`          | JWT has been explicitly revoked                                          | All protected endpoints, `GET /api/events`                       | User logged out; token blocklisted in Redis before natural expiry            |
+| **403**     | `ERR_PERMISSION_DENIED`           | Insufficient role permissions                                            | All role-restricted endpoints                                    | User role not authorized for this endpoint                                   |
+| **404**     | `ERR_NOT_FOUND`                   | Resource not found                                                       | `GET /api/*/:id`, `PATCH /api/*/:id`, `DELETE /api/*/:id`        | Resource ID does not exist or has been deleted                               |
+| **404**     | `ERR_SHIPMENT_NOT_FOUND`          | Shipment resource not found                                              | `GET /api/shipments/:id`, `PATCH /api/shipments/:id`             | Shipment ID does not exist                                                   |
+| **404**     | `ERR_PAYMENT_NOT_FOUND`           | Payment or settlement resource not found                                 | `GET /api/payments/:id`, settlement detail and dispute endpoints | Payment/settlement ID does not exist                                         |
+| **400**     | `ERR_SHIPMENT_INVALID_TRANSITION` | Shipment status transition not allowed                                   | `PATCH /api/shipments/:id/status`, bulk status endpoints         | Transition violates the shipment state machine                               |
+| **404**     | `ERR_ORGANIZATION_NOT_FOUND`      | Organization resource not found                                          | `GET /api/organizations/:id` and nested org routes               | Organization ID does not exist                                               |
+| **404**     | `ERR_SHIPMENT_ETA_NO_GPS`         | No GPS telemetry points are available for shipment ETA calculation       | Shipment ETA endpoint                                            | Shipment has no GPS telemetry points                                         |
+| **404**     | `ERR_TEMPLATE_NOT_FOUND`          | Shipment template not found or inaccessible in the caller's organization | Shipment-template endpoints                                      | Template does not exist or is outside the caller's organization              |
+| **404**     | `ERR_SETTLEMENT_NOT_FOUND`        | Registered settlement code; currently not emitted by module code         | —                                                                | Settlement lookups currently throw `ERR_PAYMENT_NOT_FOUND`                   |
+| **409**     | `ERR_SETTLEMENT_ALREADY_DISPUTED` | Registered settlement code; currently not emitted by module code         | —                                                                | The dispute service does not currently reject an already-disputed settlement |
+| **500**     | `ERR_STELLAR_CONFIG`              | Stellar server-side configuration missing                                | Anchor / webhook / signing endpoints                             | `STELLAR_SECRET_KEY` or webhook secret not configured                        |
+| **400**     | `ERR_STELLAR_INVALID_HASH`        | Invalid Stellar data hash                                                | Anchor / memo verification endpoints                             | Empty or malformed hash payload                                              |
+| **404**     | `ERR_LEDGER_BLOCK_NOT_FOUND`      | Ledger block not found                                                   | `GET /api/ledger/blocks/:id`                                     | Block height/hash does not exist                                             |
+| **409**     | `ERR_DUPLICATE_KEY`               | Unique constraint violation                                              | `POST /api/auth/signup`, `POST /api/users`                       | Email already registered, duplicate field value                              |
+| **429**     | `ERR_RATE_LIMIT_EXCEEDED`         | Too many requests (rate limit exceeded)                                  | OTP / SMS endpoints (e.g. resend), throttled routes              | Retry only after the delay indicated by the `Retry-After` response header    |
+| **500**     | `ERR_INTERNAL_SERVER_ERROR`       | Unhandled server error                                                   | All endpoints                                                    | Unexpected error in backend processing                                       |
+| **502**     | `ERR_EVENTS_POLL_FAILED`          | Redis event store unavailable                                            | `GET /api/events/poll`                                           | Redis read failure during polling fallback                                   |
 
 ## Error Response Format
 
@@ -38,6 +49,7 @@ All error responses follow this envelope:
 ### Example Error Response
 
 **Request:**
+
 ```http
 POST /api/auth/signup HTTP/1.1
 Content-Type: application/json
@@ -48,16 +60,18 @@ Content-Type: application/json
 ```
 
 **Response (400 - Validation Error):**
+
 ```json
 {
   "success": false,
   "message": "Validation failed: email must be a valid email address",
   "data": null,
-  "code": "ERR_VALIDATION_FAILED"
+  "code": "VALIDATION_ERROR"
 }
 ```
 
 **Response (409 - Duplicate Key):**
+
 ```json
 {
   "success": false,
@@ -70,25 +84,126 @@ Content-Type: application/json
 ## Error Code Index by Domain
 
 ### Authentication Errors
+
 - `ERR_AUTH_INVALID` (401) — Invalid or missing JWT token
 - `ERR_AUTH_TOKEN_REVOKED` (401) — JWT revoked (user logged out; Redis blocklist hit)
+- `ERR_AUTH_INVALID_RESET_TOKEN` (400) — Password-reset token is invalid, expired, wrong type, or references a missing user
 - `ERR_PERMISSION_DENIED` (403) — User lacks required role
 
+### Two-Factor Authentication (2FA) Errors
+
+`ERR_AUTH_2FA_*` — raised by the auth module's TOTP helpers. Clients should not prompt for re-entry on these; the stored secret is unreadable and the user must re-enrol.
+
+- `ERR_AUTH_2FA_INVALID_CODE` (401) — Submitted TOTP code did not match
+- `ERR_AUTH_2FA_NOT_SETUP` (400) — TOTP is not configured for this account
+- `ERR_AUTH_2FA_ALREADY_ENABLED` (409) — TOTP already enabled
+- `ERR_AUTH_2FA_NOT_ENABLED` (400) — Operation requires TOTP to be enabled
+- `ERR_AUTH_2FA_INVALID_BACKUP_CODE` (401) — Backup code did not match
+- `ERR_AUTH_2FA_INVALID_SECRET_FORMAT` (500) — Stored TOTP secret is malformed: wrong part count, or an IV/auth tag that does not match AES-256-GCM (#702). Internal integrity failure, not client-fixable.
+
+### Token Blocklist Errors
+
+- `ERR_AUTH_INVALID_TOKEN_IDENTIFIER` (400) — Token `jti` is not a UUID v4, so it cannot be blocklisted (#703). Thrown as an `AppError` instead of a bare `Error` from `blocklistKey()`.
+
+### File / Storage Errors
+
+`ERR_FILE_*` — carried on `StorageError.code` by the storage adapters in `src/services/storage/`. `StorageError` also exposes `provider`, `statusCode`, and `originalError`.
+
+- `ERR_FILE_UPLOAD_FAILED` (502) — Provider rejected the upload, or returned neither an error nor a result (#701)
+- `ERR_FILE_DELETE_FAILED` (502) — Provider rejected the delete (#701)
+- `ERR_FILE_TOO_LARGE` (413) — Upload exceeds the configured size cap
+- `ERR_INVALID_MIME_TYPE` (415) — Upload MIME type is not accepted
+- `ERR_INVALID_DOCUMENT_TYPE` (415) — Uploaded document type is not accepted
+- `ERR_PHOTO_LIMIT_EXCEEDED` (400) — Photo count limit reached for this resource
+
 ### Resource Errors
+
 - `ERR_NOT_FOUND` (404) — Generic resource not found
 - `ERR_SHIPMENT_NOT_FOUND` (404) — Specific shipment not found
+- `ERR_SHIPMENT_INVALID_TRANSITION` (400) — Shipment status transition not allowed by the state machine
+- `ERR_SHIPMENT_ETA_NO_GPS` (404) — Shipment ETA cannot be calculated because no GPS telemetry points exist
+- `ERR_ORGANIZATION_NOT_FOUND` (404) — Specific organization not found
 - `ERR_PAYMENT_NOT_FOUND` (404) — Specific payment not found
+- `ERR_TEMPLATE_NOT_FOUND` (404) — Shipment template not found or inaccessible in the caller's organization
 - `ERR_DUPLICATE_KEY` (409) — Unique constraint violation
 
+### Settlement Errors
+
+- Active settlement service errors:
+  - `ERR_PAYMENT_NOT_FOUND` (404) — A requested settlement does not exist; settlement endpoints currently use this payment-domain code.
+  - `ERR_INTERNAL_SERVER_ERROR` (500) — Settlement status or dispute update failed.
+  - `ERR_BAD_REQUEST` (400) — Settlement summary period is not `week`, `month`, or `quarter`.
+- `ERR_SETTLEMENT_NOT_FOUND` (404) and `ERR_SETTLEMENT_ALREADY_DISPUTED` (409) are defined in `ErrorCodes` but are not currently thrown from `src/modules/`.
+
+### Stellar Errors
+
+- `ERR_STELLAR_CONFIG` (500) — Stellar server-side configuration missing (keys, webhook secrets)
+- `ERR_STELLAR_INVALID_HASH` (400) — Empty or malformed hash in anchor/verification payloads
+
+### Ledger Errors
+
+- `ERR_LEDGER_BLOCK_NOT_FOUND` (404) — Ledger block height/hash does not exist
+
 ### Validation Errors
+
 - `ERR_BAD_REQUEST` (400) — Malformed request
-- `ERR_VALIDATION_FAILED` (400) — Zod schema validation failure
+- `VALIDATION_ERROR` (400) — Zod schema validation failure. This is the literal
+  `code` string emitted by `validateRequest` in
+  `src/shared/validation/validate.ts` for 400 schema failures.
+- `ERR_VALIDATION_FAILED` (400) — Legacy alias: the value of
+  `ErrorCodes.VALIDATION_ERROR` in `src/shared/http/errors.ts`. Both strings
+  are registered in the Swagger `ErrorCode` enum; clients must accept either.
+
+### Rate Limiting
+
+- `ERR_RATE_LIMIT_EXCEEDED` (429) — Too many requests. Clients must back off
+  and retry only after the delay indicated by the `Retry-After` response
+  header (e.g. OTP resend throttling).
+
+#### 429 Too Many Requests — response shape
+
+Rate-limited requests (see `src/shared/middleware/rateLimiter.ts`) return the
+standard error envelope with a top-level `retryAfter` (seconds) and a
+`Retry-After` response header carrying the same delay. Standard
+`RateLimit-Limit`, `RateLimit-Remaining`, and `RateLimit-Reset` headers are
+also present.
+
+```http
+HTTP/1.1 429 Too Many Requests
+Retry-After: 900
+RateLimit-Limit: 100
+RateLimit-Remaining: 0
+
+{
+  "success": false,
+  "message": "Too many requests, please try again later.",
+  "data": null,
+  "retryAfter": 900
+}
+```
 
 ### Events / Real-time Errors
+
 - `ERR_EVENTS_POLL_FAILED` (502) — Redis event store unavailable; polling fallback could not retrieve recent events
-- `ERR_VALIDATION_FAILED` (400) — Schema validation failed
+- `VALIDATION_ERROR` (400) — Schema validation failed
+
+### Chain Errors
+
+Mapped from Soroban contract errors by `chainErrorToAppError()` in `src/shared/types/chain.ts` (spec: `docs/chain-interface.md`). Not yet returned by any endpoint — reserved for the `ChainAdapter` layer (TODO Part 3).
+
+- `ERR_CHAIN_UNAUTHORIZED` (403) — Contract `NotAuthorized` (1): required signer did not authorize
+- `ERR_CHAIN_INVALID_HASH` (422) — Contract `InvalidHash` (2)
+- `ERR_CHAIN_ALREADY_ANCHORED` (409) — Contract `AlreadyAnchored` (3)
+- `ERR_CHAIN_ESCROW_EXISTS` (409) — Contract `EscrowExists` (4)
+- `ERR_CHAIN_ESCROW_NOT_FOUND` (404) — Contract `EscrowNotFound` (5)
+- `ERR_CHAIN_ESCROW_ALREADY_RELEASED` (409) — Contract `EscrowAlreadyReleased` (6)
+- `ERR_CHAIN_INVALID_AMOUNT` (422) — Contract `InvalidAmount` (7)
+- `ERR_CHAIN_INVALID_PROOF` (422) — Contract `InvalidProof` (8)
+- `ERR_CHAIN_UNKNOWN` (502) — Contract error code not in the spec (spec drift)
+- `ERR_CHAIN_INVALID_EVENT` (502) — Indexed contract event failed spec validation
 
 ### Server Errors
+
 - `ERR_INTERNAL_SERVER_ERROR` (500) — Unhandled exception
 
 ## Implementation Details
@@ -133,7 +248,7 @@ client.interceptors.response.use(
     } else if (error.response?.data?.code === 'ERR_PERMISSION_DENIED') {
       // Handle permission error
       console.error('Access denied:', error.response.data.message);
-    } else if (error.response?.data?.code === 'ERR_VALIDATION_FAILED') {
+    } else if (error.response?.data?.code === 'VALIDATION_ERROR') {
       // Handle validation error
       console.error('Validation error:', error.response.data.message);
     }
@@ -145,12 +260,14 @@ client.interceptors.response.use(
 ### cURL Examples
 
 **401 - Authentication Error:**
+
 ```bash
 curl -X GET http://localhost:3000/api/shipments
 # Response: {"success":false,"message":"Missing or invalid token","data":null,"code":"ERR_AUTH_INVALID"}
 ```
 
 **403 - Permission Error:**
+
 ```bash
 curl -X GET http://localhost:3000/api/shipments \
   -H "Authorization: Bearer <viewer_token>"
@@ -158,17 +275,18 @@ curl -X GET http://localhost:3000/api/shipments \
 ```
 
 **400 - Validation Error:**
+
 ```bash
 curl -X POST http://localhost:3000/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"email":"invalid"}'
-# Response: {"success":false,"message":"Validation failed: password is required","data":null,"code":"ERR_VALIDATION_FAILED"}
+# Response: {"success":false,"message":"Validation failed: password is required","data":null,"code":"VALIDATION_ERROR"}
 ```
 
 ## FAQ
 
 **Q: How do I distinguish between different types of 400 errors?**  
-A: Check the `code` field. `ERR_BAD_REQUEST` indicates malformed syntax, while `ERR_VALIDATION_FAILED` indicates schema violations.
+A: Check the `code` field. `ERR_BAD_REQUEST` indicates malformed syntax, while `VALIDATION_ERROR` indicates schema violations.
 
 **Q: What should I do when I receive a 500 error?**  
 A: Implement exponential backoff retry logic. The error is transient and the backend team has been notified.
@@ -181,9 +299,21 @@ A: No. Error messages are currently English only. Frontend teams should map erro
 
 ## Changelog
 
+### Version 1.3.0
+
+- Documented domain codes: `ERR_SHIPMENT_INVALID_TRANSITION`, `ERR_ORGANIZATION_NOT_FOUND`, `ERR_SETTLEMENT_NOT_FOUND`, `ERR_SETTLEMENT_ALREADY_DISPUTED`, `ERR_STELLAR_CONFIG`, `ERR_STELLAR_INVALID_HASH`, `ERR_LEDGER_BLOCK_NOT_FOUND`
+- Renamed the documented validation code from `ERR_VALIDATION_FAILED` to `VALIDATION_ERROR`
+- Added the 429 `ERR_RATE_LIMIT_EXCEEDED` section with `Retry-After` guidance
+
+### Version 1.2.0
+
+- Added `ERR_CHAIN_*` codes — chain spec error taxonomy (#650)
+
 ### Version 1.1.0
+
 - Added `ERR_AUTH_TOKEN_REVOKED` (401) — revoked JWT error for SSE and all protected endpoints
 
 ### Version 1.0.0
+
 - Initial registry with 9 core error codes
 - Document created and linked to Swagger components/schemas

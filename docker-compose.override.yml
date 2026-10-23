@@ -1,0 +1,18 @@
+# Docker Compose override for development (hot reload)
+# This file is automatically merged by Docker Compose v2 on every `docker compose` run.
+# The CI smoke test must pin `-f docker-compose.yml` ONLY to avoid merging this file.
+# It extends/overrides the 'app' service to build/run in dev mode with live source mounts.
+
+services:
+  app:
+    build:
+      target: dev
+    environment:
+      - NODE_ENV=development
+    # Bind mount source for tsx watch; anonymous volume prevents host node_modules
+    # from overwriting the image's node_modules installed during npm ci (dev deps).
+    volumes:
+      - ./src:/app/src
+      - /app/node_modules
+    # Keep service running in dev mode (npm run dev via Dockerfile dev stage)
+    command: npm run dev

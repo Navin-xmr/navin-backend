@@ -12,6 +12,14 @@ import { UserRole } from '../../shared/constants/index.js';
 
 export const analyticsRouter = Router();
 
+/**
+ * Route-role metadata for the analytics module.
+ * Single source of truth — imported by tests/rbac.matrix.test.ts (TODO G6).
+ */
+export const routeRoles = {
+  'GET /api/analytics/performance': [UserRole.ADMIN, UserRole.MANAGER],
+} as const;
+
 analyticsRouter.get(
   '/performance',
   requireAuth,

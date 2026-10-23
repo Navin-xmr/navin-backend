@@ -114,20 +114,44 @@ export interface SocketEventMap {
   'notification:new': NotificationPayload;
 }
 
-export const SOCKET_EVENTS = {
-  LOCATION_UPDATE: 'location:update',
-  ANOMALY_DETECTED: 'anomaly:detected',
-  SHIPMENT_STATUS: 'shipment:status',
-  SHIPMENT_MILESTONE: 'shipment:milestone',
-  SETTLEMENT_STATUS: 'settlement:status',
-  NOTIFICATION_NEW: 'notification:new',
-} as const;
-
 /**
  * Type-safe socket event emitter helpers.
  */
 export type SocketEventName = keyof SocketEventMap;
 export type SocketEventPayload<T extends SocketEventName> = SocketEventMap[T];
+
+/**
+ * Canonical event-name constants for all live Socket.IO / SSE events.
+ *
+ * Always reference these constants instead of inline string literals so that
+ * a rename requires an intentional, grep-visible update to both the constant
+ * and any test / client that references it.
+ *
+ * `satisfies` keeps these literals in lock-step with `SocketEventMap`, so an
+ * emitter, the SSE fan-out and any test suite that imports the constant cannot
+ * drift onto a stale (or invented) event name.
+ *
+ * Dead names (telemetry_update, payment_status_changed) are NOT included here
+ * and must never be reintroduced.
+ */
+export const SOCKET_EVENTS = {
+  LOCATION_UPDATE: 'location:update',
+  ANOMALY_DETECTED: 'anomaly:detected',
+  SHIPMENT_STATUS: 'shipment:status',
+  SETTLEMENT_STATUS: 'settlement:status',
+  NOTIFICATION_NEW: 'notification:new',
+} as const satisfies Record<string, SocketEventName>;
+
+/**
+ * Event names retired when the protocol moved to colon-separated namespaces.
+ * Referenced by test suites to prove the legacy literals are not reintroduced.
+ */
+export const RETIRED_SOCKET_EVENT_NAMES: readonly string[] = [
+  'telemetry_update',
+  'anomaly_detected',
+  'status_update',
+  'payment_status_changed',
+];
 
 /** @deprecated Use `SettlementStatusPayload` */
 export type PaymentStatusPayload = SettlementStatusPayload;

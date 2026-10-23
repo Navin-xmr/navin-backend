@@ -1,17 +1,14 @@
 import { describe, it, expect, jest, beforeAll } from '@jest/globals';
 import request from 'supertest';
 import jwt from 'jsonwebtoken';
+import { signToken } from './fixtures/factories.js';
 import { randomUUID } from 'crypto';
 import type { Application } from 'express';
 
 const JWT_SECRET = 'test-jwt-secret-key-at-least-32-chars-long!';
 
 function makeToken(role: string) {
-  return jwt.sign(
-    { userId: 'user-1', email: 'test@test.com', role, organizationId: 'org-1', jti: randomUUID() },
-    JWT_SECRET,
-    { expiresIn: '1h' }
-  );
+  return signToken({ userId: 'user-1', email: 'test@test.com', role, organizationId: 'org-1', jti: randomUUID() }, { expiresIn: '1h' });
 }
 
 await jest.unstable_mockModule('../src/modules/auth/apiKey.service.js', () => ({
@@ -95,7 +92,7 @@ describe('Issue #266: requireRole on API key management routes', () => {
         .post('/api/auth/api-keys')
         .set('Authorization', `Bearer ${makeToken('ADMIN')}`)
         .send({ name: 'test-key', organizationId: 'org-1' });
-      expect(res.status).not.toBe(403);
+      expect(res.status).toBe(201);
     });
 
     it('allows SUPER_ADMIN role', async () => {
@@ -103,7 +100,7 @@ describe('Issue #266: requireRole on API key management routes', () => {
         .post('/api/auth/api-keys')
         .set('Authorization', `Bearer ${makeToken('SUPER_ADMIN')}`)
         .send({ name: 'test-key', organizationId: 'org-1' });
-      expect(res.status).not.toBe(403);
+      expect(res.status).toBe(201);
     });
 
     it('returns 401 without token', async () => {
@@ -133,14 +130,14 @@ describe('Issue #266: requireRole on API key management routes', () => {
       const res = await request(app)
         .get('/api/auth/api-keys/org-1')
         .set('Authorization', `Bearer ${makeToken('ADMIN')}`);
-      expect(res.status).not.toBe(403);
+      expect(res.status).toBe(200);
     });
 
     it('allows SUPER_ADMIN role', async () => {
       const res = await request(app)
         .get('/api/auth/api-keys/org-1')
         .set('Authorization', `Bearer ${makeToken('SUPER_ADMIN')}`);
-      expect(res.status).not.toBe(403);
+      expect(res.status).toBe(200);
     });
 
     it('returns 401 without token', async () => {
@@ -169,14 +166,14 @@ describe('Issue #266: requireRole on API key management routes', () => {
       const res = await request(app)
         .delete('/api/auth/api-keys/key-1')
         .set('Authorization', `Bearer ${makeToken('ADMIN')}`);
-      expect(res.status).not.toBe(403);
+      expect(res.status).toBe(200);
     });
 
     it('allows SUPER_ADMIN role', async () => {
       const res = await request(app)
         .delete('/api/auth/api-keys/key-1')
         .set('Authorization', `Bearer ${makeToken('SUPER_ADMIN')}`);
-      expect(res.status).not.toBe(403);
+      expect(res.status).toBe(200);
     });
 
     it('returns 401 without token', async () => {

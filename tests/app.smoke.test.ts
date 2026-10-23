@@ -18,6 +18,8 @@ function findRouteFiles(dir: string): string[] {
   const results: string[] = [];
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, entry.name);
+    // Skip the __template__ scaffold module (not a production module)
+    if (entry.isDirectory() && entry.name === '__template__') continue;
     if (entry.isDirectory()) {
       results.push(...findRouteFiles(full));
     } else if (entry.isFile() && entry.name.endsWith('.routes.ts')) {

@@ -1,28 +1,46 @@
 import { jest, describe, expect, beforeAll, afterAll, it } from '@jest/globals';
 import { io, Socket } from 'socket.io-client';
 import { createServer, Server } from 'http';
-import jwt from 'jsonwebtoken';
+import { signToken } from './fixtures/factories.js';
 import { randomUUID } from 'crypto';
-import { Types } from 'mongoose';
+import { joinShipmentRoom, listenOnEphemeralPort, teardownSocketSuite, waitForSocketEvent } from './helpers/flush.js';
+import { expectSettlementPayload } from './helpers/socketContract.js';
 import { SOCKET_EVENTS } from '../src/shared/types/socketEvents.js';
+import type { SettlementStatusPayload } from '../src/shared/types/socketEvents.js';
 
-describe(`${SOCKET_EVENTS.SETTLEMENT_STATUS} socket event`, () => {
+/** Amount carried by the settlement broadcast; asserted verbatim. */
+const AMOUNT = 250;
+/** Stellar transaction hash — asserted verbatim so lost propagation fails. */
+const TX_HASH = 'a1b2c3d4e5f60718293a4b5c6d7e8f90112233445566778899aabbccddeeff0011';
+
+function settlementPayload(
+  overrides: Partial<SettlementStatusPayload> = {}
+): SettlementStatusPayload {
+  return {
+    paymentId: 'pay-1',
+    shipmentId: '671000000000000000000099',
+    oldStatus: 'PENDING',
+    newStatus: 'RELEASED',
+    amount: AMOUNT,
+    txHash: TX_HASH,
+    timestamp: '2026-07-24T21:00:00.000Z',
+    ...overrides,
+  };
+}
+
+describe('settlement:status socket event', () => {
   let httpServer: Server;
   let socketClient: Socket;
-  const TEST_PORT = 3998;
-  const SHIPMENT_ID = new Types.ObjectId().toString();
-  const PAYMENT_ID = new Types.ObjectId().toString();
-  const USER_ID = new Types.ObjectId().toString();
-  const ORGANIZATION_ID = new Types.ObjectId().toString();
+  let testPort: number;
+  const SHIPMENT_ID = '671000000000000000000099';
+  const OTHER_SHIPMENT_ID = '671000000000000000000098';
 
   beforeAll(async () => {
     await jest.unstable_mockModule('../src/modules/shipments/shipments.model.js', () => ({
       Shipment: {
         findById: jest.fn(() => ({
           select: jest.fn(() => ({
-            lean: jest.fn(() =>
-              Promise.resolve({ enterpriseId: ORGANIZATION_ID, logisticsId: new Types.ObjectId().toString() })
-            ),
+            lean: jest.fn(() => Promise.resolve({ enterpriseId: 'org456', logisticsId: 'org789' })),
           })),
         })),
       },
@@ -33,66 +51,137 @@ describe(`${SOCKET_EVENTS.SETTLEMENT_STATUS} socket event`, () => {
     const { initSocketIO } = await import('../src/infra/socket/io.js');
     initSocketIO(httpServer);
 
-    await new Promise<void>(resolve => {
-      httpServer.listen(TEST_PORT, () => resolve());
+    testPort = await listenOnEphemeralPort(httpServer);
+
+    const token = signToken({
+      userId: 'user-1',
+      role: 'ADMIN',
+      organizationId: 'org456',
+      jti: randomUUID(),
     });
 
-    const token = jwt.sign(
-      {
-        userId: USER_ID,
-        role: 'ADMIN',
-        organizationId: ORGANIZATION_ID,
-        jti: randomUUID(),
-      },
-      process.env.JWT_SECRET!
-    );
-
-    socketClient = io(`http://localhost:${TEST_PORT}`, {
+    socketClient = io(`http://localhost:${testPort}`, {
       transports: ['websocket'],
       forceNew: true,
       reconnection: false,
       auth: { token },
     });
 
-    await new Promise<void>(resolve => {
-      socketClient.on('connect', () => resolve());
+    await new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(
+        () => reject(new Error('Socket client did not connect within 10 s')),
+        10_000
+      );
+      socketClient.on('connect', () => {
+        clearTimeout(timer);
+        resolve();
+      });
+      socketClient.on('connect_error', err => {
+        clearTimeout(timer);
+        reject(err);
+      });
     });
   }, 30_000);
 
   afterAll(async () => {
-    if (socketClient?.connected) socketClient.disconnect();
-    const { closeSocketIO } = await import('../src/infra/socket/io.js');
-    await closeSocketIO();
-    if (httpServer) {
-      await new Promise<void>(resolve => httpServer.close(() => resolve()));
-    }
+    await teardownSocketSuite({ socketClient, httpServer });
   });
 
-  it(`delivers ${SOCKET_EVENTS.SETTLEMENT_STATUS} to joined shipment room clients`, async () => {
+  it('subscribes the client to the shipment room named shipment_<id>', async () => {
+    const joined = waitForSocketEvent<{ shipmentId: string; room: string }>(
+      socketClient,
+      'room_joined'
+    );
     socketClient.emit('join_shipment', SHIPMENT_ID);
-    await new Promise(resolve => setTimeout(resolve, 150));
+    const ack = await joined;
 
-    const eventPromise = new Promise<Record<string, unknown>>(resolve => {
-      socketClient.on(SOCKET_EVENTS.SETTLEMENT_STATUS, payload => resolve(payload));
+    expect(ack).toEqual({ shipmentId: SHIPMENT_ID, room: `shipment_${SHIPMENT_ID}` });
+  }, 30_000);
+
+  it('delivers the complete settlement payload to joined shipment room clients', async () => {
+    // Listener must be registered before the emit, otherwise the broadcast races it.
+    const eventPromise = waitForSocketEvent<unknown>(socketClient, SOCKET_EVENTS.SETTLEMENT_STATUS);
+
+    const { emitPaymentStatusChange } = await import('../src/infra/socket/io.js');
+    emitPaymentStatusChange(SHIPMENT_ID, settlementPayload());
+
+    const received: SettlementStatusPayload = expectSettlementPayload(await eventPromise);
+
+    // Full equality against the exact payload passed to the emitter, not
+    // objectContaining: a dropped, renamed or mutated field fails here.
+    expect(received).toEqual(settlementPayload());
+    expect(received.shipmentId).toBe(SHIPMENT_ID);
+    // Guard against a regression that stops propagating the Stellar tx hash.
+    expect(received.txHash).toBe(TX_HASH);
+  }, 30_000);
+
+  it('keeps txHash propagation covered when the transition is on-chain', async () => {
+    const eventPromise = waitForSocketEvent<unknown>(socketClient, SOCKET_EVENTS.SETTLEMENT_STATUS);
+
+    const { emitPaymentStatusChange } = await import('../src/infra/socket/io.js');
+    const payload = settlementPayload({
+      oldStatus: 'ESCROWED',
+      newStatus: 'COMPLETED',
+      amount: 4096.75,
+      txHash: TX_HASH.toUpperCase(),
+      timestamp: '2026-07-24T21:05:30.500Z',
     });
+    emitPaymentStatusChange(SHIPMENT_ID, payload);
+
+    const received: SettlementStatusPayload = expectSettlementPayload(await eventPromise);
+
+    expect(received.txHash).toBe(TX_HASH.toUpperCase());
+    expect(received.newStatus).toBe('COMPLETED');
+    expect(received.amount).toBe(4096.75);
+    expect(received.timestamp).toBe('2026-07-24T21:05:30.500Z');
+  }, 30_000);
+
+  it('omits txHash when the status transition is not on-chain', async () => {
+    const eventPromise = waitForSocketEvent<unknown>(socketClient, SOCKET_EVENTS.SETTLEMENT_STATUS);
 
     const { emitPaymentStatusChange } = await import('../src/infra/socket/io.js');
     emitPaymentStatusChange(SHIPMENT_ID, {
-      paymentId: PAYMENT_ID,
+      paymentId: 'pay-1',
       shipmentId: SHIPMENT_ID,
-      oldStatus: 'Pending',
-      newStatus: 'Released',
-      amount: 250,
-      timestamp: '2026-07-24T21:00:00.000Z',
+      oldStatus: 'PENDING',
+      newStatus: 'DISPUTED',
+      amount: AMOUNT,
+      timestamp: '2026-07-24T21:10:00.000Z',
     });
 
-    const payload = await eventPromise;
-    expect(payload).toMatchObject({
-      paymentId: PAYMENT_ID,
-      shipmentId: SHIPMENT_ID,
-      oldStatus: 'Pending',
-      newStatus: 'Released',
-      amount: 250,
-    });
-  });
+    const received: SettlementStatusPayload = expectSettlementPayload(await eventPromise);
+
+    expect(received.txHash).toBeUndefined();
+    expect(received.newStatus).toBe('DISPUTED');
+  }, 30_000);
+
+  it('does not deliver settlement:status to clients outside the shipment room', async () => {
+    const received: unknown[] = [];
+    const listener = (payload: unknown) => {
+      received.push(payload);
+    };
+    socketClient.on(SOCKET_EVENTS.SETTLEMENT_STATUS, listener);
+
+    try {
+      const { emitPaymentStatusChange } = await import('../src/infra/socket/io.js');
+      emitPaymentStatusChange(
+        OTHER_SHIPMENT_ID,
+        settlementPayload({ shipmentId: OTHER_SHIPMENT_ID })
+      );
+
+      // Bounded race: a leaked delivery resolves as 'delivered' before the timer.
+      const outcome = await Promise.race([
+        new Promise<'delivered'>(resolve => {
+          socketClient.once(SOCKET_EVENTS.SETTLEMENT_STATUS, () => resolve('delivered'));
+        }),
+        new Promise<'not-delivered'>(resolve => setTimeout(() => resolve('not-delivered'), 500)),
+      ]);
+
+      expect(outcome).toBe('not-delivered');
+    } finally {
+      socketClient.off(SOCKET_EVENTS.SETTLEMENT_STATUS, listener);
+    }
+
+    expect(received).toEqual([]);
+  }, 30_000);
 });

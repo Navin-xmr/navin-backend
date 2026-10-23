@@ -1,7 +1,7 @@
 import { jest, describe, it, beforeEach, expect } from '@jest/globals';
 import { Types } from 'mongoose';
 import type { Request, Response } from 'express';
-import { createStellarServiceMock } from './helpers/mocks.js';
+import { createChainFactoryMock } from './helpers/mocks.js';
 
 const PAYMENT_ID = new Types.ObjectId().toString();
 const SHIPMENT_ID = new Types.ObjectId().toString();
@@ -24,27 +24,15 @@ await jest.unstable_mockModule('../src/modules/payments/payments.repo.js', () =>
   deletePayment: jest.fn(),
 }));
 
-await jest.unstable_mockModule('../src/services/stellar.service.js', () => createStellarServiceMock());
+await jest.unstable_mockModule('../src/services/chain/factory.js', () => createChainFactoryMock());
 
 const { getPaymentsService, getPaymentByIdService } =
   await import('../src/modules/payments/payments.service.js');
 const { getPaymentsController } = await import('../src/modules/payments/payments.controller.js');
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
-function makePayment(overrides: Record<string, unknown> = {}) {
-  return {
-    _id: PAYMENT_ID,
-    shipmentId: SHIPMENT_ID,
-    organizationId: ORGANIZATION_ID,
-    amount: 100,
-    tokenType: 'USDC',
-    status: 'Pending',
-    stellarTxHash: undefined,
-    createdAt: new Date('2024-01-01T00:00:00Z'),
-    updatedAt: new Date('2024-01-01T00:00:00Z'),
-    ...overrides,
-  };
-}
+const { paymentDoc } = await import('./fixtures/factories.js');
+const makePayment = paymentDoc;
 
 function makePage(overrides: Record<string, unknown> = {}) {
   return {
@@ -70,6 +58,7 @@ function makeReqRes(query: Record<string, unknown> = {}, orgId = ORGANIZATION_ID
 }
 
 // ── Service tests ─────────────────────────────────────────────────────────────
+
 describe('getPaymentsService', () => {
   beforeEach(() => {
     getPaymentsByOrganizationMock.mockReset();

@@ -15,6 +15,9 @@ import { UserRole } from '../../shared/constants/index.js';
 import { sendEmail, invitationEmailHtml } from '../../services/email.service.js';
 import { logger } from '../../shared/logger/logger.js';
 import { auditLog } from '../../shared/utils/auditLog.js';
+import { blockToken } from '../../infra/redis/tokenBlocklist.js';
+import { verifyToken } from '../auth/auth.service.js';
+import { updateOrganization } from '../organizations/organizations.repo.js';
 
 /**
  * Creates a new user account under the caller's organization.
@@ -320,5 +323,87 @@ export async function getCurrentUser(userId: string) {
   if (!user) {
     throw new AppError(404, 'User not found', 'USER_NOT_FOUND');
   }
+  return user;
+}
+
+/**
+ * Updates the current authenticated user's profile.
+ * Updates name and/or email. If companyName is provided and the user is
+ * ADMIN or SUPER_ADMIN, also updates the linked Organization's name.
+ *
+ * @param userId - The ID of the current user.
+ * @param input - The update payload (fullName?, email?, companyName?).
+ * @returns The updated user profile (without passwordHash).
+ * @throws {AppError} 404 USER_NOT_FOUND — when the user no longer exists.
+ * @throws {AppError} 403 FORBIDDEN — when a non-admin tries to update companyName.
+ * @throws {AppError} 409 EMAIL_TAKEN — when the new email is already in use.
+ */
+export async function updateCurrentUser(
+  userId: string,
+  input: { fullName?: string; email?: string; companyName?: string }
+) {
+  const user = await UserModel.findById(userId);
+  if (!user) {
+    throw new AppError(404, 'User not found', 'USER_NOT_FOUND');
+  }
+
+  if (input.email && input.email !== user.email) {
+    const existing = await findUserByEmail(input.email);
+    if (existing) {
+      throw new AppError(409, 'Email already in use', 'EMAIL_TAKEN');
+    }
+    user.email = input.email;
+  }
+
+  if (input.fullName !== undefined) {
+    user.name = input.fullName;
+  }
+
+  if (input.companyName !== undefined) {
+    const isAdmin = user.role === UserRole.ADMIN || user.role === UserRole.SUPER_ADMIN;
+    if (!isAdmin) {
+      throw new AppError(
+        403,
+        'Only ADMIN or SUPER_ADMIN can update the organization name',
+        'FORBIDDEN'
+      );
+    }
+    if (user.organizationId) {
+      await updateOrganization(user.organizationId.toString(), { name: input.companyName });
+    }
+  }
+
+  await user.save();
+  return findUserById(userId);
+}
+
+/**
+ * Soft-deletes the current authenticated user and blocklists their JWT.
+ * Sets deletedAt on the user and adds the token's jti to the Redis blocklist
+ * so subsequent requests with the same token are rejected.
+ *
+ * @param userId - The ID of the current user.
+ * @param token - The current JWT string to blocklist.
+ * @returns The deleted user profile (without passwordHash).
+ * @throws {AppError} 404 USER_NOT_FOUND — when the user no longer exists.
+ */
+export async function deleteCurrentUser(userId: string, token: string) {
+  const user = await UserModel.findByIdAndUpdate(userId, { deletedAt: new Date() }, { new: true });
+  if (!user) {
+    throw new AppError(404, 'User not found', 'USER_NOT_FOUND');
+  }
+
+  try {
+    const payload = verifyToken(token) as { jti?: string; exp?: number };
+    if (payload.jti) {
+      const ttl = payload.exp ? payload.exp - Math.floor(Date.now() / 1000) : 7 * 24 * 60 * 60;
+      if (ttl > 0) {
+        await blockToken(payload.jti, ttl);
+      }
+    }
+  } catch {
+    // Token already invalid — nothing to blocklist
+  }
+
   return user;
 }

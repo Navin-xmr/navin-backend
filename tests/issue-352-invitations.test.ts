@@ -1,5 +1,6 @@
 import { jest, describe, it, expect, beforeEach, beforeAll } from '@jest/globals';
-import crypto from 'crypto';
+import jwt from 'jsonwebtoken';
+import { createEmailServiceMock } from './helpers/mocks.js';
 
 // Mock data
 type InvitationRecord = Record<string, unknown> & {
@@ -14,21 +15,18 @@ const invitations: InvitationRecord[] = [];
 const users: Record<string, unknown>[] = [];
 const organizations: Record<string, unknown>[] = [];
 
-// Mock sendEmail
-const mockSendEmail = jest.fn().mockResolvedValue(undefined);
-
-await jest.unstable_mockModule('../src/services/email.service.js', () => ({
-  sendEmail: mockSendEmail,
-  invitationEmailHtml: (link: string, name?: string) =>
-    `<html>Invite: ${link} from ${name}</html>`,
-}));
+await jest.unstable_mockModule('../src/services/email.service.js', () => createEmailServiceMock());
 
 await jest.unstable_mockModule('../src/modules/users/users.model.js', () => {
   const UserModel = {
     findById: (id: string) => Promise.resolve(users.find(u => u._id === id)),
-    findOne: ({ email }: { email: string }) =>
-      Promise.resolve(users.find(u => u.email === email) ?? null),
-    create: jest.fn().mockImplementation(async (data: Record<string, unknown>) => {
+    findOne: ({ email }: { email: string }) => {
+      const match = users.find(u => u.email === email) ?? null;
+      const query = Promise.resolve(match);
+      (query as any).lean = () => Promise.resolve(match);
+      return query;
+    },
+    create: jest.fn().mockImplementation(async (data) => {
       const created = {
         _id: `user-${Date.now()}`,
         ...data,
@@ -123,7 +121,6 @@ await jest.unstable_mockModule('../src/modules/invitations/invitations.model.js'
   return { InvitationModel, InvitationStatus };
 });
 
-const jwt = await import('jsonwebtoken');
 const {
   createAndSendInvitation,
   resendInvitation,
@@ -131,7 +128,8 @@ const {
   getInvitationInfo,
   acceptInvitationWithPassword,
 } = await import('../src/modules/invitations/invitations.service.js');
-const { AppError } = await import('../src/shared/http/errors.js');
+const { ErrorCodes } = await import('../src/shared/http/errors.js');
+const { invitationArgs } = await import('./fixtures/factories.js');
 
 describe('#352 - Persistent Invitations Model', () => {
   const jwtSecret = process.env.JWT_SECRET ?? 'test-secret-key-at-least-32-chars-long';
@@ -160,13 +158,7 @@ describe('#352 - Persistent Invitations Model', () => {
   });
 
   it('should create invitation and store in database (full invite → accept flow)', async () => {
-    const token = await createAndSendInvitation({
-      email: 'newuser@test.com',
-      role: 'MANAGER',
-      inviterId: 'user-1',
-      inviterRole: 'ADMIN',
-      organizationId: 'org-1',
-    });
+    const token = await createAndSendInvitation(invitationArgs({ email: 'newuser@test.com', role: 'MANAGER' }));
 
     expect(token).toHaveProperty('id');
     expect(token).toHaveProperty('token');
@@ -196,22 +188,21 @@ describe('#352 - Persistent Invitations Model', () => {
   });
 
   it('should resend invitation with new token and update expiry', async () => {
-    const initial = await createAndSendInvitation({
-      email: 'user@test.com',
-      role: 'VIEWER',
-      inviterId: 'user-1',
-      inviterRole: 'ADMIN',
-      organizationId: 'org-1',
-    });
+    const initial = await createAndSendInvitation(invitationArgs({ email: 'user@test.com' }));
 
     const invId = initial.id;
     const initialToken = initial.token;
     const initialExpiry = initial.expiresAt;
 
-    // Wait a tiny bit and resend
-    await new Promise(r => setTimeout(r, 10));
-
-    const resent = await resendInvitation(invId as string, 'org-1');
+    // Advance the clock deterministically so the re-signed token's iat/expiry differ
+    jest.useFakeTimers({ doNotFake: ['nextTick', 'setImmediate', 'queueMicrotask'] });
+    let resent: Awaited<ReturnType<typeof resendInvitation>>;
+    try {
+      jest.advanceTimersByTime(2_000);
+      resent = await resendInvitation(invId as string, 'org-1');
+    } finally {
+      jest.useRealTimers();
+    }
 
     expect(resent).toHaveProperty('token');
     expect(resent.token).not.toBe(initialToken);
@@ -221,13 +212,7 @@ describe('#352 - Persistent Invitations Model', () => {
   });
 
   it('should revoke invitation preventing acceptance', async () => {
-    const token = await createAndSendInvitation({
-      email: 'revoke@test.com',
-      role: 'VIEWER',
-      inviterId: 'user-1',
-      inviterRole: 'ADMIN',
-      organizationId: 'org-1',
-    });
+    const token = await createAndSendInvitation(invitationArgs({ email: 'revoke@test.com' }));
 
     // Revoke the invitation
     await revokeInvitationById(token.id as string, 'org-1');
@@ -235,70 +220,46 @@ describe('#352 - Persistent Invitations Model', () => {
     const inv = invitations[0] as Record<string, unknown>;
     expect(inv.status).toBe('REVOKED');
 
-    // Try to accept revoked invitation
-    try {
-      await acceptInvitationWithPassword({
+    await expect(
+      acceptInvitationWithPassword({
         token: token.token,
         name: 'User',
         password: 'SecurePass123',
-      });
-      expect.fail('Should not accept revoked invitation');
-    } catch (err) {
-      const error = err as AppError;
-      expect(error.statusCode).toBe(400);
-    }
+      })
+    ).rejects.toMatchObject({ statusCode: 400, code: ErrorCodes.BAD_REQUEST });
   });
 
   it('should return 404 for invalid invitation token in info endpoint', async () => {
-    try {
-      await getInvitationInfo('invalid.token.here');
-      expect.fail('Should throw error');
-    } catch (err) {
-      const error = err as AppError;
-      expect(error.statusCode).toBe(401);
-    }
+    const missingInvitationToken = jwt.sign(
+      {
+        type: 'COMPANY_INVITATION',
+        invitationId: 'missing-invitation-id',
+        email: 'nobody@test.com',
+        role: 'VIEWER',
+        organizationId: 'org-1',
+      },
+      jwtSecret,
+      { expiresIn: '1h' }
+    );
+
+    await expect(getInvitationInfo(missingInvitationToken)).rejects.toMatchObject({
+      statusCode: 404,
+      code: ErrorCodes.NOT_FOUND,
+    });
   });
 
   it('should prevent duplicate pending invitations for same email', async () => {
-    await createAndSendInvitation({
-      email: 'unique@test.com',
-      role: 'VIEWER',
-      inviterId: 'user-1',
-      inviterRole: 'ADMIN',
-      organizationId: 'org-1',
-    });
+    await createAndSendInvitation(invitationArgs({ email: 'unique@test.com' }));
 
-    try {
-      await createAndSendInvitation({
-        email: 'unique@test.com',
-        role: 'MANAGER',
-        inviterId: 'user-1',
-        inviterRole: 'ADMIN',
-        organizationId: 'org-1',
-      });
-      expect.fail('Should not allow duplicate');
-    } catch (err) {
-      const error = err as AppError;
-      expect(error.statusCode).toBe(409);
-    }
+    await expect(
+      createAndSendInvitation(invitationArgs({ email: 'unique@test.com', role: 'MANAGER' }))
+    ).rejects.toMatchObject({ statusCode: 409, code: 'DUPLICATE_KEY' });
   });
 
   it('should store tokenHash uniquely for security', async () => {
-    const inv1 = await createAndSendInvitation({
-      email: 'hash1@test.com',
-      role: 'VIEWER',
-      inviterId: 'user-1',
-      inviterRole: 'ADMIN',
-      organizationId: 'org-1',
-    });
+    const inv1 = await createAndSendInvitation(invitationArgs({ email: 'hash1@test.com' }));
 
-    const inv2 = await createAndSendInvitation({
-      email: 'hash2@test.com',
-      role: 'VIEWER',
-      inviterId: 'user-1',
-      inviterRole: 'ADMIN',
-      organizationId: 'org-1',
-    });
+    const inv2 = await createAndSendInvitation(invitationArgs({ email: 'hash2@test.com' }));
 
     const stored1 = invitations[0] as Record<string, unknown>;
     const stored2 = invitations[1] as Record<string, unknown>;
@@ -308,13 +269,7 @@ describe('#352 - Persistent Invitations Model', () => {
   });
 
   it('should track inviter and organization on invitation', async () => {
-    await createAndSendInvitation({
-      email: 'tracked@test.com',
-      role: 'VIEWER',
-      inviterId: 'user-1',
-      inviterRole: 'ADMIN',
-      organizationId: 'org-1',
-    });
+    await createAndSendInvitation(invitationArgs({ email: 'tracked@test.com' }));
 
     const inv = invitations[0] as Record<string, unknown>;
     expect(inv.invitedBy).toBe('user-1');
@@ -322,13 +277,7 @@ describe('#352 - Persistent Invitations Model', () => {
   });
 
   it('should retrieve company name in invitation info', async () => {
-    const token = await createAndSendInvitation({
-      email: 'info@test.com',
-      role: 'VIEWER',
-      inviterId: 'user-1',
-      inviterRole: 'ADMIN',
-      organizationId: 'org-1',
-    });
+    const token = await createAndSendInvitation(invitationArgs({ email: 'info@test.com' }));
 
     const info = await getInvitationInfo(token.token);
     expect(info.companyName).toBe('Test Org');
@@ -337,41 +286,22 @@ describe('#352 - Persistent Invitations Model', () => {
   });
 
   it('should expire invitation tokens after 48 hours', async () => {
-    const token = await createAndSendInvitation({
-      email: 'expire@test.com',
-      role: 'VIEWER',
-      inviterId: 'user-1',
-      inviterRole: 'ADMIN',
-      organizationId: 'org-1',
-    });
+    const token = await createAndSendInvitation(invitationArgs({ email: 'expire@test.com' }));
 
     // Manually expire the invitation in database
     const inv = invitations[0] as Record<string, unknown>;
     inv.expiresAt = new Date(Date.now() - 1000); // Past date
 
-    try {
-      await getInvitationInfo(token.token);
-      expect.fail('Should throw expired error');
-    } catch (err) {
-      const error = err as AppError;
-      expect(error.statusCode).toBe(400);
-    }
+    await expect(getInvitationInfo(token.token)).rejects.toMatchObject({
+      statusCode: 400,
+      code: ErrorCodes.BAD_REQUEST,
+    });
   });
 
   it('should enforce role-based invitation permissions', async () => {
-    // ADMIN trying to invite SUPER_ADMIN (not allowed)
-    try {
-      await createAndSendInvitation({
-        email: 'superadmin@test.com',
-        role: 'SUPER_ADMIN',
-        inviterId: 'user-1',
-        inviterRole: 'ADMIN',
-        organizationId: 'org-1',
-      });
-      expect.fail('Should not allow SUPER_ADMIN invite');
-    } catch (err) {
-      const error = err as AppError;
-      expect(error.statusCode).toBe(400);
-    }
+    // ADMIN cannot invite ADMIN (allowedByRole check → 403 FORBIDDEN)
+    await expect(
+      createAndSendInvitation(invitationArgs({ email: 'another-admin@test.com', role: 'ADMIN' }))
+    ).rejects.toMatchObject({ statusCode: 403, code: ErrorCodes.FORBIDDEN });
   });
 });

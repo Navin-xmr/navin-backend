@@ -7,6 +7,7 @@ import {
   CreateInvitationBodySchema,
   CreateUserBodySchema,
   ListUsersQuerySchema,
+  UpdateCurrentUserBodySchema,
   VerifyInvitationQuerySchema,
 } from './users.validation.js';
 import {
@@ -14,9 +15,11 @@ import {
   createInvitationController,
   createUserController,
   createTeamMemberController,
+  deleteCurrentUserController,
   deleteUserController,
   getCurrentUserController,
   listUsersController,
+  updateCurrentUserController,
   verifyInvitationController,
 } from './users.controller.js';
 import { requireAuth } from '../../shared/middleware/requireAuth.js';
@@ -25,7 +28,25 @@ import { UserRole } from '../../shared/constants/index.js';
 
 export const usersRouter = Router();
 
+/**
+ * Route-role metadata for the users module.
+ * Single source of truth — imported by tests/rbac.matrix.test.ts (TODO G6).
+ */
+export const routeRoles = {
+  'POST /api/users': [UserRole.ADMIN, UserRole.SUPER_ADMIN],
+  'DELETE /api/users/:id': [UserRole.ADMIN, UserRole.SUPER_ADMIN],
+} as const;
+
 usersRouter.get('/me', requireAuth, asyncHandler(getCurrentUserController));
+
+usersRouter.patch(
+  '/me',
+  requireAuth,
+  validateRequest({ body: UpdateCurrentUserBodySchema }),
+  asyncHandler(updateCurrentUserController)
+);
+
+usersRouter.delete('/me', requireAuth, asyncHandler(deleteCurrentUserController));
 
 usersRouter.post(
   '/',

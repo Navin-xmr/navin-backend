@@ -4,7 +4,7 @@ This folder contains dashboards and tooling for monitoring the Navin backend.
 
 ## Roadmap Dashboard
 
-A visual tracking dashboard for the 60-issue wave progress.
+A visual tracking dashboard for the **100-issue wave program** (phases P1–P6), plus the current phase-7 batch. Live data in `issues-data.json` currently covers **146** wave-tagged issues across P1–P7 (`#491`–`#724`).
 
 ### Generate the roadmap
 
@@ -16,14 +16,26 @@ node reports/generate-roadmap.js
 
 This reads from `issues-data.json` and generates [`ROADMAP_DASHBOARD.html`](./ROADMAP_DASHBOARD.html).
 
+Regenerate `issues-data.json` from GitHub (wave-id issues) when the program moves:
+
+```bash
+node reports/generate-issues-data.js
+```
+
 The dashboard displays:
 - **Tier Distribution** — Donut chart of Easy/Medium/Hard issue counts
 - **Completion Status** — Progress bar showing Open vs Closed with percentage
 - **Domain Breakdown** — Stacked bar chart by module (API-QA, Auth, Users, Shipments, Payments, Telemetry, WebSockets)
 - **Hard Issues Hot-List** — Top 10 Hard-tier issues by domain
-- **Summary Grid** — Quick counts and issue range coverage (#325–#390)
+- **Summary Grid** — Quick counts and issue range coverage (#491–#724)
 
 All charts render with inline SVG and CSS—no external CDN dependencies.
+
+### Generated HTML tracking policy
+
+The four `reports/*.html` dashboards are generator-owned outputs. They remain **committed** so reviewers can open them in a browser without running the generators; re-run the scripts when regenerating `*-data.json` so the HTML stays in sync.
+
+They are excluded from the Docker image (`.dockerignore` contains `reports/`) because the runtime does not read them — they exist purely for reviewers and maintainers browsing the repository.
 
 ---
 

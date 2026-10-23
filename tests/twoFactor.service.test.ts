@@ -10,7 +10,7 @@
 import { jest, describe, it, expect, beforeEach } from '@jest/globals';
 import { AppError } from '../src/shared/http/errors.js';
 import bcrypt from 'bcrypt';
-import { authenticator } from 'otplib';
+import { generateSecret, generateSync } from 'otplib';
 
 // ── Mock dependencies ─────────────────────────────────────────────────────────
 
@@ -128,7 +128,7 @@ describe('verify2fa', () => {
   });
 
   it('enables 2FA and returns 10 backup codes when code is correct', async () => {
-    const secret = authenticator.generateSecret();
+    const secret = generateSecret();
     setupMockUser({
       _id: 'user1',
       email: 'user@example.com',
@@ -137,7 +137,7 @@ describe('verify2fa', () => {
       totpBackupCodes: [],
     });
 
-    const validCode = authenticator.generate(secret);
+    const validCode = generateSync({ secret });
     const result = await verify2fa('user1', validCode);
 
     expect(result.backupCodes).toHaveLength(10);
@@ -151,7 +151,7 @@ describe('verify2fa', () => {
   });
 
   it('returns 400 when the TOTP code is incorrect', async () => {
-    const secret = authenticator.generateSecret();
+    const secret = generateSecret();
     setupMockUser({
       _id: 'user1',
       email: 'user@example.com',
@@ -182,7 +182,7 @@ describe('verify2fa', () => {
   });
 
   it('returns 409 when 2FA is already enabled', async () => {
-    const secret = authenticator.generateSecret();
+    const secret = generateSecret();
     setupMockUser({
       _id: 'user1',
       email: 'user@example.com',
@@ -191,7 +191,7 @@ describe('verify2fa', () => {
       totpBackupCodes: [],
     });
 
-    const validCode = authenticator.generate(secret);
+    const validCode = generateSync({ secret });
     await expect(verify2fa('user1', validCode)).rejects.toMatchObject({
       statusCode: 409,
       code: 'ERR_AUTH_2FA_ALREADY_ENABLED',

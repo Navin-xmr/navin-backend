@@ -115,6 +115,8 @@ function walkFiles(dir, suffix) {
   if (!fs.existsSync(dir)) return out;
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const full = path.join(dir, entry.name);
+    // Skip the __template__ scaffold module (not a production module)
+    if (entry.isDirectory() && entry.name === '__template__') continue;
     if (entry.isDirectory()) out.push(...walkFiles(full, suffix));
     else if (entry.name.endsWith(suffix)) out.push(full);
   }

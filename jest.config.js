@@ -45,5 +45,6 @@ export default {
   },
   verbose: true,
   setupFilesAfterEnv: ['./tests/setup.ts'],
-  modulePathIgnorePatterns: ['<rootDir>/src/modules/users/__mocks__/'],
+  globalSetup: './tests/globalSetup.ts',
+  globalTeardown: './tests/globalTeardown.ts',
 };

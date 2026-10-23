@@ -1,6 +1,6 @@
 import { jest, describe, beforeAll, beforeEach, it, expect } from '@jest/globals';
 import request from 'supertest';
-import jwt from 'jsonwebtoken';
+import { signToken } from './fixtures/factories.js';
 import { randomUUID } from 'crypto';
 import type { Application } from 'express';
 import { env } from '../src/env.js';
@@ -70,12 +70,6 @@ await jest.unstable_mockModule('../src/infra/redis/tokenBlocklist.js', () => ({
   blockToken: jest.fn(),
 }));
 
-await jest.unstable_mockModule('../src/services/stellar.service.js', () => ({
-  tokenizeShipment: jest.fn(),
-  releaseEscrow: jest.fn(),
-  getStellarExplorerUrl: jest.fn(() => 'https://stellar.expert/explorer/testnet/tx/mock'),
-}));
-
 await jest.unstable_mockModule('../src/infra/socket/io.js', () => ({
   emitStatusUpdate: jest.fn(),
   emitAnomalyDetected: jest.fn(),
@@ -88,11 +82,7 @@ await jest.unstable_mockModule('../src/infra/socket/io.js', () => ({
 const { buildApp } = await import('../src/app.js');
 
 function tokenFor(role: string, organizationId: string) {
-  return jwt.sign(
-    { userId: 'user-1', role, organizationId, jti: randomUUID() },
-    env.JWT_SECRET,
-    { expiresIn: '1h' }
-  );
+  return signToken({ userId: 'user-1', role, organizationId, jti: randomUUID() }, { expiresIn: '1h' });
 }
 
 describe('GET /api/shipments/:id', () => {

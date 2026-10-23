@@ -1,7 +1,8 @@
 import { jest, describe, beforeAll, beforeEach, it, expect } from '@jest/globals';
+import { createChainFactoryMock } from './helpers/mocks.js';
 import request from 'supertest';
-import jwt from 'jsonwebtoken';
-import process from 'process';
+import { signToken } from './fixtures/factories.js';
+import { SOCKET_EVENTS } from '../src/shared/types/socketEvents.js';
 import type { Application } from 'express';
 
 type ShipmentRecord = {
@@ -23,11 +24,14 @@ const shipmentsData: ShipmentRecord[] = [];
 
 await jest.unstable_mockModule('../src/modules/shipments/shipments.model.js', () => {
   const ShipmentConstructor = {
-    new (doc: Record<string, unknown>) {
+    new(doc: Record<string, unknown>) {
       const s = { ...doc, milestones: [], save: async () => s } as unknown as ShipmentRecord;
       return s;
     },
-    find: (query: { _id?: { $in: string[] }; $or?: Array<{ enterpriseId?: string; logisticsId?: string }> }) => {
+    find: (query: {
+      _id?: { $in: string[] };
+      $or?: Array<{ enterpriseId?: string; logisticsId?: string }>;
+    }) => {
       const ids = query._id?.$in;
       const orgId = query.$or?.[0]?.enterpriseId ?? query.$or?.[1]?.logisticsId;
       let result = shipmentsData;
@@ -108,21 +112,20 @@ await jest.unstable_mockModule('../src/modules/users/users.model.js', () => ({
   },
 }));
 
-await jest.unstable_mockModule('../src/services/stellar.service.js', () => ({
-  tokenizeShipment: jest.fn(),
-  anchorTelemetryHash: jest.fn(),
-  releaseEscrow: jest.fn(() => Promise.resolve({ success: true, transactionHash: 'mock-tx-hash' })),
-  getStellarExplorerUrl: jest.fn((txHash: string) => `https://stellar.expert/explorer/testnet/tx/${txHash}`),
-}));
+await jest.unstable_mockModule('../src/services/chain/factory.js', () => createChainFactoryMock());
 
-await jest.unstable_mockModule('../src/infra/socket/io.js', () => ({
+// Shared mock fns: the factory closure returns this same object on every
+// evaluation, so assertions below observe the exact calls the app makes.
+const ioMocks = {
   initSocketIO: jest.fn(),
   getIO: jest.fn(),
   emitStatusUpdate: jest.fn(),
   emitPaymentStatusChange: jest.fn(),
   emitAnomalyDetected: jest.fn(),
   emitTelemetryUpdate: jest.fn(),
-}));
+};
+
+await jest.unstable_mockModule('../src/infra/socket/io.js', () => ioMocks);
 
 await jest.unstable_mockModule('../src/modules/analytics/analytics.cache.js', () => ({
   invalidateAnalyticsPerformanceCache: jest.fn(),
@@ -154,7 +157,7 @@ describe('Bulk Status Update API', () => {
   });
 
   const generateToken = (payload: { userId?: string; role?: string; organizationId?: string }) =>
-    jwt.sign(payload, process.env.JWT_SECRET!);
+    signToken(payload);
 
   it('should return 401 when not authenticated', async () => {
     const res = await request(app)
@@ -174,11 +177,22 @@ describe('Bulk Status Update API', () => {
 
   it('should return 200 for MANAGER role', async () => {
     const token = generateToken({ userId: 'manager-1', role: 'MANAGER', organizationId: 'org1' });
+
+    shipmentsData.push({
+      _id: 's-manager-1',
+      status: 'CREATED',
+      enterpriseId: 'org1',
+      logisticsId: 'org2',
+      milestones: [],
+    });
+
     const res = await request(app)
       .patch('/api/shipments/bulk/status')
       .set('Authorization', `Bearer ${token}`)
-      .send({ shipmentIds: ['1'], status: 'IN_TRANSIT' });
+      .send({ shipmentIds: ['s-manager-1'], status: 'IN_TRANSIT' });
     expect(res.status).toBe(200);
+    expect(res.body.data.updated).toBe(1);
+    expect(res.body.data.failed).toHaveLength(0);
   });
 
   it('should return 400 when shipmentIds array is empty', async () => {
@@ -225,7 +239,13 @@ describe('Bulk Status Update API', () => {
     shipmentsData.push(
       { _id: 's1', status: 'CREATED', enterpriseId: 'org1', logisticsId: 'org2', milestones: [] },
       { _id: 's2', status: 'DELIVERED', enterpriseId: 'org1', logisticsId: 'org2', milestones: [] },
-      { _id: 's3', status: 'CREATED', enterpriseId: 'wrong-org', logisticsId: 'org2', milestones: [] }
+      {
+        _id: 's3',
+        status: 'CREATED',
+        enterpriseId: 'wrong-org',
+        logisticsId: 'org2',
+        milestones: [],
+      }
     );
 
     const res = await request(app)
@@ -260,17 +280,24 @@ describe('Bulk Status Update API', () => {
     expect(s1?.status).toBe('IN_TRANSIT');
   });
 
-  it('should emit status_update events for successful updates', async () => {
+  it(`should emit ${SOCKET_EVENTS.SHIPMENT_STATUS} events for successful updates`, async () => {
     const token = generateToken({ userId: 'admin-1', role: 'ADMIN', organizationId: 'org1' });
-    const ioModule = await import('../src/infra/socket/io.js');
 
-    shipmentsData.push({ _id: 's1', status: 'CREATED', enterpriseId: 'org1', logisticsId: 'org2', milestones: [] });
+    shipmentsData.push({
+      _id: 's1',
+      status: 'CREATED',
+      enterpriseId: 'org1',
+      logisticsId: 'org2',
+      milestones: [],
+    });
 
-    await request(app)
+    const res = await request(app)
       .patch('/api/shipments/bulk/status')
       .set('Authorization', `Bearer ${token}`)
       .send({ shipmentIds: ['s1'], status: 'IN_TRANSIT' });
 
-    expect(ioModule.emitStatusUpdate).toHaveBeenCalled();
+    expect(res.status).toBe(200);
+    expect(res.body.data.updated).toBe(1);
+    expect(ioMocks.emitStatusUpdate).toHaveBeenCalled();
   });
 });

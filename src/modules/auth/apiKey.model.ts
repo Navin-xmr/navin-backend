@@ -16,7 +16,6 @@ const ApiKeySchema = new mongoose.Schema(
 
 ApiKeySchema.plugin(isoDatePlugin);
 
-ApiKeySchema.index({ keyHash: 1 });
 ApiKeySchema.index({ organizationId: 1 });
 ApiKeySchema.index({ shipmentId: 1 });
 

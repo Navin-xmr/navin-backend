@@ -1,5 +1,5 @@
 import request from 'supertest';
-import jwt from 'jsonwebtoken';
+import { signToken } from './fixtures/factories.js';
 import { buildApp } from '../src/app.js';
 import { connectMongo } from '../src/infra/mongo/connection.js';
 import { Telemetry } from '../src/modules/telemetry/telemetry.model.js';
@@ -20,7 +20,7 @@ beforeAll(async () => {
     role: 'ADMIN',
     organizationId: '507f1f77bcf86cd799439011',
   });
-  adminToken = jwt.sign({ userId: adminUser._id.toString(), role: 'ADMIN' }, env.JWT_SECRET);
+  adminToken = signToken({ userId: adminUser._id.toString(), role: 'ADMIN' });
 });
 
 afterEach(async () => {

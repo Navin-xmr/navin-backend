@@ -1,6 +1,6 @@
 import { jest, describe, beforeAll, beforeEach, it, expect } from '@jest/globals';
 import request from 'supertest';
-import jwt from 'jsonwebtoken';
+import { signToken } from './fixtures/factories.js';
 import { randomUUID } from 'crypto';
 import type { Application } from 'express';
 import { env } from '../src/env.js';
@@ -85,11 +85,7 @@ await jest.unstable_mockModule('../src/modules/shipments/shipments.model.js', ()
 const { buildApp } = await import('../src/app.js');
 
 function tokenFor(role: string) {
-  return jwt.sign(
-    { userId: USER_ID, role, organizationId: ORG_ID, jti: randomUUID() },
-    env.JWT_SECRET,
-    { expiresIn: '1h' }
-  );
+  return signToken({ userId: 'user-1', role, organizationId: ORG_ID, jti: randomUUID() }, { expiresIn: '1h' });
 }
 
 describe('Telemetry thresholds API', () => {

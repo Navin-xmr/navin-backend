@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
-import jwt from 'jsonwebtoken';
+import { signToken } from './fixtures/factories.js';
 import request from 'supertest';
 import type { Application } from 'express';
 import { fakeAggregate, fakeModel } from './helpers/fakeModel.js';
@@ -45,6 +45,9 @@ describe('analytics redis cache', () => {
       ]);
     });
     const shipmentModel = fakeModel({ aggregate: mockAggregate });
+    const anomalyModel = fakeModel({
+      aggregate: jest.fn(async () => []),
+    });
 
     await jest.unstable_mockModule('../src/modules/shipments/shipments.model.js', () => ({
       Shipment: shipmentModel,
@@ -56,12 +59,16 @@ describe('analytics redis cache', () => {
       },
     }));
 
+    await jest.unstable_mockModule('../src/modules/anomaly/anomaly.model.js', () => ({
+      Anomaly: anomalyModel,
+    }));
+
     const appModule = await import('../src/app.js');
     app = appModule.buildApp();
   });
 
   it('serves second performance request from redis cache without hitting aggregation again', async () => {
-    const token = jwt.sign({ userId: 'u1', role: 'ADMIN' }, process.env.JWT_SECRET!);
+    const token = signToken({ userId: 'u1', role: 'ADMIN' });
     const query = {
       startDate: '2026-01-01T00:00:00.000Z',
       endDate: '2026-01-31T23:59:59.999Z',

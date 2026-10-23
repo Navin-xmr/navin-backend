@@ -1,7 +1,7 @@
 import { jest, describe, expect, it } from '@jest/globals';
 import request from 'supertest';
 import type { Application } from 'express';
-import jwt from 'jsonwebtoken';
+import { signToken } from './fixtures/factories.js';
 
 await jest.unstable_mockModule('../src/shared/middleware/rateLimiter.js', () => ({
   standardLimiter: (_req: unknown, _res: unknown, next: () => void) => next(),
@@ -121,7 +121,7 @@ describe('backend integration requirements contract', () => {
   });
 
   it('returns 403 when an authenticated caller has no permitted role', async () => {
-    const token = jwt.sign({ userId: 'customer-id', role: 'CUSTOMER' }, process.env.JWT_SECRET!);
+    const token = signToken({ userId: 'customer-id', role: 'CUSTOMER' });
     const response = await request(app)
       .get('/api/shipments')
       .set('Authorization', `Bearer ${token}`);

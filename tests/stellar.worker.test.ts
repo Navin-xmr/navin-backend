@@ -1,19 +1,26 @@
-import { describe, expect, beforeEach, it, jest, afterAll } from '@jest/globals';
+import { describe, expect, beforeEach, beforeAll, it, jest, afterAll } from '@jest/globals';
 import { MongoMemoryServer } from 'mongodb-memory-server';
 import mongoose from 'mongoose';
 import { Telemetry, TelemetryAnchorStatus } from '../src/modules/telemetry/telemetry.model.js';
 import { updateTelemetryAnchor, markTelemetryAnchorFailed } from '../src/modules/telemetry/telemetry.service.js';
 
 describe('Stellar Worker Functions', () => {
-  let mongoServer: MongoMemoryServer;
+  let mongoServer: MongoMemoryServer | undefined;
 
-  beforeEach(async () => {
+  // One server per file (not per test): per-test spawns leaked N-1 mongod
+  // children because afterAll only stopped the last one.
+  beforeAll(async () => {
     if (mongoose.connection.readyState !== 0) {
       await mongoose.disconnect();
     }
     mongoServer = await MongoMemoryServer.create();
-    const uri = mongoServer.getUri();
-    await mongoose.connect(uri);
+    await mongoose.connect(mongoServer.getUri());
+  }, 120_000);
+
+  beforeEach(async () => {
+    if (mongoose.connection.readyState !== 1) {
+      await mongoose.connect(mongoServer!.getUri());
+    }
     await Telemetry.deleteMany({});
   });
 

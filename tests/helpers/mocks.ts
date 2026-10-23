@@ -1,29 +1,74 @@
 /**
  * Reusable ESM mock factories for Jest `unstable_mockModule`.
  *
- * ## ESM mocking pattern
- *
- * Jest hoists `jest.mock()` calls, but native ESM modules require
- * `jest.unstable_mockModule()` which is **not** hoisted. The typical pattern:
+ * ## ESM-safe pattern (required)
  *
  * ```ts
  * import { jest } from '@jest/globals';
- * import { createStellarServiceMock } from './helpers/mocks.js';
  *
+ * jest.resetModules();
  * await jest.unstable_mockModule('../src/services/stellar.service.js', () =>
  *   createStellarServiceMock()
  * );
- *
  * // Import the module under test *after* registering mocks
- * const { tokenizeShipment } = await import('../src/services/stellar.service.js');
+ * const mod = await import('../src/services/stellar.service.js');
  * ```
  *
- * Each factory returns a complete module shape so callers never omit a named
- * export that downstream code may import.
+ * Order matters: reset → mock → import. Factories return complete shapes so
+ * callers never omit a named export. Keep provider boundaries fully mocked;
+ * importing the real module to discover exports can initialize external clients.
  */
 import { jest } from '@jest/globals';
+import type { Account, Transaction } from '@stellar/stellar-sdk';
+import { UserRole } from '../../src/shared/constants/index.js';
+import { OrganizationType } from '../../src/shared/types/user.js';
+import type * as usersRepo from '../../src/modules/users/users.repo.js';
+import type { sendEmail } from '../../src/services/email.service.js';
+import type * as emailService from '../../src/services/email.service.js';
+import type * as socketIo from '../../src/infra/socket/io.js';
+import type { AnchorResult, EscrowResult } from '../../src/services/chain/types.js';
+import type { ChainEvent } from '../../src/shared/types/chain.js';
+import { fakeQuery } from './fakeModel.js';
+import type { FakeQuery } from './fakeModel.js';
 
 type MockFn = ReturnType<typeof jest.fn>;
+
+export interface HorizonTransactionRecordMock {
+  paging_token: string;
+  hash: string;
+  ledger_attr: number;
+  created_at: string;
+  envelope_xdr: string;
+  successful: boolean;
+}
+
+export interface SimulatedHorizonClientMock {
+  loadAccount(publicKey: string): Promise<Account>;
+  submitTransaction(tx: Transaction): Promise<{ hash: string; ledger: number }>;
+  listTransactions(
+    publicKey: string,
+    cursor: string | undefined,
+    limit: number
+  ): Promise<HorizonTransactionRecordMock[]>;
+}
+
+/** Script a query result usable both with direct await and with repository chains. */
+export function createModelQuery<T>(value: T): FakeQuery<T> {
+  return fakeQuery(value);
+}
+
+export type UsersRepoMock = jest.Mocked<typeof usersRepo>;
+
+/** Complete repository boundary; tests explicitly arrange every exercised operation. */
+export function createUsersRepoMock(overrides: Partial<UsersRepoMock> = {}): UsersRepoMock {
+  return {
+    createUser: jest.fn<typeof usersRepo.createUser>(),
+    findUserByEmail: jest.fn<typeof usersRepo.findUserByEmail>(),
+    findUserById: jest.fn<typeof usersRepo.findUserById>(),
+    findUsersByOrganizationId: jest.fn<typeof usersRepo.findUsersByOrganizationId>(),
+    ...overrides,
+  };
+}
 
 export type StellarServiceMock = {
   tokenizeShipment: MockFn;
@@ -39,9 +84,18 @@ export type UsersModelMock = {
     findOne: MockFn;
     findById: MockFn;
     findByIdAndUpdate: MockFn;
+    findOneAndUpdate: MockFn;
+    updateOne: MockFn;
+    updateMany: MockFn;
+    deleteOne: MockFn;
+    countDocuments: MockFn;
   };
   OrganizationModel: {
     findById: MockFn;
+    findOne: MockFn;
+    find: MockFn;
+    findByIdAndUpdate: MockFn;
+    create: MockFn;
   };
   UserRole: Record<string, string>;
   OrganizationType: Record<string, string>;
@@ -52,6 +106,7 @@ export type TelemetryModelMock = {
     create: MockFn;
     find: MockFn;
     findOne: MockFn;
+    findOneAndUpdate: MockFn;
     findByIdAndUpdate: MockFn;
     deleteMany: MockFn;
     updateMany: MockFn;
@@ -59,16 +114,7 @@ export type TelemetryModelMock = {
   TelemetryAnchorStatus: Record<string, string>;
 };
 
-export type SocketIoMock = {
-  getActiveUsers: MockFn;
-  initSocketIO: MockFn;
-  getIO: MockFn;
-  closeSocketIO: MockFn;
-  emitAnomalyDetected: MockFn;
-  emitTelemetryUpdate: MockFn;
-  emitStatusUpdate: MockFn;
-  emitPaymentStatusChange: MockFn;
-};
+export type SocketIoMock = { [K in keyof typeof socketIo]: MockFn };
 
 /**
  * Full mock of `src/services/stellar.service.js` named exports.
@@ -80,8 +126,81 @@ export function createStellarServiceMock(
     tokenizeShipment: jest.fn(),
     anchorTelemetryHash: jest.fn(),
     releaseEscrow: jest.fn(),
-    getStellarExplorerUrl: (hash: string) =>
-      `https://stellar.expert/explorer/testnet/tx/${hash}`,
+    getStellarExplorerUrl: (hash: string) => `https://stellar.expert/explorer/testnet/tx/${hash}`,
+    ...overrides,
+  };
+}
+
+export type ChainAdapterMock = {
+  anchorEvent: MockFn;
+  releaseEscrow: MockFn;
+  streamEvents: MockFn;
+  getConfirmationCount: MockFn;
+};
+
+export type ChainFactoryMock = {
+  createChainAdapter: MockFn;
+  getChainAdapter: MockFn;
+  resetChainAdapter: MockFn;
+  getChainActorAddress: MockFn;
+};
+
+const MOCK_TX_HASH = 'a'.repeat(64);
+
+/**
+ * Scriptable port mock: `script` sets plain-value anchor/release receipts
+ * and the events `streamEvents` replays, so suites mock the ChainAdapter
+ * port — never stellar.service internals. Per-test overrides still win.
+ */
+export type ChainAdapterScript = {
+  anchorResult?: Partial<AnchorResult>;
+  releaseResult?: Partial<EscrowResult>;
+  events?: ChainEvent[];
+};
+
+/**
+ * Port-shaped adapter: anchors/releases resolve a simulated receipt, the event
+ * stream replays `script.events` (default: empty). Override any method per test.
+ */
+export function createChainAdapterMock(
+  overrides: Partial<ChainAdapterMock> = {},
+  script: ChainAdapterScript = {}
+): ChainAdapterMock {
+  return {
+    anchorEvent: jest.fn(async () => ({
+      txHash: MOCK_TX_HASH,
+      ledger: 1,
+      simulated: true,
+      ...script.anchorResult,
+    })),
+    releaseEscrow: jest.fn(async (input: unknown) => ({
+      txHash: MOCK_TX_HASH,
+      ledger: 1,
+      simulated: true,
+      paymentId: (input as { payment_id: string }).payment_id,
+      ...script.releaseResult,
+    })),
+    streamEvents: jest.fn(async function* () {
+      yield* script.events ?? [];
+    }),
+    getConfirmationCount: jest.fn(async () => 3),
+    ...overrides,
+  };
+}
+
+/**
+ * Full mock of `src/services/chain/factory.js` named exports.
+ * `getChainAdapter()` / `createChainAdapter()` return `adapter`.
+ */
+export function createChainFactoryMock(
+  adapter: ChainAdapterMock = createChainAdapterMock(),
+  overrides: Partial<ChainFactoryMock> = {}
+): ChainFactoryMock {
+  return {
+    createChainAdapter: jest.fn(() => adapter),
+    getChainAdapter: jest.fn(() => adapter),
+    resetChainAdapter: jest.fn(),
+    getChainActorAddress: jest.fn(() => 'GAAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQDZ7H'),
     ...overrides,
   };
 }
@@ -89,34 +208,44 @@ export function createStellarServiceMock(
 /**
  * Full mock of `src/modules/users/users.model.js` named exports.
  */
-export function createUsersModelMock(overrides: Partial<UsersModelMock> = {}): UsersModelMock {
+export function createUsersModelMock(
+  overrides: {
+    UserModel?: Partial<UsersModelMock['UserModel']>;
+    OrganizationModel?: Partial<UsersModelMock['OrganizationModel']>;
+    UserRole?: UsersModelMock['UserRole'];
+    OrganizationType?: UsersModelMock['OrganizationType'];
+  } = {}
+): UsersModelMock {
   return {
     UserModel: {
       create: jest.fn(),
-      find: jest.fn(),
-      findOne: jest.fn(),
-      findById: jest.fn(),
-      findByIdAndUpdate: jest.fn(),
+      find: jest.fn(() => createModelQuery([])),
+      findOne: jest.fn(() => createModelQuery(null)),
+      findById: jest.fn(() => createModelQuery(null)),
+      findByIdAndUpdate: jest.fn(() => createModelQuery(null)),
+      findOneAndUpdate: jest.fn(),
+      updateOne: jest.fn(),
+      updateMany: jest.fn(),
+      deleteOne: jest.fn(),
+      countDocuments: jest.fn(async () => 0),
       ...(overrides.UserModel ?? {}),
     },
     OrganizationModel: {
-      findById: jest.fn(),
+      findById: jest.fn(() => createModelQuery(null)),
+      findOne: jest.fn(() => createModelQuery(null)),
+      find: jest.fn(() => createModelQuery([])),
+      findByIdAndUpdate: jest.fn(() => createModelQuery(null)),
+      create: jest.fn(),
       ...(overrides.OrganizationModel ?? {}),
     },
     UserRole: {
-      SUPER_ADMIN: 'SUPER_ADMIN',
-      ADMIN: 'ADMIN',
-      MANAGER: 'MANAGER',
-      VIEWER: 'VIEWER',
-      CUSTOMER: 'CUSTOMER',
+      ...UserRole,
       ...(overrides.UserRole ?? {}),
     },
     OrganizationType: {
-      ENTERPRISE: 'ENTERPRISE',
-      LOGISTICS: 'LOGISTICS',
+      ...OrganizationType,
       ...(overrides.OrganizationType ?? {}),
     },
-    ...overrides,
   };
 }
 
@@ -124,14 +253,19 @@ export function createUsersModelMock(overrides: Partial<UsersModelMock> = {}): U
  * Full mock of `src/modules/telemetry/telemetry.model.js` named exports.
  */
 export function createTelemetryModelMock(
-  overrides: Partial<TelemetryModelMock> = {}
+  overrides: {
+    Telemetry?: Partial<TelemetryModelMock['Telemetry']>;
+    TelemetryAnchorStatus?: Partial<TelemetryModelMock['TelemetryAnchorStatus']>;
+  } = {}
 ): TelemetryModelMock {
   return {
     Telemetry: {
       create: jest.fn(),
       find: jest.fn(),
       findOne: jest.fn(),
+      findOneAndUpdate: jest.fn(),
       findByIdAndUpdate: jest.fn(),
+      updateOne: jest.fn(),
       deleteMany: jest.fn(),
       updateMany: jest.fn(),
       ...(overrides.Telemetry ?? {}),
@@ -140,9 +274,40 @@ export function createTelemetryModelMock(
       PENDING_ANCHOR: 'PENDING_ANCHOR',
       ANCHORED: 'ANCHORED',
       ANCHOR_FAILED: 'ANCHOR_FAILED',
+      VERIFIED: 'VERIFIED',
       ...(overrides.TelemetryAnchorStatus ?? {}),
     },
-    ...overrides,
+  };
+}
+
+export type PaymentModelMock = {
+  PaymentModel: {
+    find: MockFn;
+    findOneAndUpdate: MockFn;
+  };
+  PaymentStatus: Record<string, string>;
+};
+
+export function createPaymentModelMock(
+  overrides: {
+    PaymentModel?: Partial<PaymentModelMock['PaymentModel']>;
+    PaymentStatus?: Partial<PaymentModelMock['PaymentStatus']>;
+  } = {}
+): PaymentModelMock {
+  return {
+    PaymentModel: {
+      find: jest.fn(() => createModelQuery([])),
+      findOneAndUpdate: jest.fn(),
+      ...(overrides.PaymentModel ?? {}),
+    },
+    PaymentStatus: {
+      PENDING: 'Pending',
+      ESCROWED: 'Escrowed',
+      RELEASED: 'Released',
+      FAILED: 'Failed',
+      DISPUTED: 'Disputed',
+      ...(overrides.PaymentStatus ?? {}),
+    },
   };
 }
 
@@ -159,23 +324,25 @@ export function createSocketIoMock(overrides: Partial<SocketIoMock> = {}): Socke
     emitTelemetryUpdate: jest.fn(),
     emitStatusUpdate: jest.fn(),
     emitPaymentStatusChange: jest.fn(),
+    emitNotificationNew: jest.fn(),
     ...overrides,
   };
 }
 
-export type EmailServiceMock = {
-  sendEmail: MockFn;
-  resetPasswordEmailHtml: (link: string) => string;
-  invitationEmailHtml: (link: string) => string;
+export type EmailServiceMock = Omit<typeof emailService, 'sendEmail'> & {
+  sendEmail: jest.Mock<typeof sendEmail>;
 };
 
 /**
- * Full mock of `src/services/email.service.js` named exports.
+ * Full mock of `src/services/email.service.js` named exports. Inert by default:
+ * `sendEmail` resolves without a transport. `emailServiceMock.test.ts` fails if
+ * an export is added, renamed or removed in the service without updating this.
  */
-export function createEmailServiceMock(overrides: Partial<EmailServiceMock> = {}): EmailServiceMock {
+export function createEmailServiceMock(
+  overrides: Partial<EmailServiceMock> = {}
+): EmailServiceMock {
   return {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    sendEmail: jest.fn(async () => undefined) as any,
+    sendEmail: jest.fn<typeof sendEmail>().mockResolvedValue(undefined),
     resetPasswordEmailHtml: (link: string) => `<html>Reset: ${link}</html>`,
     invitationEmailHtml: (link: string) => `<html>Invite: ${link}</html>`,
     ...overrides,

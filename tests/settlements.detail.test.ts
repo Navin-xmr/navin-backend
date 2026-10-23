@@ -10,7 +10,7 @@
 import { jest, describe, it, beforeEach, expect } from '@jest/globals';
 import { Types } from 'mongoose';
 import type { Request, Response } from 'express';
-import { createStellarServiceMock } from './helpers/mocks.js';
+import { createChainFactoryMock } from './helpers/mocks.js';
 
 const SETTLEMENT_ID = new Types.ObjectId().toString();
 const SHIPMENT_ID = new Types.ObjectId().toString();
@@ -19,7 +19,8 @@ const USER_ID = new Types.ObjectId().toString();
 
 // ── Repo mock ────────────────────────────────────────────────────────────────
 const getPaymentByIdMock = jest.fn<(id: string) => Promise<unknown>>();
-const disputePaymentMock = jest.fn<(id: string, reason: string, notes?: string) => Promise<unknown>>();
+const disputePaymentMock =
+  jest.fn<(id: string, reason: string, notes?: string) => Promise<unknown>>();
 
 await jest.unstable_mockModule('../src/modules/payments/payments.repo.js', () => ({
   getPaymentsByOrganization: jest.fn(),
@@ -33,9 +34,7 @@ await jest.unstable_mockModule('../src/modules/payments/payments.repo.js', () =>
   disputePayment: disputePaymentMock,
 }));
 
-await jest.unstable_mockModule('../src/services/stellar.service.js', () =>
-  createStellarServiceMock()
-);
+await jest.unstable_mockModule('../src/services/chain/factory.js', () => createChainFactoryMock());
 
 await jest.unstable_mockModule('../src/infra/socket/io.js', () => ({
   emitPaymentStatusChange: jest.fn(),
@@ -48,13 +47,10 @@ await jest.unstable_mockModule('../src/infra/socket/io.js', () => ({
   emitStatusUpdate: jest.fn(),
 }));
 
-const { getPaymentByIdService, disputeSettlementService } = await import(
-  '../src/modules/payments/payments.service.js'
-);
-const {
-  getSettlementByIdController,
-  disputeSettlementController,
-} = await import('../src/modules/payments/payments.controller.js');
+const { getPaymentByIdService, disputeSettlementService } =
+  await import('../src/modules/payments/payments.service.js');
+const { getSettlementByIdController, disputeSettlementController } =
+  await import('../src/modules/payments/payments.controller.js');
 
 // ── Fixtures ─────────────────────────────────────────────────────────────────
 
@@ -77,7 +73,11 @@ function makeSettlement(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function makeReq(params: Record<string, string> = {}, body: Record<string, unknown> = {}, role = 'ADMIN') {
+function makeReq(
+  params: Record<string, string> = {},
+  body: Record<string, unknown> = {},
+  role = 'ADMIN'
+) {
   return {
     params,
     body,
@@ -166,9 +166,7 @@ describe('disputeSettlementService', () => {
   it('throws 404 when settlement not found', async () => {
     getPaymentByIdMock.mockResolvedValue(null);
 
-    await expect(
-      disputeSettlementService('no-such-id', { reason: 'test' })
-    ).rejects.toMatchObject({
+    await expect(disputeSettlementService('no-such-id', { reason: 'test' })).rejects.toMatchObject({
       statusCode: 404,
       code: 'ERR_PAYMENT_NOT_FOUND',
     });
@@ -276,9 +274,7 @@ describe('disputeSettlementController', () => {
 
     await disputeSettlementController(req, res, next as never);
 
-    expect(next).toHaveBeenCalledWith(
-      expect.objectContaining({ statusCode: 404 })
-    );
+    expect(next).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 404 }));
   });
 });
 

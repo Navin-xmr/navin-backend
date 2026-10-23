@@ -1,5 +1,5 @@
 import request from 'supertest';
-import jwt from 'jsonwebtoken';
+import { signToken } from './fixtures/factories.js';
 import { Types } from 'mongoose';
 
 import { buildApp } from '../src/app.js';
@@ -9,7 +9,7 @@ import { AuditLog } from '../src/modules/audit-logs/auditLogs.model.js';
 const app = buildApp();
 
 function makeToken(role: string): string {
-  return jwt.sign({ userId: 'test-user-id', role }, process.env.JWT_SECRET!);
+  return signToken({ userId: 'test-user-id', role });
 }
 
 beforeAll(async () => {

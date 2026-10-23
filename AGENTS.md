@@ -8,7 +8,7 @@ Stack: TypeScript Strict · Express · MongoDB/Mongoose · Zod · JWT+Redis · J
 ### Program state — read before working
 
 - **`TODO.md` is the canonical work tracker** (Parts 1–4). Check it before inventing tasks; several known-failing tests are tracked there with owners/plans.
-- **Tests deliberately do NOT gate CI yet** (TODO H4 decision): `ci.yml` enforces deps-audit/typecheck/build/lint/docker; the test suite has a known red baseline being remediated. Your duty: do not *increase* failures (see §4).
+- **Tests gate CI** (TODO H4.2): `ci.yml` enforces deps-audit/typecheck/build/lint/docker **and** the full `npm test` suite (mongo + redis services). A red suite blocks merge.
 - **Auth policy (decided 2026-08-25):** signup always assigns `VIEWER` — never implement email-domain-based role elevation (#147 resolved Option A). Elevation is invitations-only.
 - **Chain direction:** Stellar integration moves behind a `ChainAdapter` port (simulated vs Soroban); current `stellar.service.ts` manage-data ops are placeholders, escrow moves no funds. See TODO Part 3 before touching chain code.
 - **Realtime event names** come from `src/shared/types/socketEvents.ts` constants — never string literals (`telemetry_update`/`payment_status_changed` are dead names; live: `location:update`, `shipment:status`, `anomaly:detected`, `settlement:status`).
@@ -50,10 +50,10 @@ Test battery before done:
 ```bash
 npm run lint && npm run typecheck && npm run build   # must be fully green
 npm test -- <suites for files you touched>           # must be green
-npm test                                             # full suite — see note
+npm test                                             # full suite — CI-blocking
 ```
 
-> The full suite currently has a **known red baseline** (tracked in `TODO.md` Part 1). Do not fix unrelated failing suites inside an unrelated PR — but your PR must not add new failures. If a suite you touched fails for a pre-existing reason, cite the TODO item instead of scope-creeping.
+> The full suite is a **blocking CI check** (`test` job in `ci.yml`). Do not scope-creep into unrelated suites, but a PR cannot merge while any suite is red — if an unrelated failure appears, raise it against `TODO.md` Part 1 instead of skipping it.
 
 ## 5. Agent Skills Pipeline
 After writing code, run these in order and fix issues before moving on:
@@ -89,7 +89,7 @@ Modules stay self-contained. Cross-module imports only along these lines:
 | `analytics` | `shipments`, `payments` |
 | `events` | `infra/redis` |
 | `notifications` | `users` (preferences) |
-| `telemetry`/`payments`/`shipments`/`webhooks` | `src/services/chain` (**port types only** — planned per TODO Part 3; never import Stellar implementations directly) |
+| `telemetry`/`payments`/`shipments`/`webhooks`/workers | `src/services/chain` — **port types (`types.ts`) + `factory.ts` (`getChainAdapter`) only**; never import an adapter implementation or Stellar SDK directly |
 
 Prefer domain events over direct service calls. Never import a sibling controller. Avoid circular deps — pull shared logic into `src/shared/` or emit events. When you add a new dependency, note it here and in the consumer module's `AGENTS.md`.
 
@@ -99,8 +99,9 @@ Prefer domain events over direct service calls. Never import a sibling controlle
 - [ ] `requireAuth` on all routes (or `// PUBLIC: <reason>`)
 - [ ] No `...rest` into DB queries · no duplicate imports/declarations
 - [ ] Zod schemas export inferred types · models use `isoDatePlugin` + soft-delete
-- [ ] Swagger updated · `npm run build` passes · touched-module tests pass (see §4 baseline note)
+- [ ] Swagger updated · `npm run build` passes · full `npm test` passes (CI-blocking, see §4)
 - [ ] **AGENTS.md reviewed if conventions, boundaries, or module structure changed**
+- [ ] **Chain spec drift:** if `docs/chain-interface.md` changed, `src/shared/types/chain.ts` (+ `CHAIN_SPEC_VERSION`) and `tests/fixtures/chain/*.json` (`spec_version`) changed in the same PR — and vice versa. Chain shapes are imported only from `src/shared/types/chain.ts`.
 
 ### Clean-Install Build Triage (hard rule)
 

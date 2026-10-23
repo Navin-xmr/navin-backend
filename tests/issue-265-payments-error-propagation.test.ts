@@ -1,5 +1,5 @@
 import { jest, describe, it, expect, beforeEach } from '@jest/globals';
-import { createStellarServiceMock } from './helpers/mocks.js';
+import { createChainAdapterMock, createChainFactoryMock } from './helpers/mocks.js';
 import type { IPayment, PaymentStatus } from '../src/modules/payments/payments.model.js';
 import { Types } from 'mongoose';
 
@@ -21,7 +21,19 @@ await jest.unstable_mockModule('../src/modules/payments/payments.repo.js', () =>
   disputePayment: jest.fn(),
 }));
 
-await jest.unstable_mockModule('../src/services/stellar.service.js', () => createStellarServiceMock());
+// Migrate from direct stellar.service mock to ChainAdapter port pattern
+const chainAdapter = createChainAdapterMock();
+await jest.unstable_mockModule('../src/services/chain/factory.js', () =>
+  createChainFactoryMock(chainAdapter)
+);
+
+// Mock stellar.service for getStellarExplorerUrl utility (not chain operations)
+await jest.unstable_mockModule('../src/services/stellar.service.js', () => ({
+  getStellarExplorerUrl: jest.fn((hash: string) => `https://stellar.expert/explorer/testnet/tx/${hash}`),
+  tokenizeShipment: jest.fn(),
+  anchorTelemetryHash: jest.fn(),
+  releaseEscrow: jest.fn(),
+}));
 
 const { createPaymentService } = await import('../src/modules/payments/payments.service.js');
 const { AppError } = await import('../src/shared/http/errors.js');

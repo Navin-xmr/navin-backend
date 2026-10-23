@@ -1,5 +1,5 @@
 import request from 'supertest';
-import jwt from 'jsonwebtoken';
+import { signToken } from './fixtures/factories.js';
 import { buildApp } from '../src/app.js';
 import { connectMongo } from '../src/infra/mongo/connection.js';
 import { Anomaly } from '../src/modules/anomaly/anomaly.model.js';
@@ -24,10 +24,7 @@ beforeAll(async () => {
     role: 'ADMIN',
     organizationId: '507f1f77bcf86cd799439011',
   });
-  adminToken = jwt.sign(
-    { userId: adminUser._id.toString(), role: 'ADMIN', organizationId: '507f1f77bcf86cd799439011' },
-    env.JWT_SECRET
-  );
+  adminToken = signToken({ userId: adminUser._id.toString(), role: 'ADMIN', organizationId: '507f1f77bcf86cd799439011' });
 });
 
 afterEach(async () => {
@@ -379,10 +376,7 @@ describe('Issue #168: Battery Threshold Detection at 20%', () => {
         organizationId: '507f1f77bcf86cd799439011',
       });
 
-      const lowPrivToken = jwt.sign(
-        { userId: lowPrivUser._id.toString(), role: 'VIEWER', organizationId: '507f1f77bcf86cd799439011' },
-        env.JWT_SECRET
-      );
+      const lowPrivToken = signToken({ userId: lowPrivUser._id.toString(), role: 'VIEWER', organizationId: '507f1f77bcf86cd799439011' });
 
       const res = await request(app)
         .get('/api/anomalies')

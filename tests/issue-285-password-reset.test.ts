@@ -1,8 +1,11 @@
 import { jest, describe, it, expect, beforeAll } from '@jest/globals';
+import { createEmailServiceMock } from './helpers/mocks.js';
 
-const mockBlockToken = jest.fn();
-const mockIsTokenBlocked = jest.fn();
-const mockSendEmail = jest.fn();
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mockBlockToken = jest.fn() as any;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const mockIsTokenBlocked = jest.fn() as any;
+const emailServiceMock = createEmailServiceMock();
 
 await jest.unstable_mockModule('../src/modules/users/users.model.js', () => {
   const users: Record<string, unknown>[] = [];
@@ -40,11 +43,7 @@ await jest.unstable_mockModule('../src/infra/redis/connection.js', () => ({
   connectRedis: jest.fn(),
 }));
 
-await jest.unstable_mockModule('../src/services/email.service.js', () => ({
-  sendEmail: mockSendEmail,
-  resetPasswordEmailHtml: (link: string) => `<html>Reset: ${link}</html>`,
-  invitationEmailHtml: (link: string) => `<html>Invite: ${link}</html>`,
-}));
+await jest.unstable_mockModule('../src/services/email.service.js', () => emailServiceMock);
 
 const jwt = await import('jsonwebtoken');
 const { forgotPassword, resetPassword } = await import('../src/modules/auth/auth.service.js');
@@ -73,19 +72,19 @@ describe('#285 - Password Reset Flow', () => {
     });
 
     it('should trigger email send for existing user', async () => {
-      mockSendEmail.mockClear();
+      emailServiceMock.sendEmail.mockClear();
       await forgotPassword('existing@test.com');
-      expect(mockSendEmail).toHaveBeenCalledTimes(1);
-      expect(mockSendEmail).toHaveBeenCalledWith(
-        expect.objectContaining({ to: 'existing@test.com' }),
+      expect(emailServiceMock.sendEmail).toHaveBeenCalledTimes(1);
+      expect(emailServiceMock.sendEmail).toHaveBeenCalledWith(
+        expect.objectContaining({ to: 'existing@test.com' })
       );
     });
 
     it('should include a valid reset link in the email', async () => {
-      mockSendEmail.mockClear();
+      emailServiceMock.sendEmail.mockClear();
       await forgotPassword('existing@test.com');
-      const call = mockSendEmail.mock.calls[0] as [{ to: string; subject: string; html: string }];
-      expect(call[0].html).toContain('/reset-password?token=');
+      const [params] = emailServiceMock.sendEmail.mock.calls[0];
+      expect(params.html).toContain('/reset-password?token=');
     });
   });
 

@@ -1,6 +1,7 @@
 import { jest, describe, beforeAll, beforeEach, it, expect } from '@jest/globals';
+import { createChainFactoryMock } from './helpers/mocks.js';
 import request from 'supertest';
-import jwt from 'jsonwebtoken';
+import { signToken } from './fixtures/factories.js';
 import type { Application } from 'express';
 
 // Mock in-memory DB for shipments
@@ -102,14 +103,9 @@ await jest.unstable_mockModule('../src/modules/shipments/shipments.model.js', ()
 });
 
 // Mock other dependencies
-await jest.unstable_mockModule('../src/services/stellar.service.js', () => ({
-  tokenizeShipment: jest.fn(() =>
-    Promise.resolve({ stellarTokenId: 'test', stellarTxHash: 'test' })
-  ),
-  anchorTelemetryHash: jest.fn(() => Promise.resolve({ stellarTxHash: 'test' })),
-  releaseEscrow: jest.fn(() => Promise.resolve({ success: true, transactionHash: 'test' })),
-  getStellarExplorerUrl: jest.fn(() => 'https://stellar.expert/explorer/testnet/tx/mock'),
-}));
+await jest.unstable_mockModule('../src/services/chain/factory.js', () =>
+  createChainFactoryMock()
+);
 
 await jest.unstable_mockModule('../src/infra/socket/io.js', () => ({
   emitStatusUpdate: jest.fn(),
@@ -139,10 +135,6 @@ await jest.unstable_mockModule('../src/modules/users/users.model.js', () => ({
   },
 }));
 
-await jest.unstable_mockModule('../src/services/mockStorageService.js', () => ({
-  mockUploadToStorage: jest.fn(() => Promise.resolve('http://fake-url.com/file')),
-}));
-
 // Mock middleware dependencies
 await jest.unstable_mockModule('../src/shared/middleware/rateLimiter.js', () => ({
   standardLimiter: (_req: unknown, _res: unknown, next: () => void) => next(),
@@ -163,7 +155,7 @@ describe('Shipments Search Filters', () => {
 
   beforeAll(async () => {
     app = buildApp();
-    authToken = jwt.sign({ userId: 'test-user-id', role: 'ADMIN' }, process.env.JWT_SECRET!);
+    authToken = signToken({ userId: 'test-user-id', role: 'ADMIN' });
   });
 
   beforeEach(async () => {

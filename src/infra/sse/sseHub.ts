@@ -1,5 +1,5 @@
 import type { Response } from 'express';
-import type { Redis } from 'ioredis';
+
 import { getRedisClient } from '../redis/connection.js';
 import { logger } from '../../shared/logger/logger.js';
 import {
@@ -8,29 +8,20 @@ import {
   type RealtimeEvent,
 } from '../../shared/types/realtimeEvents.js';
 
-interface SseClient {
-  res: Response;
-  heartbeatTimer: ReturnType<typeof setInterval>;
-}
-
-const clientsByUser = new Map<string, Set<SseClient>>();
-
-let subscriber: Redis | null = null;
-let publisher: Redis | null = null;
-let redisPubSubReady = false;
+import { sseHubState, type SseClient, type SseStreamResponse } from './sseHubState.js';
 
 function formatSseMessage(event: RealtimeEvent): string {
   return `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`;
 }
 
-function writeHeartbeat(res: Response): void {
+function writeHeartbeat(res: SseStreamResponse): void {
   if (!res.writableEnded) {
     res.write(': heartbeat\n\n');
   }
 }
 
 function deliverToLocalClients(userId: string, event: RealtimeEvent): void {
-  const clients = clientsByUser.get(userId);
+  const clients = sseHubState.clientsByUser.get(userId);
   if (!clients || clients.size === 0) {
     return;
   }
@@ -46,14 +37,14 @@ function deliverToLocalClients(userId: string, event: RealtimeEvent): void {
 function removeClient(userId: string, client: SseClient): void {
   clearInterval(client.heartbeatTimer);
 
-  const clients = clientsByUser.get(userId);
+  const clients = sseHubState.clientsByUser.get(userId);
   if (!clients) {
     return;
   }
 
   clients.delete(client);
   if (clients.size === 0) {
-    clientsByUser.delete(userId);
+    sseHubState.clientsByUser.delete(userId);
   }
 }
 
@@ -77,23 +68,25 @@ function handleRedisMessage(channel: string, message: string): void {
  * Falls back to in-process delivery when Redis pub/sub is unavailable.
  */
 export async function initSseHub(): Promise<void> {
-  if (redisPubSubReady) {
+  if (sseHubState.redisPubSubReady) {
     return;
   }
 
   try {
-    publisher = getRedisClient();
-    subscriber = publisher.duplicate();
+    const publisher = getRedisClient();
+    const subscriber = publisher.duplicate();
+    sseHubState.publisher = publisher;
+    sseHubState.subscriber = subscriber;
 
     subscriber.on('message', handleRedisMessage);
 
     await subscriber.subscribe('sse:user:__init__');
     await subscriber.unsubscribe('sse:user:__init__');
 
-    redisPubSubReady = true;
+    sseHubState.redisPubSubReady = true;
     logger.info('SSE hub Redis pub/sub initialized');
   } catch (err) {
-    redisPubSubReady = false;
+    sseHubState.redisPubSubReady = false;
     logger.warn({ err }, 'SSE hub using in-memory fan-out only (Redis pub/sub unavailable)');
   }
 }
@@ -102,7 +95,8 @@ export async function initSseHub(): Promise<void> {
  * Publishes a realtime event to all SSE connections for the given user.
  */
 export function publishToUser(userId: string, event: RealtimeEvent): void {
-  if (redisPubSubReady && publisher) {
+  const publisher = sseHubState.publisher;
+  if (sseHubState.redisPubSubReady && publisher) {
     void publisher.publish(userSseChannel(userId), JSON.stringify(event)).catch(err => {
       logger.error({ err, userId }, 'Redis SSE publish failed; falling back to local delivery');
       deliverToLocalClients(userId, event);
@@ -118,30 +112,32 @@ export function publishToUser(userId: string, event: RealtimeEvent): void {
  * Sends heartbeats every 30 seconds until the client disconnects.
  */
 export function registerSseClient(userId: string, res: Response): void {
-  res.writeHead(200, {
+  const sseRes = res as SseStreamResponse;
+
+  sseRes.writeHead(200, {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache, no-transform',
     Connection: 'keep-alive',
     'X-Accel-Buffering': 'no',
   });
 
-  res.write(': connected\n\n');
-  writeHeartbeat(res);
+  sseRes.write(': connected\n\n');
+  writeHeartbeat(sseRes);
 
   const heartbeatTimer = setInterval(() => {
-    writeHeartbeat(res);
+    writeHeartbeat(sseRes);
   }, SSE_HEARTBEAT_INTERVAL_MS);
   heartbeatTimer.unref();
 
-  const client: SseClient = { res, heartbeatTimer };
-  const existing = clientsByUser.get(userId);
+  const client: SseClient = { res: sseRes, heartbeatTimer };
+  const existing = sseHubState.clientsByUser.get(userId);
   if (existing) {
     existing.add(client);
   } else {
-    clientsByUser.set(userId, new Set([client]));
+    sseHubState.clientsByUser.set(userId, new Set([client]));
   }
 
-  res.on('close', () => {
+  sseRes.on('close', () => {
     removeClient(userId, client);
   });
 }
@@ -150,7 +146,7 @@ export function registerSseClient(userId: string, res: Response): void {
  * Closes all SSE connections and tears down Redis pub/sub.
  */
 export async function closeSseHub(): Promise<void> {
-  for (const [userId, clients] of clientsByUser.entries()) {
+  for (const [userId, clients] of sseHubState.clientsByUser.entries()) {
     for (const client of clients) {
       clearInterval(client.heartbeatTimer);
       if (!client.res.writableEnded) {
@@ -159,50 +155,15 @@ export async function closeSseHub(): Promise<void> {
       removeClient(userId, client);
     }
   }
-  clientsByUser.clear();
+  sseHubState.clientsByUser.clear();
 
+  const subscriber = sseHubState.subscriber;
   if (subscriber) {
     subscriber.removeAllListeners('message');
     await subscriber.quit();
-    subscriber = null;
+    sseHubState.subscriber = null;
   }
 
-  publisher = null;
-  redisPubSubReady = false;
-}
-
-/** @internal Exposed for unit tests */
-export function getSseClientCount(userId?: string): number {
-  if (userId) {
-    return clientsByUser.get(userId)?.size ?? 0;
-  }
-
-  let total = 0;
-  for (const clients of clientsByUser.values()) {
-    total += clients.size;
-  }
-  return total;
-}
-
-/** @internal Exposed for unit tests */
-export function deliverToUserForTest(userId: string, event: RealtimeEvent): void {
-  deliverToLocalClients(userId, event);
-}
-
-/** @internal Exposed for unit tests */
-export function isRedisPubSubReady(): boolean {
-  return redisPubSubReady;
-}
-
-/** @internal Exposed for unit tests — bypasses Redis for direct local writes */
-export function resetSseHubForTest(): void {
-  for (const clients of clientsByUser.values()) {
-    for (const client of clients) {
-      clearInterval(client.heartbeatTimer);
-    }
-  }
-  clientsByUser.clear();
-  redisPubSubReady = false;
-  subscriber = null;
-  publisher = null;
+  sseHubState.publisher = null;
+  sseHubState.redisPubSubReady = false;
 }

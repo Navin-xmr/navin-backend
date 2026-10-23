@@ -1,21 +1,38 @@
+# syntax=docker/dockerfile:1
 # ── Stage 1: production dependencies only ─────────────────────────────────────
 FROM node:20-alpine AS deps
 WORKDIR /app
 # Skip husky git-hooks init (no .git in image; husky is a devDependency)
 ENV HUSKY=0
 COPY package*.json ./
-RUN npm ci --omit=dev
+RUN --mount=type=cache,target=/root/.npm npm ci --omit=dev
 
 # ── Stage 2: build (TypeScript compilation) ───────────────────────────────────
 FROM node:20-alpine AS builder
 WORKDIR /app
 ENV HUSKY=0
 COPY package*.json ./
-RUN npm ci
+RUN --mount=type=cache,target=/root/.npm npm ci
 COPY . .
 RUN npm run build
 
-# ── Stage 3: production runner ────────────────────────────────────────────────
+# ── Stage 3: development (hot reload via tsx watch) ──────────────────────────
+# Used by docker-compose.override.yml. Installs ALL deps (dev included) and runs
+# `npm run dev`. Source is bind-mounted at runtime; see the override for the
+# node_modules strategy. NOT the default target — `runner` stays last so a bare
+# `docker build .` still produces the production image.
+FROM node:20-alpine AS dev
+WORKDIR /app
+ENV HUSKY=0
+# Must be development BEFORE `npm ci` so devDependencies (tsx) are installed.
+ENV NODE_ENV=development
+COPY package*.json ./
+RUN --mount=type=cache,target=/root/.npm npm ci
+COPY . .
+EXPOSE 3000
+CMD ["npm", "run", "dev"]
+
+# ── Stage 4: production runner ────────────────────────────────────────────────
 FROM node:20-alpine AS runner
 WORKDIR /app
 
@@ -29,6 +46,11 @@ COPY --from=builder /app/dist         ./dist
 COPY docs ./dist/docs
 
 COPY package.json ./
+
+# migrate-mongo runtime for the one-shot `migrate` compose service
+# (`npm run migrate:up` needs the config + migrations dir next to node_modules).
+COPY migrate-mongo.config.cjs ./
+COPY migrations ./migrations
 
 RUN chown -R node:node /app
 
