@@ -11,8 +11,14 @@ export async function mockModule<T extends Record<string, unknown>>(
   overrides: Partial<T>
 ): Promise<void> {
   const fromHelpers = `../${specifier}`;
+  // `jest.requireActual()` performs a synchronous CommonJS require, which
+  // throws `ERR_REQUIRE_ASYNC_MODULE` when the target is an ES module that is
+  // already mid-import (`users.service.ts` → `auth.service.ts`). Import the
+  // real module asynchronously first, then hand the already-resolved namespace
+  // to the mock factory.
+  const actual = (await import(fromHelpers)) as T;
   await jest.unstable_mockModule(fromHelpers, () => ({
-    ...(jest.requireActual(fromHelpers) as T),
+    ...actual,
     ...overrides,
   }));
 }

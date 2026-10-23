@@ -161,7 +161,6 @@ export function createMockLedgerBlock(overrides: Partial<ILedgerBlock> = {}): IL
   return {
     _id: id,
     shipmentId: new Types.ObjectId().toString(),
-    eventType: 'PICKED_UP',
     milestoneEvent: 'PICKED_UP',
     stellarTxHash: `tx-${id.slice(-8)}`,
     metadata: {},

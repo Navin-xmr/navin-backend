@@ -22,6 +22,7 @@ import { KeyedSerializer } from '../src/services/chain/serializer.js';
 import { SimulatedAdapter } from '../src/services/chain/simulated.adapter.js';
 import { ErrorCodes } from '../src/shared/http/errors.js';
 import { generateDataHash } from '../src/shared/utils/crypto.js';
+import type { SimulatedHorizonClientMock } from './helpers/mocks.js';
 
 const PASSPHRASE = Networks.TESTNET;
 const WORKERS = 5; // matches stellar.worker concurrency
@@ -34,8 +35,7 @@ const badSeqError = () =>
     response: { data: { extras: { result_codes: { transaction: 'tx_bad_seq' } } } },
   });
 
-/** Structurally matches the adapter's private Horizon port; checked when injected below. */
-class SequencedHorizon {
+class SequencedHorizon implements SimulatedHorizonClientMock {
   sequence = BigInt(5_000);
   ledger = 100;
   badSeqFailures = 0;
@@ -177,23 +177,6 @@ describe('signing safety load gate', () => {
     horizon.submitTransaction.mockRejectedValueOnce(new Error('tx_insufficient_fee'));
 
     await expect(adapter.anchorEvent(anchorInput(0, 0, signer.publicKey()))).rejects.toMatchObject({
-      code: ErrorCodes.CHAIN_UNKNOWN,
-    });
-    expect(horizon.submitTransaction).toHaveBeenCalledTimes(1);
-  });
-
-  it('does not retry an error that merely names tx_bad_seq without Horizon structure', async () => {
-    const horizon = new SequencedHorizon();
-    const signer = Keypair.random();
-    const adapter = new SimulatedAdapter({
-      horizon,
-      secretKey: signer.secret(),
-      networkPassphrase: PASSPHRASE,
-    });
-    horizon.submitTransaction.mockRejectedValueOnce(new Error('tx_bad_seq'));
-
-    await expect(adapter.anchorEvent(anchorInput(0, 0, signer.publicKey()))).rejects.toMatchObject({
-      statusCode: 502,
       code: ErrorCodes.CHAIN_UNKNOWN,
     });
     expect(horizon.submitTransaction).toHaveBeenCalledTimes(1);

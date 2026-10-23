@@ -80,6 +80,10 @@ LedgerBlockSchema.plugin(isoDatePlugin);
 // Optimizes querying ledger blocks for a specific shipment, newest first.
 LedgerBlockSchema.index({ shipmentId: 1, milestoneEvent: 1, createdAt: -1 });
 
+// Allows cross-shipment queries by milestone event type, newest first.
+// Replaces the stale { eventType: 1, createdAt: -1 } index (issue #799).
+LedgerBlockSchema.index({ milestoneEvent: 1, createdAt: -1 });
+
 // Allows fast lookup / deduplication by on-chain data hash.
 LedgerBlockSchema.index({ dataHash: 1 }, { sparse: true });
 

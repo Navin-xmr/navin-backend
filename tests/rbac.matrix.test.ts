@@ -1,15 +1,254 @@
 import { describe, expect, beforeAll, afterAll, it, jest } from '@jest/globals';
 import request from 'supertest';
 import { signToken } from './fixtures/factories.js';
+import { createChainFactoryMock } from './helpers/mocks.js';
 import { randomUUID } from 'crypto';
 import mongoose from 'mongoose';
 import type { Application } from 'express';
-import { env } from '../src/env.js';
 import { UserRole } from '../src/shared/constants/index.js';
-import { routeRoles as shipmentRoles } from '../src/modules/shipments/shipments.routes.js';
-import { routeRoles as userRoles } from '../src/modules/users/users.routes.js';
-import { routeRoles as analyticsRoles } from '../src/modules/analytics/analytics.routes.js';
-import { routeRoles as anomalyRoles } from '../src/modules/anomaly/anomaly.routes.js';
+
+// Mock dependencies
+const mockUserFind = jest.fn();
+const mockUserFindOne = jest.fn();
+const mockUserCreate = jest.fn();
+const mockUserFindById = jest.fn();
+const mockShipmentFind = jest.fn();
+const mockShipmentCreate = jest.fn();
+const mockShipmentFindByIdAndUpdate = jest.fn();
+const mockTelemetryFind = jest.fn();
+const mockAnomalyFind = jest.fn();
+const mockAnomalyFindByIdAndUpdate = jest.fn();
+const mockAnalyticsAggregate = jest.fn();
+const mockApiKeyFindOne = jest.fn();
+
+// Setup mocks at top level before dynamic imports of routes
+await jest.unstable_mockModule('../src/infra/redis/connection.js', () => ({
+  getRedisClient: () => ({
+    get: jest.fn(async () => null),
+    set: jest.fn(async () => 'OK'),
+    incr: jest.fn(async () => 1),
+    decr: jest.fn(async () => 0),
+    del: jest.fn(async () => 1),
+    expire: jest.fn(async () => 1),
+    pttl: jest.fn(async () => 1000),
+    exists: jest.fn(async () => 0),
+  }),
+  getRedisConnection: () => ({
+    get: jest.fn(async () => null),
+    set: jest.fn(async () => 'OK'),
+  }),
+  disconnectRedis: jest.fn(async () => undefined),
+}));
+
+await jest.unstable_mockModule('../src/services/chain/factory.js', () => createChainFactoryMock());
+
+await jest.unstable_mockModule('../src/infra/redis/tokenBlocklist.js', () => ({
+  isTokenBlocked: jest.fn().mockResolvedValue(false),
+  blockToken: jest.fn().mockResolvedValue(undefined),
+}));
+
+await jest.unstable_mockModule('../src/modules/telemetry/telemetry.service.js', () => ({
+  getTelemetryService: jest.fn().mockResolvedValue({
+    data: [],
+    nextCursor: null,
+    hasMore: false,
+  }),
+  createTelemetryRecord: jest.fn(),
+  findActiveShipmentBySensorId: jest.fn(),
+  updateTelemetryAnchor: jest.fn(),
+  markTelemetryAnchorFailed: jest.fn(),
+  bulkIngestTelemetry: jest.fn().mockResolvedValue([]),
+  getTelemetryThresholds: jest
+    .fn<any>()
+    .mockReturnValue({ minBatteryLevel: 20, maxTemperature: 25, maxHumidity: 80 }),
+}));
+
+await jest.unstable_mockModule('../src/modules/anomaly/anomaly.service.js', () => ({
+  getAnomaliesService: jest.fn().mockResolvedValue({
+    data: [],
+    nextCursor: null,
+    hasMore: false,
+  }),
+  resolveAnomalyService: jest.fn<any>().mockResolvedValue({ _id: 'anomaly-1', status: 'RESOLVED' }),
+  detectAnomaly: jest.fn().mockResolvedValue({ detected: false, anomalies: [] }),
+  getAnomalyStatsService: jest.fn().mockResolvedValue({ total: 0, open: 0, resolved: 0 }),
+}));
+
+await jest.unstable_mockModule('../src/modules/shipments/shipments.service.js', () => ({
+  DOCUMENT_UPLOAD_CONSTRAINTS: {
+    mimeTypes: ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'],
+    maxSize: 10 * 1024 * 1024,
+  },
+  PHOTO_UPLOAD_CONSTRAINTS: {
+    mimeTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'],
+    maxSize: 5 * 1024 * 1024,
+    maxPerShipment: 10,
+  },
+  getShipmentsService: jest.fn().mockResolvedValue({
+    data: [],
+    page: 1,
+    limit: 20,
+    total: 0,
+  }),
+  getShipmentByIdService: jest
+    .fn<any>()
+    .mockResolvedValue({ _id: 'shipment-1', status: 'IN_TRANSIT' }),
+  getShipmentTimelineService: jest
+    .fn<any>()
+    .mockResolvedValue({ data: [], nextCursor: null, hasMore: false }),
+  createShipmentService: jest.fn().mockResolvedValue({ _id: 'shipment-1' }),
+  patchShipmentService: jest
+    .fn<any>()
+    .mockResolvedValue({ _id: 'shipment-1', status: 'IN_TRANSIT' }),
+  updateShipmentStatusService: jest
+    .fn<any>()
+    .mockResolvedValue({ _id: 'shipment-1', status: 'IN_TRANSIT' }),
+  uploadShipmentProofService: jest.fn().mockResolvedValue({ _id: 'shipment-1' }),
+  uploadShipmentDocumentService: jest.fn().mockResolvedValue({ url: 'http://mock/doc' }),
+  uploadShipmentPhotoService: jest.fn().mockResolvedValue({ url: 'http://mock/photo' }),
+  createDisputeService: jest
+    .fn<any>()
+    .mockResolvedValue({ referenceNumber: 'DSP-000001', status: 'PENDING' }),
+  deleteShipmentService: jest.fn().mockResolvedValue({ _id: 'shipment-1' }),
+  bulkUpdateShipmentStatusService: jest.fn<any>().mockResolvedValue({ updated: 0, failed: [] }),
+  getShipmentEtaService: jest
+    .fn<any>()
+    .mockResolvedValue({ estimatedArrival: null, reason: 'not in transit' }),
+  exportShipmentsService: jest.fn().mockResolvedValue([]),
+  shipmentsToCSV: jest.fn().mockReturnValue(''),
+  findShipments: jest.fn().mockResolvedValue([]),
+}));
+
+await jest.unstable_mockModule('../src/infra/redis/queue.js', () => ({
+  pushAlertJob: jest.fn().mockResolvedValue(undefined),
+  pushStellarAnchorJob: jest.fn().mockResolvedValue(undefined),
+  getTransactionQueue: jest.fn(),
+  getRedisClient: jest.fn(),
+}));
+
+await jest.unstable_mockModule('../src/infra/socket/io.js', () => ({
+  emitTelemetryUpdate: jest.fn(),
+  emitPaymentStatusChange: jest.fn(),
+  emitAnomalyDetected: jest.fn(),
+  emitStatusUpdate: jest.fn(),
+  initSocketIO: jest.fn(),
+  getIO: jest.fn(),
+  getActiveUsers: jest.fn().mockReturnValue(new Map()),
+  closeSocketIO: jest.fn(async () => undefined),
+}));
+
+await jest.unstable_mockModule('../src/modules/users/users.model.js', () => ({
+  UserModel: {
+    find: mockUserFind,
+    findOne: mockUserFindOne,
+    create: mockUserCreate,
+    findById: mockUserFindById,
+  },
+  UserRole: {
+    SUPER_ADMIN: 'SUPER_ADMIN',
+    ADMIN: 'ADMIN',
+    MANAGER: 'MANAGER',
+    VIEWER: 'VIEWER',
+    CUSTOMER: 'CUSTOMER',
+  },
+  OrganizationType: {},
+  OrganizationModel: {
+    findById: jest.fn(),
+  },
+}));
+
+await jest.unstable_mockModule('../src/modules/shipments/shipments.model.js', () => ({
+  Shipment: {
+    find: mockShipmentFind,
+    create: mockShipmentCreate,
+    findByIdAndUpdate: mockShipmentFindByIdAndUpdate,
+    findById: jest.fn(),
+  },
+  ShipmentStatus: {
+    CREATED: 'CREATED',
+    IN_TRANSIT: 'IN_TRANSIT',
+    DELIVERED: 'DELIVERED',
+    CANCELLED: 'CANCELLED',
+  },
+}));
+
+await jest.unstable_mockModule('../src/modules/telemetry/telemetry.model.js', () => ({
+  Telemetry: {
+    find: mockTelemetryFind,
+  },
+  TelemetryAnchorStatus: {},
+}));
+
+await jest.unstable_mockModule('../src/modules/anomaly/anomaly.model.js', () => ({
+  Anomaly: {
+    find: mockAnomalyFind,
+    findByIdAndUpdate: mockAnomalyFindByIdAndUpdate,
+  },
+  AnomalySeverity: {
+    LOW: 'LOW',
+    MEDIUM: 'MEDIUM',
+    HIGH: 'HIGH',
+  },
+  AnomalyStatus: {
+    DETECTED: 'DETECTED',
+    INVESTIGATING: 'INVESTIGATING',
+    RESOLVED: 'RESOLVED',
+  },
+}));
+
+await jest.unstable_mockModule('../src/modules/analytics/analytics.service.js', () => ({
+  getAnalyticsPerformance: mockAnalyticsAggregate,
+  getAnalyticsSummary: jest.fn().mockResolvedValue({
+    totalShipments: 0,
+    onTimeRate: 0,
+    avgTransitDays: 0,
+    disputeRate: 0,
+    sparklines: [],
+  }),
+}));
+
+await jest.unstable_mockModule('../src/modules/users/users.service.js', () => ({
+  registerUser: jest.fn().mockResolvedValue({
+    _id: 'user-new',
+    email: 'newuser@test.com',
+    name: 'New User',
+  }),
+  createTeamMember: jest.fn().mockResolvedValue({
+    _id: 'user-team',
+    email: 'team@test.com',
+    name: 'Team User',
+  }),
+  listOrganizationUsers: jest.fn().mockResolvedValue({
+    data: [],
+    total: 0,
+    hasMore: false,
+    nextCursor: null,
+  }),
+  deleteUser: jest.fn().mockResolvedValue({ _id: 'user-deleted' }),
+  generateInvitationLink: jest.fn().mockResolvedValue({ token: 'invite-token' }),
+  verifyInvitationToken: jest.fn().mockReturnValue({ email: 'invite@test.com' }),
+  acceptInvitation: jest.fn().mockResolvedValue({ _id: 'user-accepted' }),
+  getCurrentUser: jest.fn().mockResolvedValue({ _id: 'user-1', role: 'ADMIN' }),
+}));
+
+await jest.unstable_mockModule('../src/modules/webhooks/iot.service.js', () => ({
+  processIotWebhook: jest
+    .fn<any>()
+    .mockResolvedValue({ _id: 'telemetry-1', shipmentId: 'shipment-1' }),
+}));
+
+await jest.unstable_mockModule('../src/modules/auth/apiKey.service.js', () => ({
+  validateApiKey: mockApiKeyFindOne,
+  generateApiKey: jest.fn(),
+  revokeApiKey: jest.fn(),
+  listApiKeys: jest.fn(),
+}));
+
+const { routeRoles: shipmentRoles } = await import('../src/modules/shipments/shipments.routes.js');
+const { routeRoles: userRoles } = await import('../src/modules/users/users.routes.js');
+const { routeRoles: analyticsRoles } = await import('../src/modules/analytics/analytics.routes.js');
+const { routeRoles: anomalyRoles } = await import('../src/modules/anomaly/anomaly.routes.js');
+const appModule = await import('../src/app.js');
 
 // Role definitions for the matrix
 const ROLES = [
@@ -54,19 +293,6 @@ describe('RBAC Matrix Integration Tests', () => {
   let app: Application;
   let testUserIds: Record<Role, string>;
   let testOrganizationId: string;
-  // Mock dependencies
-  const mockUserFind = jest.fn();
-  const mockUserFindOne = jest.fn();
-  const mockUserCreate = jest.fn();
-  const mockUserFindById = jest.fn();
-  const mockShipmentFind = jest.fn();
-  const mockShipmentCreate = jest.fn();
-  const mockShipmentFindByIdAndUpdate = jest.fn();
-  const mockTelemetryFind = jest.fn();
-  const mockAnomalyFind = jest.fn();
-  const mockAnomalyFindByIdAndUpdate = jest.fn();
-  const mockAnalyticsAggregate = jest.fn();
-  const mockApiKeyFindOne = jest.fn();
 
   beforeAll(async () => {
     testOrganizationId = new mongoose.Types.ObjectId().toString();
@@ -78,218 +304,7 @@ describe('RBAC Matrix Integration Tests', () => {
       testUserIds[role] = userId;
     }
 
-    // Setup mocks
-    await jest.unstable_mockModule('../src/infra/redis/tokenBlocklist.js', () => ({
-      isTokenBlocked: jest.fn().mockResolvedValue(false),
-      blockToken: jest.fn().mockResolvedValue(undefined),
-    }));
-
-    await jest.unstable_mockModule('../src/modules/telemetry/telemetry.service.js', () => ({
-      getTelemetryService: jest.fn().mockResolvedValue({
-        data: [],
-        nextCursor: null,
-        hasMore: false,
-      }),
-      createTelemetryRecord: jest.fn(),
-      findActiveShipmentBySensorId: jest.fn(),
-      updateTelemetryAnchor: jest.fn(),
-      markTelemetryAnchorFailed: jest.fn(),
-      bulkIngestTelemetry: jest.fn().mockResolvedValue([]),
-      getTelemetryThresholds: jest
-        .fn<any>()
-        .mockReturnValue({ minBatteryLevel: 20, maxTemperature: 25, maxHumidity: 80 }),
-    }));
-
-    await jest.unstable_mockModule('../src/modules/anomaly/anomaly.service.js', () => ({
-      getAnomaliesService: jest.fn().mockResolvedValue({
-        data: [],
-        nextCursor: null,
-        hasMore: false,
-      }),
-      resolveAnomalyService: jest
-        .fn<any>()
-        .mockResolvedValue({ _id: 'anomaly-1', status: 'RESOLVED' }),
-      detectAnomaly: jest.fn().mockResolvedValue({ detected: false, anomalies: [] }),
-      getAnomalyStatsService: jest.fn().mockResolvedValue({ total: 0, open: 0, resolved: 0 }),
-    }));
-
-    // ✅ Correct layout - top-level export matching shipments.service.ts
-    await jest.unstable_mockModule('../src/modules/shipments/shipments.service.js', () => ({
-      DOCUMENT_UPLOAD_CONSTRAINTS: {
-        mimeTypes: ['application/pdf', 'image/jpeg', 'image/png', 'image/webp'],
-        maxSize: 10 * 1024 * 1024,
-      },
-      PHOTO_UPLOAD_CONSTRAINTS: {
-        mimeTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'],
-        maxSize: 5 * 1024 * 1024,
-        maxPerShipment: 10,
-      },
-      getShipmentsService: jest.fn().mockResolvedValue({
-        data: [],
-        page: 1,
-        limit: 20,
-        total: 0,
-      }),
-      getShipmentByIdService: jest
-        .fn<any>()
-        .mockResolvedValue({ _id: 'shipment-1', status: 'IN_TRANSIT' }),
-      getShipmentTimelineService: jest
-        .fn<any>()
-        .mockResolvedValue({ data: [], nextCursor: null, hasMore: false }),
-      createShipmentService: jest.fn().mockResolvedValue({ _id: 'shipment-1' }),
-      patchShipmentService: jest
-        .fn<any>()
-        .mockResolvedValue({ _id: 'shipment-1', status: 'IN_TRANSIT' }),
-      updateShipmentStatusService: jest
-        .fn<any>()
-        .mockResolvedValue({ _id: 'shipment-1', status: 'IN_TRANSIT' }),
-      uploadShipmentProofService: jest.fn().mockResolvedValue({ _id: 'shipment-1' }),
-      uploadShipmentDocumentService: jest.fn().mockResolvedValue({ url: 'http://mock/doc' }),
-      uploadShipmentPhotoService: jest.fn().mockResolvedValue({ url: 'http://mock/photo' }),
-      createDisputeService: jest
-        .fn<any>()
-        .mockResolvedValue({ referenceNumber: 'DSP-000001', status: 'PENDING' }),
-      deleteShipmentService: jest.fn().mockResolvedValue({ _id: 'shipment-1' }),
-      bulkUpdateShipmentStatusService: jest
-        .fn<any>()
-        .mockResolvedValue({ updated: 0, failed: [] }),
-      getShipmentEtaService: jest
-        .fn<any>()
-        .mockResolvedValue({ estimatedArrival: null, reason: 'not in transit' }),
-      exportShipmentsService: jest.fn().mockResolvedValue([]),
-      shipmentsToCSV: jest.fn().mockReturnValue(''),
-      findShipments: jest.fn().mockResolvedValue([]),
-    }));
-
-
-    await jest.unstable_mockModule('../src/infra/redis/queue.js', () => ({
-      pushAlertJob: jest.fn().mockResolvedValue(undefined),
-      pushStellarAnchorJob: jest.fn().mockResolvedValue(undefined),
-      getTransactionQueue: jest.fn(),
-      getRedisClient: jest.fn(),
-    }));
-
-    await jest.unstable_mockModule('../src/infra/socket/io.js', () => ({
-      emitTelemetryUpdate: jest.fn(),
-      emitPaymentStatusChange: jest.fn(),
-      emitAnomalyDetected: jest.fn(),
-      emitStatusUpdate: jest.fn(),
-      initSocketIO: jest.fn(),
-      getIO: jest.fn(),
-      getActiveUsers: jest.fn().mockReturnValue(new Map()),
-      closeSocketIO: jest.fn(async () => undefined),
-    }));
-
-    await jest.unstable_mockModule('../src/modules/users/users.model.js', () => ({
-      UserModel: {
-        find: mockUserFind,
-        findOne: mockUserFindOne,
-        create: mockUserCreate,
-        findById: mockUserFindById,
-      },
-      UserRole: {
-        SUPER_ADMIN: 'SUPER_ADMIN',
-        ADMIN: 'ADMIN',
-        MANAGER: 'MANAGER',
-        VIEWER: 'VIEWER',
-        CUSTOMER: 'CUSTOMER',
-      },
-      OrganizationType: {},
-      OrganizationModel: {
-        findById: jest.fn(),
-      },
-    }));
-
-    await jest.unstable_mockModule('../src/modules/shipments/shipments.model.js', () => ({
-      Shipment: {
-        find: mockShipmentFind,
-        create: mockShipmentCreate,
-        findByIdAndUpdate: mockShipmentFindByIdAndUpdate,
-        findById: jest.fn(),
-      },
-      ShipmentStatus: {
-        CREATED: 'CREATED',
-        IN_TRANSIT: 'IN_TRANSIT',
-        DELIVERED: 'DELIVERED',
-        CANCELLED: 'CANCELLED',
-      },
-    }));
-
-    await jest.unstable_mockModule('../src/modules/telemetry/telemetry.model.js', () => ({
-      Telemetry: {
-        find: mockTelemetryFind,
-      },
-      TelemetryAnchorStatus: {},
-    }));
-
-    await jest.unstable_mockModule('../src/modules/anomaly/anomaly.model.js', () => ({
-      Anomaly: {
-        find: mockAnomalyFind,
-        findByIdAndUpdate: mockAnomalyFindByIdAndUpdate,
-      },
-      AnomalySeverity: {
-        LOW: 'LOW',
-        MEDIUM: 'MEDIUM',
-        HIGH: 'HIGH',
-      },
-      AnomalyStatus: {
-        DETECTED: 'DETECTED',
-        INVESTIGATING: 'INVESTIGATING',
-        RESOLVED: 'RESOLVED',
-      },
-    }));
-
-    await jest.unstable_mockModule('../src/modules/analytics/analytics.service.js', () => ({
-      getAnalyticsPerformance: mockAnalyticsAggregate,
-      // Mock the summary endpoint for analytics controller
-      getAnalyticsSummary: jest.fn().mockResolvedValue({
-        totalShipments: 0,
-        onTimeRate: 0,
-        avgTransitDays: 0,
-        disputeRate: 0,
-        sparklines: [],
-      }),
-    }));
-
-    await jest.unstable_mockModule('../src/modules/users/users.service.js', () => ({
-      registerUser: jest.fn().mockResolvedValue({
-        _id: 'user-new',
-        email: 'newuser@test.com',
-        name: 'New User',
-      }),
-      createTeamMember: jest.fn().mockResolvedValue({
-        _id: 'user-team',
-        email: 'team@test.com',
-        name: 'Team User',
-      }),
-      listOrganizationUsers: jest.fn().mockResolvedValue({
-        data: [],
-        total: 0,
-        hasMore: false,
-        nextCursor: null,
-      }),
-      deleteUser: jest.fn().mockResolvedValue({ _id: 'user-deleted' }),
-      generateInvitationLink: jest.fn().mockResolvedValue({ token: 'invite-token' }),
-      verifyInvitationToken: jest.fn().mockReturnValue({ email: 'invite@test.com' }),
-      acceptInvitation: jest.fn().mockResolvedValue({ _id: 'user-accepted' }),
-      getCurrentUser: jest.fn().mockResolvedValue({ _id: 'user-1', role: 'ADMIN' }),
-    }));
-
-    await jest.unstable_mockModule('../src/modules/webhooks/iot.service.js', () => ({
-      processIotWebhook: jest
-        .fn<any>()
-        .mockResolvedValue({ _id: 'telemetry-1', shipmentId: 'shipment-1' }),
-    }));
-
-    await jest.unstable_mockModule('../src/modules/auth/apiKey.service.js', () => ({
-      validateApiKey: mockApiKeyFindOne,
-      generateApiKey: jest.fn(),
-      revokeApiKey: jest.fn(),
-      listApiKeys: jest.fn(),
-    }));
-
     // Build the app
-    const appModule = await import('../src/app.js');
     app = appModule.buildApp();
 
     // Setup default mock responses
@@ -331,8 +346,14 @@ describe('RBAC Matrix Integration Tests', () => {
     (mockApiKeyFindOne as any).mockResolvedValue({ isValid: true });
   }, 60_000);
 
-  afterAll(() => {
+  afterAll(async () => {
     jest.clearAllMocks();
+    try {
+      const { disconnectRedis } = await import('../src/infra/redis/connection.js');
+      await disconnectRedis();
+    } catch {
+      // Ignore
+    }
   });
 
   /**
@@ -688,15 +709,13 @@ describe('RBAC Matrix Integration Tests', () => {
         ['GET', '/api/telemetry', true],
       ];
 
-      for (const [method, path, requiresAuth] of endpoints) {
+      for (const [, path, requiresAuth] of endpoints) {
         const res =
           path === '/api/analytics/performance'
-            ? await request(app)
-                .get(path)
-                .query({
-                  startDate: '2026-01-01T00:00:00.000Z',
-                  endDate: '2026-01-31T23:59:59.999Z',
-                })
+            ? await request(app).get(path).query({
+                startDate: '2026-01-01T00:00:00.000Z',
+                endDate: '2026-01-31T23:59:59.999Z',
+              })
             : await request(app).get(path);
 
         if (requiresAuth) {

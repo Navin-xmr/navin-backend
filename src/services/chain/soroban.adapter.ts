@@ -145,6 +145,17 @@ export class SorobanAdapter implements ChainAdapter {
     }
   }
 
+  async getConfirmationCount(ledger: number): Promise<number> {
+    try {
+      const latest = await this.server.getLatestLedger();
+      return Math.max(0, latest.sequence - ledger);
+    } catch (err) {
+      throw new AppError(502, 'Failed to fetch latest Soroban ledger', ErrorCodes.CHAIN_UNKNOWN, {
+        cause: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
   /**
    * Invocation pipeline: simulate -> assemble -> sign -> send -> poll
    */
@@ -214,5 +225,20 @@ export class SorobanAdapter implements ChainAdapter {
       }
       await new Promise(resolve => setTimeout(resolve, 1000));
     }
+  }
+
+  /** Latest ledger sequence reported by the RPC node (#818). */
+  async getLatestLedger(): Promise<number> {
+    const latest = await this.server.getLatestLedger();
+    return latest.sequence;
+  }
+
+  /** Ledger containing a successful transaction; null if not found or not successful (#818). */
+  async getTransactionLedger(txHash: string): Promise<number | null> {
+    const res = await this.server.getTransaction(txHash);
+    if (res.status === 'SUCCESS') {
+      return (res as { ledger: number }).ledger;
+    }
+    return null;
   }
 }
