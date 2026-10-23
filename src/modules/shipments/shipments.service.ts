@@ -503,7 +503,8 @@ export const getShipmentTimelineService = async (
 };
 
 /**
- * Creates a new shipment record and attempts Stellar tokenization.
+ * Creates a new shipment record and anchors its creation through the ChainAdapter port.
+ * Anchoring is best-effort: a chain failure is logged and the shipment is still returned.
  * @param {object} data - Shipment creation payload.
  * @param {string=} data.trackingNumber - Optional tracking number.
  * @param {string} data.origin - Shipment origin.
@@ -975,10 +976,10 @@ export const uploadShipmentProofService = async (
       shipmentReference: shipment?.trackingNumber,
       transactionHash: shipment?.stellarTxHash ?? undefined,
       dataHash: generateDataHash(canonical),
+      canonicalPayload: canonical,
       metadata: {
         proofUrl,
         recipientSignatureName: proof.recipientSignatureName,
-        canonical,
       },
     });
   } catch (ledgerErr) {

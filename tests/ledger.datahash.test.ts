@@ -123,6 +123,7 @@ describe('createLedgerBlock — canonicalPayload persistence (issue #971)', () =
 
   beforeEach(() => {
     createMock.mockReset();
+    createMock.mockImplementation(async doc => doc);
   });
 
   it('stores top-level canonicalPayload on status-change blocks with sha256(canonicalPayload) === dataHash', async () => {
@@ -224,6 +225,49 @@ describe('getLedgerBlockVerificationService — canonicalPayload presence (issue
   );
 });
 
+// ─── canonicalPayload persistence (P8-05 / P8-06) ─────────────────────────────
+
+describe('createLedgerBlock — top-level canonicalPayload', () => {
+  const shipmentId = new Types.ObjectId().toHexString();
+
+  beforeEach(() => {
+    createMock.mockReset();
+    createMock.mockImplementation(async doc => doc);
+  });
+
+  it('stores canonicalPayload top-level on settlement blocks and it hashes to dataHash', async () => {
+    const paymentId = new Types.ObjectId().toHexString();
+    const canonical = buildCanonicalShipmentPayload({
+      shipmentId,
+      event: 'SETTLEMENT_INITIATED',
+      actor: new Types.ObjectId().toHexString(),
+      timestamp: new Date('2026-10-01T12:00:00.000Z'),
+      metadata: { paymentId },
+    });
+    const dataHash = generateDataHash(canonical);
+
+    await createLedgerBlock({
+      shipmentId,
+      eventType: 'SETTLEMENT_INITIATED' as never,
+      transactionHash: 'c'.repeat(64),
+      dataHash,
+      canonicalPayload: canonical,
+      metadata: { paymentId, simulated: true },
+    });
+
+    const persisted = (createMock.mock.calls[0] as [Record<string, unknown>])[0];
+    expect(persisted.canonicalPayload).toEqual(canonical);
+    expect(generateDataHash(persisted.canonicalPayload)).toBe(persisted.dataHash);
+    expect(persisted.metadata).not.toHaveProperty('canonical');
+  });
+
+  it('omits canonicalPayload when not supplied', async () => {
+    await createLedgerBlock({ shipmentId, milestoneEvent: 'IN_TRANSIT' as never });
+
+    const persisted = (createMock.mock.calls[0] as [Record<string, unknown>])[0];
+    expect(persisted).not.toHaveProperty('canonicalPayload');
+  });
+});
 // ─── Migration smoke tests ────────────────────────────────────────────────────
 
 /**

@@ -15,6 +15,8 @@ const paymentFindOneAndUpdateMock = jest.fn((): { lean: () => Promise<unknown> }
   lean: async () => null,
 }));
 const telemetryFindMock = jest.fn(() => ({ lean: async () => [] }));
+// The worker chains `.lean()` on findOneAndUpdate results (recordTelemetryConfirmation,
+// recordPaymentConfirmation), so the mocks must return a lean-able query object.
 const telemetryFindOneAndUpdateMock = jest.fn((): { lean: () => Promise<unknown> } => ({
   lean: async () => null,
 }));
