@@ -6,6 +6,7 @@ import { createServer, Server } from 'http';
 import { signToken } from './fixtures/factories.js';
 import { randomUUID } from 'crypto';
 import { generateDataHash } from '../src/shared/utils/crypto.js';
+import { SOCKET_EVENTS } from '../src/shared/types/socketEvents.js';
 import type { Application } from 'express';
 import {
   flushUntilIdle,

@@ -31,7 +31,7 @@ await jest.unstable_mockModule('../src/infra/socket/io.js', () => ({
 
 const { updatePaymentStatusService } = await import('../src/modules/payments/payments.service.js');
 
-describe('updatePaymentStatusService WebSocket emission', () => {
+describe(`updatePaymentStatusService ${SOCKET_EVENTS.SETTLEMENT_STATUS} emission`, () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });

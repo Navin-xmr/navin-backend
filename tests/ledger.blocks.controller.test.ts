@@ -1,4 +1,5 @@
 import { describe, expect, it, jest, beforeEach } from '@jest/globals';
+import type { Request, Response } from 'express';
 import { AppError } from '../src/shared/http/errors.js';
 import { createLedgerBlock } from '../src/modules/ledger/ledger.repo.js';
 
@@ -26,11 +27,11 @@ describe('GET /api/ledger/blocks controller', () => {
   it('passes the validated ledger block id parameter to the service', async () => {
     getLedgerBlockByIdServiceMock.mockResolvedValue({ _id: 'lb1' });
 
-    const req = { params: { id: 'lb1' } } as any;
+    const req = { params: { id: 'lb1' } } as unknown as Request;
     const res = {
       status: jest.fn().mockReturnThis(),
       json: jest.fn(),
-    } as any;
+    } as unknown as Response;
 
     await getLedgerBlockById(req, res);
 
@@ -67,12 +68,12 @@ describe('GET /api/ledger/blocks controller', () => {
 
     const req = {
       query: { limit: '1' },
-    } as any;
+    } as unknown as Request;
 
     const res = {
       status: jest.fn().mockReturnThis(),
       json: jest.fn(),
-    } as any;
+    } as unknown as Response;
 
     await getLedgerBlocks(req, res);
 
@@ -99,12 +100,12 @@ describe('GET /api/ledger/blocks controller', () => {
 
     const req = {
       query: { milestoneEvent: 'SETTLEMENT_COMPLETED', limit: '10' },
-    } as any;
+    } as unknown as Request;
 
     const res = {
       status: jest.fn().mockReturnThis(),
       json: jest.fn(),
-    } as any;
+    } as unknown as Response;
 
     await getLedgerBlocks(req, res);
 
@@ -121,11 +122,11 @@ describe('GET /api/ledger/blocks controller', () => {
       total: 0,
     });
 
-    const req = { query: {} } as any;
+    const req = { query: {} } as unknown as Request;
     const res = {
       status: jest.fn().mockReturnThis(),
       json: jest.fn(),
-    } as any;
+    } as unknown as Response;
 
     await getLedgerBlocks(req, res);
 

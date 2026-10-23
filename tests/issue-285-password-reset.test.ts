@@ -15,8 +15,7 @@ await jest.unstable_mockModule('../src/modules/users/users.model.js', () => {
     findById: (id: string) => {
       const found = users.find(u => u._id === id);
       if (!found) return Promise.resolve(null);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return Promise.resolve({ ...found, save: jest.fn<any>().mockResolvedValue(undefined) });
+      return Promise.resolve({ ...found, save: jest.fn().mockResolvedValue(undefined) });
     },
     _users: users,
   };
@@ -63,8 +62,7 @@ describe('#285 - Password Reset Flow', () => {
 
     it('should return silently for existing email', async () => {
       const usersModule = await import('../src/modules/users/users.model.js');
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (usersModule.UserModel as any)._users.push({
+      (usersModule.UserModel as unknown as { _users: Record<string, unknown>[] })._users.push({
         _id: 'user1',
         email: 'existing@test.com',
         passwordHash: 'hash',
@@ -136,14 +134,12 @@ describe('#285 - Password Reset Flow', () => {
 
     it('should successfully reset password for valid token', async () => {
       const usersModule = await import('../src/modules/users/users.model.js');
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (usersModule.UserModel as any)._users.push({
+      (usersModule.UserModel as unknown as { _users: Record<string, unknown>[] })._users.push({
         _id: 'user2',
         email: 'reset@test.com',
         passwordHash: 'oldhash',
         role: 'VIEWER',
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        save: jest.fn<any>().mockResolvedValue(undefined),
+        save: jest.fn().mockResolvedValue(undefined),
       });
 
       const token = jwt.sign(

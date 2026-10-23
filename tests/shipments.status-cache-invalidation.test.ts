@@ -59,7 +59,7 @@ describe('shipment status cache invalidation', () => {
 
     const { updateShipmentStatusService } = await import('../src/modules/shipments/shipments.service.js');
 
-    const result = await updateShipmentStatusService('shipment-1', 'DELIVERED' as any);
+    const result = await updateShipmentStatusService('shipment-1', 'DELIVERED');
 
     expect(result).toBeTruthy();
     expect(invalidateAnalyticsPerformanceCache).toHaveBeenCalledTimes(1);

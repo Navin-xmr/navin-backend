@@ -6,8 +6,10 @@ import type { Application } from 'express';
 import { env } from '../src/env.js';
 import { UserRole } from '../src/shared/constants/index.js';
 import { DEFAULT_TELEMETRY_THRESHOLDS } from '../src/modules/telemetry/telemetryThreshold.constants.js';
+import { Types } from 'mongoose';
 
-const ORG_ID = 'aaaaaaaaaaaaaaaaaaaaaaaa';
+const ORG_ID = new Types.ObjectId().toString();
+const USER_ID = new Types.ObjectId().toString();
 const thresholdStore: Array<{
   organizationId: string;
   shipmentType: string;

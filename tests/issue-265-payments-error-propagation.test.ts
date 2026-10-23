@@ -1,6 +1,11 @@
 import { jest, describe, it, expect, beforeEach } from '@jest/globals';
 import { createChainAdapterMock, createChainFactoryMock } from './helpers/mocks.js';
 import type { IPayment, PaymentStatus } from '../src/modules/payments/payments.model.js';
+import { Types } from 'mongoose';
+
+const PAYMENT_ID = new Types.ObjectId().toString();
+const SHIPMENT_ID = new Types.ObjectId().toString();
+const ORGANIZATION_ID = new Types.ObjectId().toString();
 
 const mockCreatePayment = jest.fn<(...args: unknown[]) => Promise<IPayment>>();
 
@@ -40,9 +45,9 @@ describe('Issue #265: createPaymentService error handling', () => {
 
   it('creates a payment successfully with valid data', async () => {
     const paymentData = {
-      _id: 'pay-1',
-      shipmentId: 'ship-1',
-      organizationId: 'org-1',
+      _id: PAYMENT_ID,
+      shipmentId: SHIPMENT_ID,
+      organizationId: ORGANIZATION_ID,
       amount: 100,
       token: 'USDC',
       tokenType: 'USDC',
@@ -53,8 +58,8 @@ describe('Issue #265: createPaymentService error handling', () => {
     mockCreatePayment.mockResolvedValue(paymentData as unknown as IPayment);
 
     const result = await createPaymentService({
-      shipmentId: 'ship-1',
-      organizationId: 'org-1',
+      shipmentId: SHIPMENT_ID,
+      organizationId: ORGANIZATION_ID,
       amount: 100,
       token: 'USDC',
       status: 'Pending' as PaymentStatus,
@@ -62,8 +67,8 @@ describe('Issue #265: createPaymentService error handling', () => {
 
     expect(mockCreatePayment).toHaveBeenCalledWith(
       expect.objectContaining({
-        shipmentId: 'ship-1',
-        organizationId: 'org-1',
+        shipmentId: SHIPMENT_ID,
+        organizationId: ORGANIZATION_ID,
         amount: 100,
         token: 'USDC',
       })
@@ -79,7 +84,7 @@ describe('Issue #265: createPaymentService error handling', () => {
     await expect(
       createPaymentService({
         shipmentId: 'invalid',
-        organizationId: 'org-1',
+        organizationId: ORGANIZATION_ID,
         amount: -1,
         token: 'USDC',
         status: 'Pending' as PaymentStatus,
@@ -93,13 +98,13 @@ describe('Issue #265: createPaymentService error handling', () => {
       keyValue: Record<string, unknown>;
     };
     dupError.code = 11000;
-    dupError.keyValue = { shipmentId: 'ship-1' };
+    dupError.keyValue = { shipmentId: SHIPMENT_ID };
     mockCreatePayment.mockRejectedValue(dupError);
 
     await expect(
       createPaymentService({
-        shipmentId: 'ship-1',
-        organizationId: 'org-1',
+        shipmentId: SHIPMENT_ID,
+        organizationId: ORGANIZATION_ID,
         amount: 100,
         token: 'USDC',
         status: 'Pending' as PaymentStatus,
@@ -113,8 +118,8 @@ describe('Issue #265: createPaymentService error handling', () => {
 
     await expect(
       createPaymentService({
-        shipmentId: 'ship-1',
-        organizationId: 'org-1',
+        shipmentId: SHIPMENT_ID,
+        organizationId: ORGANIZATION_ID,
         amount: 100,
         token: 'USDC',
         status: 'Pending' as PaymentStatus,
@@ -128,8 +133,8 @@ describe('Issue #265: createPaymentService error handling', () => {
 
     try {
       await createPaymentService({
-        shipmentId: 'ship-1',
-        organizationId: 'org-1',
+        shipmentId: SHIPMENT_ID,
+        organizationId: ORGANIZATION_ID,
         amount: 100,
         token: 'USDC',
         status: 'Pending' as PaymentStatus,
