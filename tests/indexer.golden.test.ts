@@ -1,16 +1,32 @@
 import { describe, expect, it, jest, beforeEach } from '@jest/globals';
 import fs from 'node:fs';
 import path from 'node:path';
+import {
+  createPaymentModelMock,
+  createSocketIoMock,
+  createTelemetryModelMock,
+} from './helpers/mocks.js';
 import type { ChainAdapter } from '../src/services/chain/types.js';
 import type { ChainEvent } from '../src/shared/types/chain.js';
 
 const ledgerUpdateOneMock = jest.fn();
+const paymentFindMock = jest.fn(() => ({ lean: async () => [] }));
+const telemetryFindMock = jest.fn(() => ({ lean: async () => [] }));
+const paymentModelMock = createPaymentModelMock({ PaymentModel: { find: paymentFindMock } });
+const telemetryModelMock = createTelemetryModelMock({ Telemetry: { find: telemetryFindMock } });
+const socketIoMock = createSocketIoMock();
 
 await jest.unstable_mockModule('../src/modules/ledger/ledger.model.js', () => ({
   LedgerBlock: {
     updateOne: ledgerUpdateOneMock,
   },
 }));
+await jest.unstable_mockModule('../src/modules/payments/payments.model.js', () => paymentModelMock);
+await jest.unstable_mockModule(
+  '../src/modules/telemetry/telemetry.model.js',
+  () => telemetryModelMock
+);
+await jest.unstable_mockModule('../src/infra/socket/io.js', () => socketIoMock);
 
 const { indexStellarTransactions } = await import('../src/workers/stellar-indexer.worker.js');
 
@@ -41,6 +57,9 @@ describe('Event-driven indexer golden fixtures replay', () => {
         for (const ev of events) {
           yield ev;
         }
+      },
+      async getConfirmationCount() {
+        return 3;
       },
     };
 
@@ -135,5 +154,13 @@ describe('Event-driven indexer golden fixtures replay', () => {
       },
       { upsert: true }
     );
+
+    // Only the anchor promotes its hash to the top-level indexed LedgerBlock.dataHash.
+    const [anchorBlock, initBlock, releaseBlock] = ledgerUpdateOneMock.mock.calls.map(
+      ([, update]) => (update as { $set: Record<string, unknown> }).$set
+    );
+    expect(anchorBlock.dataHash).toBe(events[0].data[0]);
+    expect(initBlock).not.toHaveProperty('dataHash');
+    expect(releaseBlock).not.toHaveProperty('dataHash');
   });
 });

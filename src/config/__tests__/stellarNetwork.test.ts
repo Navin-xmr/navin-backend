@@ -1,5 +1,6 @@
 import { describe, it, expect } from '@jest/globals';
-import { resolveStellarUrls } from '../stellarNetwork.js';
+import { Networks } from '@stellar/stellar-sdk';
+import { resolveStellarUrls, stellarNetworkPassphrase } from '../stellarNetwork.js';
 
 describe('resolveStellarUrls', () => {
   it('resolves testnet Horizon/Soroban URLs', () => {
@@ -34,5 +35,12 @@ describe('resolveStellarUrls', () => {
 
   it('throws for an unknown network', () => {
     expect(() => resolveStellarUrls('devnet')).toThrow(/Unknown STELLAR_NETWORK "devnet"/);
+  });
+});
+
+describe('stellarNetworkPassphrase', () => {
+  it('maps each network to its SDK passphrase', () => {
+    expect(stellarNetworkPassphrase('testnet')).toBe(Networks.TESTNET);
+    expect(stellarNetworkPassphrase('public')).toBe(Networks.PUBLIC);
   });
 });

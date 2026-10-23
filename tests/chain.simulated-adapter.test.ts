@@ -1,17 +1,13 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
-import { Account, Keypair, Networks, StrKey } from '@stellar/stellar-sdk';
+import { Account, Keypair, Networks } from '@stellar/stellar-sdk';
 import type { Transaction } from '@stellar/stellar-sdk';
 
-import {
-  SIMULATED_CONTRACT_ID,
-  SimulatedAdapter,
-  toTokenizeAnchorInput,
-} from '../src/services/chain/simulated.adapter.js';
-import type { HorizonClient, HorizonTxRecord } from '../src/services/chain/simulated.adapter.js';
+import { SimulatedAdapter } from '../src/services/chain/simulated.adapter.js';
 import { AppError, ErrorCodes } from '../src/shared/http/errors.js';
 import { ChainEventSchema } from '../src/shared/types/chain.js';
 import type { ChainEvent } from '../src/shared/types/chain.js';
 import { generateDataHash } from '../src/shared/utils/crypto.js';
+import type { HorizonTransactionRecordMock, SimulatedHorizonClientMock } from './helpers/mocks.js';
 
 const signer = Keypair.random();
 const PASSPHRASE = Networks.TESTNET;
@@ -23,7 +19,7 @@ const HASH_B = generateDataHash({ reading: 'b' });
 /** In-memory Horizon: records every submitted tx so streamEvents can replay it. */
 function createFakeHorizon() {
   const submitted: Transaction[] = [];
-  const records: HorizonTxRecord[] = [];
+  const records: HorizonTransactionRecordMock[] = [];
   let ledger = 1000;
 
   const client = {
@@ -45,7 +41,7 @@ function createFakeHorizon() {
       const start = cursor ? records.findIndex(r => r.paging_token === cursor) + 1 : 0;
       return records.slice(start, start + limit);
     }),
-  } satisfies HorizonClient;
+  } satisfies SimulatedHorizonClientMock;
 
   return { client, submitted, records };
 }
@@ -114,13 +110,16 @@ describe('SimulatedAdapter', () => {
     };
 
     it('anchors a deterministic hash of the tokenized fields', async () => {
-      const input = toTokenizeAnchorInput(shipment, signer.publicKey());
+      const input = {
+        shipment_id: shipment.shipmentId,
+        data_hash: generateDataHash(shipment),
+        actor: signer.publicKey(),
+      };
       expect(input).toEqual({
         shipment_id: SHIPMENT_ID,
         data_hash: generateDataHash(shipment),
         actor: signer.publicKey(),
       });
-      expect(toTokenizeAnchorInput({ ...shipment }, signer.publicKey())).toEqual(input);
 
       const result = await adapter.anchorEvent(input);
       expect(result.simulated).toBe(true);
@@ -208,11 +207,12 @@ describe('SimulatedAdapter', () => {
       for (const e of events) expect(ChainEventSchema.safeParse(e).success).toBe(true);
       expect(events[0]).toMatchObject({
         id: horizon.records[0]!.paging_token,
-        contract_id: SIMULATED_CONTRACT_ID,
         tx_hash: horizon.records[0]!.hash,
         ledger: 1001,
         data: [HASH_A, 1001],
       });
+      expect(StrKey.isValidContract(events[0]!.contract_id)).toBe(true);
+      expect(StrKey.decodeContract(events[0]!.contract_id).equals(Buffer.alloc(32))).toBe(true);
     });
 
     it('resumes strictly after the cursor', async () => {
@@ -250,10 +250,5 @@ describe('SimulatedAdapter', () => {
         code: ErrorCodes.CHAIN_UNKNOWN,
       });
     });
-  });
-
-  it('uses the all-zero contract strkey as the simulated contract id', () => {
-    expect(StrKey.isValidContract(SIMULATED_CONTRACT_ID)).toBe(true);
-    expect(StrKey.decodeContract(SIMULATED_CONTRACT_ID).equals(Buffer.alloc(32))).toBe(true);
   });
 });

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { createHmac } from 'crypto';
 import request from 'supertest';
 import type { Application } from 'express';
+import { createChainFactoryMock } from './helpers/mocks.js';
 
 const STELLAR_WEBHOOK_SECRET = 'test-stellar-webhook-secret-key';
 
@@ -40,12 +41,9 @@ describe('POST /api/webhooks/stellar', () => {
       handleStellarWebhookEvent: mockHandleStellarWebhookEvent,
     }));
 
-    await jest.unstable_mockModule('../src/services/stellar.service.js', () => ({
-      tokenizeShipment: jest.fn(),
-      anchorTelemetryHash: jest.fn(),
-      releaseEscrow: jest.fn(),
-      getStellarExplorerUrl: jest.fn(() => 'https://stellar.expert/explorer/testnet/tx/mock'),
-    }));
+    await jest.unstable_mockModule('../src/services/chain/factory.js', () =>
+      createChainFactoryMock()
+    );
 
     await jest.unstable_mockModule('../src/infra/socket/io.js', () => ({
       initSocketIO: jest.fn(),

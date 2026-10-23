@@ -1,4 +1,5 @@
 import { jest, describe, it, expect, beforeEach } from '@jest/globals';
+import { createChainFactoryMock } from './helpers/mocks.js';
 
 await jest.unstable_mockModule('../src/modules/shipments/shipments.model.js', () => ({
   Shipment: {
@@ -47,10 +48,7 @@ await jest.unstable_mockModule('../src/infra/socket/io.js', () => ({
   emitPaymentStatusChange: jest.fn(),
 }));
 
-await jest.unstable_mockModule('../src/services/stellar.service.js', () => ({
-  tokenizeShipment: jest.fn(),
-  releaseEscrow: jest.fn(),
-}));
+await jest.unstable_mockModule('../src/services/chain/factory.js', () => createChainFactoryMock());
 
 await jest.unstable_mockModule('../src/modules/ledger/ledger.service.js', () => ({
   createLedgerBlockService: jest.fn(),
@@ -81,7 +79,7 @@ describe('Issue #267: No ...filters spread into MongoDB query', () => {
     ShipmentMock.countDocuments.mockResolvedValue(0);
   });
 
-  it('passes organizationId explicitly when provided in filters', async () => {
+  it('matches organizationId against shipment ownership fields', async () => {
     await getShipmentsService({
       page: 1,
       limit: 20,
@@ -89,7 +87,13 @@ describe('Issue #267: No ...filters spread into MongoDB query', () => {
     });
 
     expect(ShipmentMock.find).toHaveBeenCalledWith(
-      expect.objectContaining({ organizationId: 'org-123' })
+      expect.objectContaining({
+        $or: [
+          { enterpriseId: 'org-123' },
+          { logisticsId: 'org-123' },
+          { organizationId: 'org-123' },
+        ],
+      })
     );
   });
 
@@ -107,7 +111,11 @@ describe('Issue #267: No ...filters spread into MongoDB query', () => {
     const query = ShipmentMock.find.mock.calls[0][0] as Record<string, unknown>;
     expect(query).not.toHaveProperty('maliciousField');
     expect(query).not.toHaveProperty('anotherDangerous');
-    expect(query).toHaveProperty('organizationId', 'org-123');
+    expect(query.$or).toEqual([
+      { enterpriseId: 'org-123' },
+      { logisticsId: 'org-123' },
+      { organizationId: 'org-123' },
+    ]);
   });
 
   it('builds an empty query when filters is empty', async () => {
@@ -132,7 +140,11 @@ describe('Issue #267: No ...filters spread into MongoDB query', () => {
     });
 
     const query = ShipmentMock.find.mock.calls[0][0] as Record<string, unknown>;
-    expect(query.organizationId).toBe('org-456');
+    expect(query.$or).toEqual([
+      { enterpriseId: 'org-456' },
+      { logisticsId: 'org-456' },
+      { organizationId: 'org-456' },
+    ]);
     expect(query.status).toBe('CREATED');
     expect(query.origin).toEqual({ $regex: 'Warehouse A', $options: 'i' });
     expect(query.destination).toEqual({ $regex: 'Store B', $options: 'i' });

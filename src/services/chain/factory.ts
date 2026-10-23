@@ -12,20 +12,32 @@
 import { Keypair } from '@stellar/stellar-sdk';
 
 import { config } from '../../config/index.js';
+import { stellarNetworkPassphrase } from '../../config/stellarNetwork.js';
 import { AppError, ErrorCodes } from '../../shared/http/errors.js';
 
 import { SimulatedAdapter } from './simulated.adapter.js';
 import { SorobanAdapter } from './soroban.adapter.js';
+import type { SorobanAdapterOptions } from './soroban.adapter.js';
 import type { ChainAdapter } from './types.js';
 
 export type ChainAdapterKind = typeof config.chainAdapter;
+
+/** RPC endpoint, contract, signer and network for the live adapter — all from config. */
+function sorobanOptionsFromConfig(): SorobanAdapterOptions {
+  return {
+    sorobanRpcUrl: config.sorobanRpcUrl,
+    contractId: config.escrowContractId,
+    secretKey: config.stellarSecretKey,
+    networkPassphrase: stellarNetworkPassphrase(config.stellarNetwork),
+  };
+}
 
 export function createChainAdapter(kind: ChainAdapterKind = config.chainAdapter): ChainAdapter {
   switch (kind) {
     case 'simulated':
       return new SimulatedAdapter();
     case 'soroban':
-      return new SorobanAdapter();
+      return new SorobanAdapter(sorobanOptionsFromConfig());
     default: {
       const unsupported: never = kind;
       throw new AppError(

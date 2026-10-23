@@ -1,3 +1,5 @@
+import { Networks } from '@stellar/stellar-sdk';
+
 export type StellarNetwork = 'testnet' | 'public';
 
 export interface StellarNetworkUrls {
@@ -15,6 +17,16 @@ const STELLAR_NETWORK_DEFAULTS: Record<StellarNetwork, StellarNetworkUrls> = {
     sorobanRpcUrl: 'https://mainnet.sorobanrpc.com',
   },
 };
+
+const STELLAR_NETWORK_PASSPHRASES: Record<StellarNetwork, string> = {
+  testnet: Networks.TESTNET,
+  public: Networks.PUBLIC,
+};
+
+/** Passphrase that transactions on `network` must be signed against. */
+export function stellarNetworkPassphrase(network: StellarNetwork): string {
+  return STELLAR_NETWORK_PASSPHRASES[network];
+}
 
 /**
  * Resolves the Horizon and Soroban RPC URLs for a Stellar network.

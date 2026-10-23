@@ -5,10 +5,10 @@ import {
   nativeToScVal,
   TransactionBuilder,
   Keypair,
-  Networks,
   BASE_FEE,
 } from '@stellar/stellar-sdk';
 import { config } from '../../config/index.js';
+import { stellarNetworkPassphrase } from '../../config/stellarNetwork.js';
 import { AppError, ErrorCodes } from '../../shared/http/errors.js';
 import {
   Bytes32HexSchema,
@@ -45,8 +45,7 @@ export class SorobanAdapter implements ChainAdapter {
     this.contractId = options.contractId ?? config.escrowContractId ?? '';
     this.secretKey = options.secretKey ?? config.stellarSecretKey;
     this.networkPassphrase =
-      options.networkPassphrase ??
-      (config.stellarNetwork === 'public' ? Networks.PUBLIC : Networks.TESTNET);
+      options.networkPassphrase ?? stellarNetworkPassphrase(config.stellarNetwork);
   }
 
   private signer(): Keypair {
@@ -141,6 +140,17 @@ export class SorobanAdapter implements ChainAdapter {
     } catch (err) {
       if (err instanceof AppError) throw err;
       throw new AppError(502, 'Failed to fetch Soroban events', ErrorCodes.CHAIN_UNKNOWN, {
+        cause: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  async getConfirmationCount(ledger: number): Promise<number> {
+    try {
+      const latest = await this.server.getLatestLedger();
+      return Math.max(0, latest.sequence - ledger);
+    } catch (err) {
+      throw new AppError(502, 'Failed to fetch latest Soroban ledger', ErrorCodes.CHAIN_UNKNOWN, {
         cause: err instanceof Error ? err.message : String(err),
       });
     }

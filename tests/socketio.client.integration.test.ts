@@ -1,4 +1,5 @@
 import { describe, expect, beforeAll, afterAll, it, jest } from '@jest/globals';
+import { createChainFactoryMock } from './helpers/mocks.js';
 import { io, Socket } from 'socket.io-client';
 import request from 'supertest';
 import { createServer, Server } from 'http';
@@ -68,14 +69,12 @@ describe('Socket.io Client Integration Tests', () => {
   const dataHash = generateDataHash(telemetryBody);
   const anchoredTxHash = 'mock-tx-hash';
 
-  const mockAnchorTelemetryHash = jest.fn<() => Promise<{ stellarTxHash: string }>>();
   const mockTelemetryCreate = jest.fn<() => Promise<TelemetryCreateResult>>();
   const mockValidateApiKey = jest.fn<() => Promise<ValidateApiKeyResult>>();
 
   beforeAll(async () => {
     jest.clearAllMocks();
 
-    mockAnchorTelemetryHash.mockResolvedValue({ stellarTxHash: anchoredTxHash });
     mockTelemetryCreate.mockResolvedValue({
       _id: 't1',
       shipmentId: telemetryBody.shipmentId,
@@ -111,12 +110,9 @@ describe('Socket.io Client Integration Tests', () => {
       },
     }));
 
-    await jest.unstable_mockModule('../src/services/stellar.service.js', () => ({
-      tokenizeShipment: jest.fn(),
-      anchorTelemetryHash: mockAnchorTelemetryHash,
-      releaseEscrow: jest.fn(),
-      getStellarExplorerUrl: jest.fn(() => 'https://stellar.expert/explorer/testnet/tx/mock'),
-    }));
+    await jest.unstable_mockModule('../src/services/chain/factory.js', () =>
+      createChainFactoryMock()
+    );
 
     await jest.unstable_mockModule('../src/modules/auth/apiKey.service.js', () => ({
       validateApiKey: mockValidateApiKey,
@@ -206,6 +202,7 @@ describe('Socket.io Client Integration Tests', () => {
         () => reject(new Error('Socket client did not connect within 10 s')),
         10_000
       );
+      timer.unref();
       socketClient.on('connect', () => {
         clearTimeout(timer);
         resolve();
@@ -219,6 +216,12 @@ describe('Socket.io Client Integration Tests', () => {
 
   afterAll(async () => {
     await teardownSocketSuite({ socketClient, httpServer });
+    try {
+      const { disconnectRedis } = await import('../src/infra/redis/connection.js');
+      await disconnectRedis();
+    } catch {
+      // Ignore
+    }
   });
 
   describe('HTTP-to-WebSocket Pipeline', () => {

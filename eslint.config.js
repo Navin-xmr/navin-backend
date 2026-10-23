@@ -70,6 +70,27 @@ export default [
       'no-console': 'off',
     },
   },
+  // P9-14 / #925: suites must drive the ChainAdapter port instead of reaching into
+  // the deprecated stellar.service internals. Keep `tests/stellar.service.test.ts`
+  // as the single suite that knowingly tests that module directly.
+  {
+    files: ['tests/**/*.ts'],
+    ignores: ['tests/stellar.service.test.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['**/services/stellar.service.js', '**/services/stellar.service'],
+              message:
+                'Mock the ChainAdapter port (src/services/chain) instead of importing stellar.service directly.',
+            },
+          ],
+        },
+      ],
+    },
+  },
   {
     ignores: ['dist', 'node_modules', 'coverage', 'migrations'],
   },

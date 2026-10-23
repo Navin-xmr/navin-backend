@@ -13,6 +13,8 @@ import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 
 describe('sms-otp.service smoke test', () => {
   beforeEach(() => {
+    jest.resetModules();
+
     // Ensure Twilio env vars are absent so the dev/test branch is taken.
     delete process.env.TWILIO_SID;
     delete process.env.TWILIO_TOKEN;
@@ -30,9 +32,8 @@ describe('sms-otp.service smoke test', () => {
       })),
     }));
 
-    const { sendOtpService, verifyOtpService } = await import(
-      '../src/modules/notifications/sms-otp.service.js'
-    );
+    const { sendOtpService, verifyOtpService } =
+      await import('../src/modules/notifications/sms-otp.service.js');
 
     expect(typeof sendOtpService).toBe('function');
     expect(typeof verifyOtpService).toBe('function');
@@ -51,11 +52,9 @@ describe('sms-otp.service smoke test', () => {
       })),
     }));
 
-    const { sendOtpService } = await import(
-      '../src/modules/notifications/sms-otp.service.js'
-    );
+    const { sendOtpService } = await import('../src/modules/notifications/sms-otp.service.js');
 
-    // Should complete without throwing – dev/test path logs the OTP instead of
+    // Should complete without throwing ï¿½ dev/test path logs the OTP instead of
     // calling Twilio, so no network request is made.
     await expect(sendOtpService('user123', '+10000000000')).resolves.toBeUndefined();
 

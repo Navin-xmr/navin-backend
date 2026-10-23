@@ -92,9 +92,7 @@ const chainFactory = createChainFactoryMock(chainAdapter);
 await jest.unstable_mockModule('../src/services/chain/factory.js', () => chainFactory);
 
 const { createShipmentService } = await import('../src/modules/shipments/shipments.service.js');
-const { buildCanonicalShipmentPayload, generateDataHash } = await import(
-  '../src/shared/utils/crypto.js'
-);
+const { generateDataHash } = await import('../src/shared/utils/crypto.js');
 
 const input = {
   trackingNumber: 'NVN-123456',
@@ -118,19 +116,14 @@ describe('createShipmentService — ChainAdapter anchoring (P8-07)', () => {
     const shipment = (await createShipmentService(input)) as unknown as ShipmentDocMock;
     const shipmentId = shipment._id.toString();
 
-    const expectedHash = generateDataHash(
-      buildCanonicalShipmentPayload({
-        shipmentId,
-        event: 'CREATED',
-        actor: input.actorUserId,
-        timestamp: CREATED_AT,
-        metadata: {
-          trackingNumber: input.trackingNumber,
-          origin: input.origin,
-          destination: input.destination,
-        },
-      })
-    );
+    // data_hash inputs mirror createShipmentService on main: the persisted
+    // record's identity fields (no canonical envelope at creation time).
+    const expectedHash = generateDataHash({
+      shipmentId,
+      trackingNumber: input.trackingNumber,
+      origin: input.origin,
+      destination: input.destination,
+    });
 
     expect(chainFactory.getChainAdapter).toHaveBeenCalled();
     expect(chainAdapter.anchorEvent).toHaveBeenCalledTimes(1);
@@ -140,7 +133,8 @@ describe('createShipmentService — ChainAdapter anchoring (P8-07)', () => {
       actor: ACTOR_ADDRESS,
     });
     expect(shipment.stellarTxHash).toBe(txHash);
-    expect(shipment.stellarTokenId).toBe(`stellar:${shipmentId}:${txHash.slice(0, 8)}`);
+    // main's implementation records only the tx hash (no stellarTokenId).
+    expect(shipment.stellarTokenId).toBeUndefined();
     expect(saveMock).toHaveBeenCalledTimes(2);
   });
 

@@ -1,7 +1,7 @@
 import { Shipment } from './shipments.model.js';
 import type { FilterQuery, SortOrder } from 'mongoose';
-import { getChainActorAddress, getChainAdapter } from '../../services/chain/factory.js';
-import type { EscrowResult } from '../../services/chain/types.js';
+import { getChainAdapter, getChainActorAddress } from '../../services/chain/factory.js';
+import type { AnchorEventInput, EscrowResult } from '../../services/chain/types.js';
 import { generateDataHash, buildCanonicalShipmentPayload } from '../../shared/utils/crypto.js';
 import { uploadFileToStorage } from '../../services/storage/upload.js';
 import {
@@ -256,7 +256,11 @@ export const getShipmentsService = async (params: {
   const query: FilterQuery<unknown> = {};
 
   if (filters.organizationId) {
-    query.organizationId = filters.organizationId;
+    query.$or = [
+      { enterpriseId: filters.organizationId },
+      { logisticsId: filters.organizationId },
+      { organizationId: filters.organizationId },
+    ];
   }
 
   if (status) {
@@ -520,31 +524,23 @@ export const createShipmentService = async (data: {
   const shipment = new Shipment({ ...shipmentData, trackingNumber });
   await shipment.save();
 
-  const shipmentId = shipment._id.toString();
   try {
-    // Hash inputs come from the persisted record (incl. createdAt) so the
-    // anchored dataHash can be recomputed from the shipment alone.
-    const canonical = buildCanonicalShipmentPayload({
-      shipmentId,
-      event: MilestoneEvent.CREATED,
-      actor: actorUserId,
-      timestamp: shipment.createdAt,
-      metadata: {
+    const actor = getChainActorAddress();
+    const anchorInput: AnchorEventInput = {
+      shipment_id: shipment._id.toString(),
+      data_hash: generateDataHash({
+        shipmentId: shipment._id.toString(),
         trackingNumber: shipment.trackingNumber,
         origin: shipment.origin,
         destination: shipment.destination,
-      },
-    });
-    const { txHash } = await getChainAdapter().anchorEvent({
-      shipment_id: shipmentId,
-      data_hash: generateDataHash(canonical),
-      actor: getChainActorAddress(),
-    });
-    shipment.stellarTokenId = `stellar:${shipmentId}:${txHash.slice(0, 8)}`;
-    shipment.stellarTxHash = txHash;
+      }),
+      actor,
+    };
+    const receipt = await getChainAdapter().anchorEvent(anchorInput);
+    shipment.stellarTxHash = receipt.txHash;
     await shipment.save();
   } catch (err) {
-    logger.warn({ err, shipmentId }, 'Shipment creation anchoring skipped');
+    logger.warn({ err, shipmentId: shipment._id.toString() }, 'Chain tokenization skipped');
   }
 
   auditLog({
@@ -656,11 +652,11 @@ export const updateShipmentStatusService = async (
     });
     await createLedgerBlockService({
       shipmentId: id,
-      eventType: status as unknown as MilestoneEvent,
+      milestoneEvent: status as unknown as MilestoneEvent,
       actor: actor?.userId,
+      canonicalPayload: canonical,
       metadata: { previousStatus, simulated: true },
       dataHash: generateDataHash(canonical),
-      canonicalPayload: canonical,
     });
   } catch (ledgerErr) {
     logger.warn(
@@ -694,11 +690,11 @@ export const updateShipmentStatusService = async (
           });
           await createLedgerBlockService({
             shipmentId: id,
-            eventType: MilestoneEvent.SETTLEMENT_INITIATED,
+            milestoneEvent: MilestoneEvent.SETTLEMENT_INITIATED,
             transactionHash: released.txHash,
             dataHash: generateDataHash(canonical),
-            canonicalPayload: canonical,
             actor: actor?.userId,
+            canonicalPayload: canonical,
             metadata: {
               paymentId: payment._id.toString(),
               simulated: released.simulated,

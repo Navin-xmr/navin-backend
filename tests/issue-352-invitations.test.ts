@@ -1,19 +1,13 @@
 import { jest, describe, it, expect, beforeEach, beforeAll } from '@jest/globals';
 import jwt from 'jsonwebtoken';
+import { createEmailServiceMock } from './helpers/mocks.js';
 
 // Mock data
 const invitations: Record<string, unknown>[] = [];
 const users: Record<string, unknown>[] = [];
 const organizations: Record<string, unknown>[] = [];
 
-// Mock sendEmail
-const mockSendEmail = jest.fn().mockResolvedValue(undefined);
-
-await jest.unstable_mockModule('../src/services/email.service.js', () => ({
-  sendEmail: mockSendEmail,
-  invitationEmailHtml: (link: string, name?: string) =>
-    `<html>Invite: ${link} from ${name}</html>`,
-}));
+await jest.unstable_mockModule('../src/services/email.service.js', () => createEmailServiceMock());
 
 await jest.unstable_mockModule('../src/modules/users/users.model.js', () => {
   const UserModel = {

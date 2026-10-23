@@ -1,4 +1,5 @@
 import { describe, expect, beforeEach, it, jest } from '@jest/globals';
+import { createChainFactoryMock } from './helpers/mocks.js';
 import request from 'supertest';
 import { generateDataHash } from '../src/shared/utils/crypto.js';
 import type { Application } from 'express';
@@ -35,7 +36,6 @@ type ShipmentUpdateResult = {
 
 describe('Real-time Socket.io Events', () => {
   let app: Application;
-  const mockAnchorTelemetryHash = jest.fn<() => Promise<{ stellarTxHash: string }>>();
   const mockTelemetryCreate = jest.fn<() => Promise<TelemetryCreateResult>>();
   const mockValidateApiKey = jest.fn<() => Promise<ValidateApiKeyResult>>();
   const mockEmitTelemetryUpdate = jest.fn();
@@ -61,7 +61,6 @@ describe('Real-time Socket.io Events', () => {
 
     const dataHash = generateDataHash(telemetryBody);
 
-    mockAnchorTelemetryHash.mockResolvedValue({ stellarTxHash: 'mock-tx-hash' });
     mockTelemetryCreate.mockResolvedValue({
       _id: 't1',
       shipmentId: telemetryBody.shipmentId,
@@ -114,12 +113,9 @@ describe('Real-time Socket.io Events', () => {
       },
     }));
 
-    await jest.unstable_mockModule('../src/services/stellar.service.js', () => ({
-      tokenizeShipment: jest.fn(),
-      anchorTelemetryHash: mockAnchorTelemetryHash,
-      releaseEscrow: jest.fn(),
-      getStellarExplorerUrl: jest.fn(() => 'https://stellar.expert/explorer/testnet/tx/mock'),
-    }));
+    await jest.unstable_mockModule('../src/services/chain/factory.js', () =>
+      createChainFactoryMock()
+    );
 
     await jest.unstable_mockModule('../src/modules/auth/apiKey.service.js', () => ({
       validateApiKey: mockValidateApiKey,

@@ -38,7 +38,7 @@ In `src/services/stellar.service.ts:157–160`, `releaseEscrow` catches any subm
 
 ### Event Indexing & Confirmation Tracking
 
-A background BullMQ worker (`src/workers/stellar-indexer.worker.ts:112–132`) runs on a 30-second interval (`STELLAR_INDEXER_JOB`). It calls `indexStellarTransactions`, polling Horizon account operations to verify on-chain confirmations and update settlement records in MongoDB.
+A background BullMQ worker (`src/workers/stellar-indexer.worker.ts`) runs on a 30-second interval (`STELLAR_INDEXER_JOB`). It calls `indexStellarTransactions`, tracks transaction confirmation counts, and verifies anchored telemetry and released settlements after three ledgers; simulated-chain confirmations are immediate.
 
 ### Why this is a fallback
 
@@ -511,3 +511,37 @@ export async function verifyLedgerBlock(
 - Never log `STELLAR_SECRET_KEY` or raw contract signing payloads.
 - Keep response envelopes unchanged; expose new on-chain fields only under
   documented shipment / payment / settlement schemas in `docs/swagger.yaml`.
+
+---
+
+## Acceptance scripts
+
+Two runnable acceptance/demo scripts live under `scripts/acceptance/` and exercise the
+full Hash-and-Emit lifecycle:
+
+- `scripts/acceptance/run-simulated.mjs` — runs against `SimulatedAdapter`
+  (`SOROBAN_ADAPTER=simulated`, the default). No Soroban RPC or contract is needed.
+- `scripts/acceptance/run-soroban.mjs` — runs against `SorobanAdapter`
+  (`SOROBAN_ADAPTER=soroban`). Requires `SOROBAN_RPC_URL` and `ESCROW_CONTRACT_ID`
+  plus a live Soroban RPC for the on-chain anchor step; that step is best-effort
+  and skipped when the network is unavailable.
+
+Each script prints every step and exits non-zero if
+`sha256(canonicalPayload) !== dataHash` (the client-side verification check).
+
+### Run
+
+```bash
+# Simulated adapter (works offline; chain anchor skipped without network)
+SOROBAN_ADAPTER=simulated node scripts/acceptance/run-simulated.mjs
+
+# Soroban adapter (needs SOROBAN_RPC_URL + ESCROW_CONTRACT_ID for a real anchor)
+SOROBAN_ADAPTER=soroban node scripts/acceptance/run-soroban.mjs
+```
+
+Each script bootstraps an in-memory MongoDB (or uses `MONGO_URI` when set),
+builds the Express app, seeds an ADMIN user, creates a shipment, advances it to
+`DELIVERED` (which writes a ledger block whose `dataHash = sha256(canonicalPayload)`),
+attempts an on-chain anchor via the selected `ChainAdapter`, runs the indexer,
+fetches `GET /api/ledger/blocks/:id/verification`, recomputes
+`sha256(canonicalPayload)`, and compares it to `dataHash`.

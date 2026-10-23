@@ -2,6 +2,7 @@ import { describe, expect, beforeEach, it, jest } from '@jest/globals';
 import request from 'supertest';
 import { signToken } from './fixtures/factories.js';
 import type { Application } from 'express';
+import { createEmailServiceMock } from './helpers/mocks.js';
 
 type UserRecord = { _id: string; email: string; organizationId: string; role: string };
 
@@ -69,6 +70,7 @@ describe('GET /api/users', () => {
       findUserById: jest.fn(),
       findUsersByOrganizationId,
     }));
+    jest.unstable_mockModule('../src/services/email.service.js', () => createEmailServiceMock());
 
     const appModule = await import('../src/app.js');
     app = appModule.buildApp();
