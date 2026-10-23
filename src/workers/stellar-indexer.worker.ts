@@ -13,6 +13,7 @@ import { MilestoneEvent } from '../shared/types/shipment.js';
 import { CHAIN_EVENT_NAMES } from '../shared/types/chain.js';
 import type { ChainAdapter } from '../services/chain/types.js';
 import { getChainAdapter } from '../services/chain/factory.js';
+import { confirmAnchoredTelemetry } from '../modules/telemetry/telemetry.confirmation.js';
 import { logger } from '../shared/logger/logger.js';
 
 export const STELLAR_INDEXER_QUEUE = 'stellar_indexer_queue';
@@ -270,8 +271,27 @@ export async function indexStellarTransactions(
 }
 
 async function processIndexerJob(_job: Job): Promise<IndexerSummary> {
-  const summary = await indexStellarTransactions();
+  const adapter = getChainAdapter();
+  const summary = await indexStellarTransactions(adapter);
   logger.info(summary, 'Stellar indexer event stream cycle complete');
+
+  // Confirmation tracking for anchored telemetry (#818). Runs after indexing and
+  // never fails the indexer cycle.
+  if (
+    typeof adapter.getLatestLedger === 'function' &&
+    typeof adapter.getTransactionLedger === 'function'
+  ) {
+    try {
+      const confirmation = await confirmAnchoredTelemetry({
+        getLatestLedger: () => adapter.getLatestLedger!(),
+        getTransactionLedger: txHash => adapter.getTransactionLedger!(txHash),
+      });
+      logger.info(confirmation, 'Telemetry confirmation cycle complete');
+    } catch (err) {
+      logger.error({ err }, 'Telemetry confirmation cycle failed');
+    }
+  }
+
   return summary;
 }
 
