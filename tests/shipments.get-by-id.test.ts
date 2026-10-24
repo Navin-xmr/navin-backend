@@ -1,6 +1,6 @@
 import { jest, describe, beforeAll, beforeEach, it, expect } from '@jest/globals';
 import request from 'supertest';
-import { signToken } from './fixtures/factories.js';
+import { createMockUser, signToken } from './fixtures/factories.js';
 import { randomUUID } from 'crypto';
 import type { Application } from 'express';
 import { env } from '../src/env.js';
@@ -21,6 +21,7 @@ const shipmentsData: ShipmentRecord[] = [];
 const ORG_A = 'aaaaaaaaaaaaaaaaaaaaaaaa';
 const ORG_B = 'bbbbbbbbbbbbbbbbbbbbbbbb';
 const SHIPMENT_ID = 'cccccccccccccccccccccccc';
+const USER_ID = createMockUser()._id;
 
 await jest.unstable_mockModule('../src/modules/shipments/shipments.model.js', () => {
   const ShipmentStatus = {
@@ -82,7 +83,7 @@ await jest.unstable_mockModule('../src/infra/socket/io.js', () => ({
 const { buildApp } = await import('../src/app.js');
 
 function tokenFor(role: string, organizationId: string) {
-  return signToken({ userId: 'user-1', role, organizationId, jti: randomUUID() }, { expiresIn: '1h' });
+  return signToken({ userId: USER_ID, role, organizationId, jti: randomUUID() }, { expiresIn: '1h' });
 }
 
 describe('GET /api/shipments/:id', () => {

@@ -2,7 +2,14 @@ import { jest, describe, beforeAll, beforeEach, it, expect } from '@jest/globals
 import request from 'supertest';
 import { fileURLToPath } from 'node:url';
 import type { Application } from 'express';
-import { signToken } from './fixtures/factories.js';
+import { Types } from 'mongoose';
+import { createMockOrganization, createMockUser, signToken } from './fixtures/factories.js';
+
+const USER_ID = createMockUser()._id;
+const VIEWER_USER_ID = createMockUser()._id;
+const ORG_ID = createMockOrganization()._id;
+const ENTERPRISE_ID = createMockOrganization()._id;
+const LOGISTICS_ID = createMockOrganization()._id;
 
 type PrimitiveId = string | number;
 type ShipmentRecord = {
@@ -38,7 +45,7 @@ await jest.unstable_mockModule('../src/modules/shipments/shipments.model.js', ()
   } as unknown as ShipmentCtor;
 
   ShipmentConstructor.create = (doc) => {
-    const d = { ...doc, _id: String(shipmentsData.length) };
+    const d = { ...doc, _id: new Types.ObjectId().toString() };
     shipmentsData.push(d as ShipmentRecord);
     return Promise.resolve(d);
   };
@@ -69,7 +76,7 @@ describe('POST /api/shipments/:id/proof', () => {
   beforeAll(async () => {
     const appModule = await import('../src/app.js');
     app = appModule.buildApp();
-    authToken = signToken({ userId: 'user-1', role: 'MANAGER', organizationId: 'org-1' });
+    authToken = signToken({ userId: USER_ID, role: 'MANAGER', organizationId: ORG_ID });
   });
 
   beforeEach(() => {
@@ -82,8 +89,8 @@ describe('POST /api/shipments/:id/proof', () => {
       trackingNumber: 'TN-PROOF',
       origin: 'A',
       destination: 'B',
-      enterpriseId: 'ent1',
-      logisticsId: 'log1',
+      enterpriseId: ENTERPRISE_ID,
+      logisticsId: LOGISTICS_ID,
       status: 'CREATED',
     });
 
@@ -106,8 +113,8 @@ describe('POST /api/shipments/:id/proof', () => {
       trackingNumber: 'TN-PROOF-NOTE',
       origin: 'A',
       destination: 'B',
-      enterpriseId: 'ent1',
-      logisticsId: 'log1',
+      enterpriseId: ENTERPRISE_ID,
+      logisticsId: LOGISTICS_ID,
       status: 'CREATED',
     });
 
@@ -129,8 +136,8 @@ describe('POST /api/shipments/:id/proof', () => {
       trackingNumber: 'TN-NO-FILE',
       origin: 'A',
       destination: 'B',
-      enterpriseId: 'ent1',
-      logisticsId: 'log1',
+      enterpriseId: ENTERPRISE_ID,
+      logisticsId: LOGISTICS_ID,
       status: 'CREATED',
     });
 
@@ -149,8 +156,8 @@ describe('POST /api/shipments/:id/proof', () => {
       trackingNumber: 'TN-401',
       origin: 'A',
       destination: 'B',
-      enterpriseId: 'ent1',
-      logisticsId: 'log1',
+      enterpriseId: ENTERPRISE_ID,
+      logisticsId: LOGISTICS_ID,
       status: 'CREATED',
     });
 
@@ -166,12 +173,12 @@ describe('POST /api/shipments/:id/proof', () => {
       trackingNumber: 'TN-403',
       origin: 'A',
       destination: 'B',
-      enterpriseId: 'ent1',
-      logisticsId: 'log1',
+      enterpriseId: ENTERPRISE_ID,
+      logisticsId: LOGISTICS_ID,
       status: 'CREATED',
     });
 
-    const viewerToken = signToken({ userId: 'user-viewer', role: 'VIEWER', organizationId: 'org-1' });
+    const viewerToken = signToken({ userId: VIEWER_USER_ID, role: 'VIEWER', organizationId: ORG_ID });
 
     const res = await request(app)
       .post(`/api/shipments/${shipment._id}/proof`)
