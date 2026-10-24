@@ -15,6 +15,8 @@ import { createEmailServiceMock } from '../../../../tests/helpers/mocks.js';
 const mockFindUserByEmail = jest.fn();
 const mockFindUserById = jest.fn();
 
+jest.resetModules();
+
 jest.unstable_mockModule('../users.repo.js', () => ({
   findUserByEmail: mockFindUserByEmail,
   findUserById: mockFindUserById,
