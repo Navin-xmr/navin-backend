@@ -8,7 +8,9 @@ import {
 import type { ChainAdapter } from '../src/services/chain/types.js';
 import { CHAIN_EVENT_NAMES } from '../src/shared/types/chain.js';
 import type { ChainEvent } from '../src/shared/types/chain.js';
-import { createMockPayment, createMockShipment } from './fixtures/factories.js';
+import { createMockPayment, createMockShipment, createMockTelemetry } from './fixtures/factories.js';
+import { TelemetryAnchorStatus } from '../src/shared/types/telemetry.js';
+import type { ITelemetry } from '../src/shared/types/telemetry.js';
 
 const ledgerUpdateOneMock = jest.fn();
 const paymentFindOneAndUpdateMock = jest.fn((): { lean: () => Promise<unknown> } => ({
@@ -41,6 +43,8 @@ const telemetryModelMock = createTelemetryModelMock({
 const socketIoMock = createSocketIoMock({
   emitPaymentStatusChange: emitPaymentStatusChangeMock,
 });
+
+jest.resetModules();
 
 await jest.unstable_mockModule('../src/modules/ledger/ledger.model.js', () => ({
   LedgerBlock: {
@@ -202,7 +206,7 @@ describe('stellar indexer worker - event driven', () => {
       ledger: 100,
       ledger_closed_at: '2026-09-27T10:00:00Z',
       name: 'anchor',
-      topic: ['anchor', 'ship-1'],
+      topic: ['anchor', createMockShipment()._id],
       data: ['a'.repeat(64), 100],
     };
 
@@ -219,7 +223,7 @@ describe('stellar indexer worker - event driven', () => {
     expect(telemetryFindOneAndUpdateMock).not.toHaveBeenCalled();
 
     telemetryFindOneAndUpdateMock.mockImplementationOnce(() => ({
-      lean: async () => ({ _id: { toString: () => 'telemetry-1' } }),
+      lean: async () => ({ _id: { toString: () => createMockTelemetry()._id } }),
     }));
     await indexStellarTransactions(makeAdapter([anchorEvent], 3));
     expect(telemetryFindOneAndUpdateMock).toHaveBeenCalledWith(
@@ -271,5 +275,176 @@ describe('stellar indexer worker - event driven', () => {
         txHash: releaseEvent.tx_hash,
       })
     );
+  });
+describe('telemetry anchor VERIFIED transition upon confirmation (#972)', () => {
+    let telemetryStore: Array<ITelemetry & { stellarTxLedger?: number }>;
+
+    beforeEach(() => {
+      telemetryStore = [];
+
+      telemetryUpdateOneMock.mockImplementation(
+        async (
+          filter: { stellarTxHash?: string; anchorStatus?: string },
+          update: { $set?: Record<string, unknown> }
+        ) => {
+          let modifiedCount = 0;
+          for (const doc of telemetryStore) {
+            if (
+              doc.stellarTxHash === filter.stellarTxHash &&
+              doc.anchorStatus === filter.anchorStatus
+            ) {
+              Object.assign(doc, update.$set);
+              modifiedCount += 1;
+            }
+          }
+          return { matchedCount: modifiedCount, modifiedCount };
+        }
+      );
+
+      telemetryFindOneAndUpdateMock.mockImplementation(
+        (
+          filter: { stellarTxHash?: string; anchorStatus?: string },
+          update: { $set?: Record<string, unknown> }
+        ) => ({
+          lean: async () => {
+            const match = telemetryStore.find(
+              doc =>
+                doc.stellarTxHash === filter.stellarTxHash &&
+                doc.anchorStatus === filter.anchorStatus
+            );
+            if (!match) return null;
+            Object.assign(match, update.$set);
+            return { ...match };
+          },
+        })
+      );
+
+      telemetryFindMock.mockImplementation(
+        (filter?: { anchorStatus?: string }) => ({
+          lean: async () =>
+            telemetryStore
+              .filter(
+                doc =>
+                  (!filter?.anchorStatus || doc.anchorStatus === filter.anchorStatus) &&
+                  typeof doc.stellarTxLedger === 'number' &&
+                  doc.verified !== true
+              )
+              .map(doc => ({ ...doc })),
+        })
+      );
+    });
+
+    it('transitions ANCHORED telemetry with matching stellarTxHash to VERIFIED and leaves unmatched records untouched', async () => {
+      const shipment = createMockShipment();
+      const matchedTxHash = 'aa'.repeat(32);
+      const unmatchedTxHash = 'bb'.repeat(32);
+
+      const matchedTelemetry = createMockTelemetry({
+        shipmentId: shipment._id,
+        stellarTxHash: matchedTxHash,
+        anchorStatus: TelemetryAnchorStatus.ANCHORED,
+        verified: false,
+      });
+      const differentHashTelemetry = createMockTelemetry({
+        shipmentId: shipment._id,
+        stellarTxHash: unmatchedTxHash,
+        anchorStatus: TelemetryAnchorStatus.ANCHORED,
+        verified: false,
+      });
+      const pendingStatusTelemetry = createMockTelemetry({
+        shipmentId: shipment._id,
+        stellarTxHash: matchedTxHash,
+        anchorStatus: TelemetryAnchorStatus.PENDING,
+        verified: false,
+      });
+
+      telemetryStore.push(matchedTelemetry, differentHashTelemetry, pendingStatusTelemetry);
+
+      const anchorEvent: ChainEvent = {
+        id: 'evt-anchor-verified',
+        contract_id: CONTRACT_ID,
+        tx_hash: matchedTxHash,
+        ledger: 120,
+        ledger_closed_at: '2026-09-27T10:05:00Z',
+        name: CHAIN_EVENT_NAMES.ANCHOR,
+        topic: [CHAIN_EVENT_NAMES.ANCHOR, shipment._id],
+        data: ['b'.repeat(64), 120],
+      };
+
+      await indexStellarTransactions(makeAdapter([anchorEvent], 3));
+
+      expect(matchedTelemetry.anchorStatus).toBe(TelemetryAnchorStatus.VERIFIED);
+      expect(matchedTelemetry.verified).toBe(true);
+      expect(matchedTelemetry.stellarTxLedger).toBe(120);
+      expect(matchedTelemetry.confirmationMetadata).toEqual(
+        expect.objectContaining({
+          ledger: 120,
+          confirmations: 3,
+          verified: true,
+        })
+      );
+
+      expect(differentHashTelemetry.anchorStatus).toBe(TelemetryAnchorStatus.ANCHORED);
+      expect(differentHashTelemetry.verified).toBe(false);
+      expect(differentHashTelemetry.confirmationMetadata).toBeUndefined();
+
+      expect(pendingStatusTelemetry.anchorStatus).toBe(TelemetryAnchorStatus.PENDING);
+      expect(pendingStatusTelemetry.verified).toBe(false);
+      expect(pendingStatusTelemetry.confirmationMetadata).toBeUndefined();
+    });
+
+    it('transitions pending ANCHORED telemetry to VERIFIED on a subsequent confirmation pass without modifying unmatched records', async () => {
+      const shipment = createMockShipment();
+      const targetTxHash = 'cc'.repeat(32);
+      const otherTxHash = 'dd'.repeat(32);
+
+      const targetTelemetry = createMockTelemetry({
+        shipmentId: shipment._id,
+        stellarTxHash: targetTxHash,
+        anchorStatus: TelemetryAnchorStatus.ANCHORED,
+        verified: false,
+      });
+      const unmatchedTelemetry = createMockTelemetry({
+        shipmentId: shipment._id,
+        stellarTxHash: otherTxHash,
+        anchorStatus: TelemetryAnchorStatus.ANCHORED,
+        verified: false,
+      });
+
+      telemetryStore.push(targetTelemetry, unmatchedTelemetry);
+
+      const anchorEvent: ChainEvent = {
+        id: 'evt-anchor-pending',
+        contract_id: CONTRACT_ID,
+        tx_hash: targetTxHash,
+        ledger: 150,
+        ledger_closed_at: '2026-09-27T10:10:00Z',
+        name: CHAIN_EVENT_NAMES.ANCHOR,
+        topic: [CHAIN_EVENT_NAMES.ANCHOR, shipment._id],
+        data: ['c'.repeat(64), 150],
+      };
+
+      // First run: only 1 confirmation -> stays ANCHORED with ledger recorded
+      await indexStellarTransactions(makeAdapter([anchorEvent], 1));
+      expect(targetTelemetry.anchorStatus).toBe(TelemetryAnchorStatus.ANCHORED);
+      expect(targetTelemetry.verified).toBe(false);
+      expect(targetTelemetry.stellarTxLedger).toBe(150);
+
+      // Second run: confirmations reach 4 -> pending ANCHORED record transitions to VERIFIED
+      await indexStellarTransactions(makeAdapter([], 4));
+      expect(targetTelemetry.anchorStatus).toBe(TelemetryAnchorStatus.VERIFIED);
+      expect(targetTelemetry.verified).toBe(true);
+      expect(targetTelemetry.confirmationMetadata).toEqual(
+        expect.objectContaining({
+          ledger: 150,
+          confirmations: 4,
+          verified: true,
+        })
+      );
+
+      // Unmatched record without a confirmed ledger remains ANCHORED
+      expect(unmatchedTelemetry.anchorStatus).toBe(TelemetryAnchorStatus.ANCHORED);
+      expect(unmatchedTelemetry.verified).toBe(false);
+    });
   });
 });
