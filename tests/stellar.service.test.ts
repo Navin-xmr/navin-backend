@@ -20,6 +20,8 @@ const mockFromSecret = jest.fn();
 const mockManageData = jest.fn();
 const mockMemoHash = jest.fn();
 
+jest.resetModules();
+
 await jest.unstable_mockModule('@stellar/stellar-sdk', () => ({
   Horizon: {
     Server: jest.fn().mockImplementation((url?: string) => ({

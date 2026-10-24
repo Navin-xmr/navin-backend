@@ -42,6 +42,8 @@ const socketIoMock = createSocketIoMock({
   emitPaymentStatusChange: emitPaymentStatusChangeMock,
 });
 
+jest.resetModules();
+
 await jest.unstable_mockModule('../src/modules/ledger/ledger.model.js', () => ({
   LedgerBlock: {
     updateOne: ledgerUpdateOneMock,
