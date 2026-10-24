@@ -33,6 +33,8 @@ const telemetryModelMock = createTelemetryModelMock({
 });
 const socketIoMock = createSocketIoMock();
 
+jest.resetModules();
+
 await jest.unstable_mockModule('../src/modules/ledger/ledger.model.js', () => ({
   LedgerBlock: {
     updateOne: ledgerUpdateOneMock,
