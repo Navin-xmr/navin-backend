@@ -1,5 +1,11 @@
 import request from 'supertest';
-import { signToken } from './fixtures/factories.js';
+import {
+  createMockOrganization,
+  createMockPayment,
+  createMockShipment,
+  createMockUser,
+  signToken,
+} from './fixtures/factories.js';
 import { Types } from 'mongoose';
 
 import { buildApp } from '../src/app.js';
@@ -7,8 +13,15 @@ import { AuditLog } from '../src/modules/audit-logs/auditLogs.model.js';
 
 const app = buildApp();
 
-function makeToken(role: string, userId = 'user-000000000000000000000001'): string {
-  return signToken({ userId, role, organizationId: 'org-1' });
+const DEFAULT_USER_ID = createMockUser()._id;
+const ORG_ID = createMockOrganization()._id;
+const SHIPMENT_ID = createMockShipment()._id;
+const INVITED_USER_ID = createMockUser()._id;
+const ANOMALY_ID = new Types.ObjectId().toString();
+const PAYMENT_ID = createMockPayment()._id;
+
+function makeToken(role: string, userId = DEFAULT_USER_ID): string {
+  return signToken({ userId, role, organizationId: ORG_ID });
 }
 
 afterEach(async () => {
@@ -26,35 +39,35 @@ async function seedLogs() {
       userId,
       action: 'SHIPMENT_CREATED',
       resource: 'SHIPMENT',
-      resourceId: 'ship-1',
+      resourceId: SHIPMENT_ID,
       timestamp: new Date(base.getTime() + 1_000),
     },
     {
       userId,
       action: 'USER_INVITED',
       resource: 'USER',
-      resourceId: 'user-1',
+      resourceId: INVITED_USER_ID,
       timestamp: new Date(base.getTime() + 2_000),
     },
     {
       userId,
       action: 'ANOMALY_DETECTED',
       resource: 'ANOMALY',
-      resourceId: 'anomaly-1',
+      resourceId: ANOMALY_ID,
       timestamp: new Date(base.getTime() + 3_000),
     },
     {
       userId,
       action: 'PROOF_UPLOADED',
       resource: 'SHIPMENT',
-      resourceId: 'ship-1',
+      resourceId: SHIPMENT_ID,
       timestamp: new Date(base.getTime() + 4_000),
     },
     {
       userId,
       action: 'SETTLEMENT_RELEASED',
       resource: 'PAYMENT',
-      resourceId: 'pay-1',
+      resourceId: PAYMENT_ID,
       timestamp: new Date(base.getTime() + 5_000),
     },
   ]);

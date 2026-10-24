@@ -12,6 +12,11 @@
 import bcrypt from 'bcrypt';
 import { jest, describe, it, expect, beforeEach } from '@jest/globals';
 import { randomBytes } from 'crypto';
+import { createMockOrganization, createMockUser } from './fixtures/factories.js';
+
+const USER_ID = createMockUser()._id;
+const ORG_ID = createMockOrganization()._id;
+const ADMIN_ID = createMockUser()._id;
 
 // ---------------------------------------------------------------------------
 // Shared mock factories
@@ -19,11 +24,11 @@ import { randomBytes } from 'crypto';
 
 function makeUserDoc(overrides: Record<string, unknown> = {}) {
   return {
-    _id: { toString: () => 'user-id-123' },
+    _id: { toString: () => USER_ID },
     email: 'test@example.com',
     name: 'Test User',
     role: 'VIEWER',
-    organizationId: { toString: () => 'org-id-1' },
+    organizationId: { toString: () => ORG_ID },
     ...overrides,
   };
 }
@@ -87,7 +92,7 @@ describe('Password hashing — signup flow', () => {
       email: 'test@example.com',
       name: 'Test User',
       password: 'plaintext123',
-      organizationId: 'org-id-1',
+      organizationId: ORG_ID,
     });
 
     // Must be a bcrypt hash — not the original plaintext
@@ -127,7 +132,7 @@ describe('Password hashing — signup flow', () => {
       email: 'user2@example.com',
       name: 'Another User',
       password: 'mySecurePass!',
-      organizationId: 'org-id-1',
+      organizationId: ORG_ID,
     });
 
     const isValid = await bcrypt.compare('mySecurePass!', capturedPasswordHash);
@@ -153,7 +158,7 @@ describe('Password hashing — signup flow', () => {
     const { signup } = await import('../src/modules/auth/auth.service.js');
 
     await expect(
-      signup({ email: 'taken@example.com', name: 'X', password: 'pass', organizationId: 'org-1' }),
+      signup({ email: 'taken@example.com', name: 'X', password: 'pass', organizationId: ORG_ID }),
     ).rejects.toThrow('Email already in use');
   });
 });
@@ -195,9 +200,9 @@ describe('Password hashing — invitation acceptance flow', () => {
     const invitation = await service.generateInvitationLink({
       email: 'invited@example.com',
       role: 'VIEWER',
-      inviterUserId: 'admin-1',
+      inviterUserId: ADMIN_ID,
       inviterRole: 'ADMIN',
-      organizationId: 'org-id-1',
+      organizationId: ORG_ID,
     });
 
     await service.acceptInvitation({
@@ -241,8 +246,8 @@ describe('Password hashing — invitation acceptance flow', () => {
         type: 'USER_INVITATION',
         email: 'invited@example.com',
         role: 'VIEWER',
-        organizationId: 'org-1',
-        invitedBy: 'admin-1',
+        organizationId: ORG_ID,
+        invitedBy: ADMIN_ID,
       },
       env.JWT_SECRET,
       { expiresIn: 3600 },
@@ -310,7 +315,7 @@ describe('Password hashing — team member creation flow', () => {
     await service.createTeamMember({
       email: 'member@example.com',
       name: 'Team Member',
-      callerOrganizationId: 'org-id-1',
+      callerOrganizationId: ORG_ID,
     });
 
     const capturedPasswordHash = capturedDoc['passwordHash'] as string;
@@ -351,7 +356,7 @@ describe('Password hashing — team member creation flow', () => {
       service.createTeamMember({
         email: 'taken@example.com',
         name: 'Dup',
-        callerOrganizationId: 'org-id-1',
+        callerOrganizationId: ORG_ID,
       }),
     ).rejects.toMatchObject({ statusCode: 409, message: 'Email already in use' });
   });

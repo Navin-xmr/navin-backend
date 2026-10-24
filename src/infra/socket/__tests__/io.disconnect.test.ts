@@ -1,5 +1,12 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
+import { Types } from 'mongoose';
 import type { Socket } from 'socket.io';
+
+const USER_ID_1 = new Types.ObjectId().toString();
+const USER_ID_2 = new Types.ObjectId().toString();
+const USER_ID_3 = new Types.ObjectId().toString();
+const USER_ID_4 = new Types.ObjectId().toString();
+const SHIPMENT_ID = new Types.ObjectId().toString();
 
 // Minimal fake socket factory
 function makeSocket(
@@ -131,18 +138,18 @@ describe('io.ts — disconnect cleanup handlers', () => {
       const { activeUsers, simulateConnection } = await setupWithMockedServer();
       const socket = makeSocket({
         id: 'sock-1' as unknown as string,
-        user: { userId: 'user-1', role: 'admin', jti: 'mock-jti' },
+        user: { userId: USER_ID_1, role: 'admin', jti: 'mock-jti' },
       });
       (socket as unknown as { id: string }).id = 'sock-1';
 
       simulateConnection(socket);
 
-      expect(activeUsers.get('sock-1')).toBe('user-1');
+      expect(activeUsers.get('sock-1')).toBe(USER_ID_1);
     });
 
     it('removes userId from activeUsers on disconnect', async () => {
       const { activeUsers, simulateConnection } = await setupWithMockedServer();
-      const socket = makeSocket({ user: { userId: 'user-2', role: 'user', jti: 'mock-jti' } });
+      const socket = makeSocket({ user: { userId: USER_ID_2, role: 'user', jti: 'mock-jti' } });
       (socket as unknown as { id: string }).id = 'sock-2';
 
       simulateConnection(socket);
@@ -165,8 +172,8 @@ describe('io.ts — disconnect cleanup handlers', () => {
     it('handles multiple sockets independently', async () => {
       const { activeUsers, simulateConnection } = await setupWithMockedServer();
 
-      const s1 = makeSocket({ user: { userId: 'u1', role: 'admin', jti: 'mock-jti' } });
-      const s2 = makeSocket({ user: { userId: 'u2', role: 'user', jti: 'mock-jti' } });
+      const s1 = makeSocket({ user: { userId: USER_ID_1, role: 'admin', jti: 'mock-jti' } });
+      const s2 = makeSocket({ user: { userId: USER_ID_2, role: 'user', jti: 'mock-jti' } });
       (s1 as unknown as { id: string }).id = 'sock-a';
       (s2 as unknown as { id: string }).id = 'sock-b';
 
@@ -184,7 +191,7 @@ describe('io.ts — disconnect cleanup handlers', () => {
 
     it('disconnect is idempotent — double-disconnect does not throw', async () => {
       const { activeUsers, simulateConnection } = await setupWithMockedServer();
-      const socket = makeSocket({ user: { userId: 'u3', role: 'user', jti: 'mock-jti' } });
+      const socket = makeSocket({ user: { userId: USER_ID_3, role: 'user', jti: 'mock-jti' } });
       (socket as unknown as { id: string }).id = 'sock-c';
 
       simulateConnection(socket);
@@ -198,9 +205,9 @@ describe('io.ts — disconnect cleanup handlers', () => {
     it('logs rooms before they are cleared', async () => {
       const consoleSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
 
-      const socket = makeSocket({ user: { userId: 'u4', role: 'user', jti: 'mock-jti' } });
+      const socket = makeSocket({ user: { userId: USER_ID_4, role: 'user', jti: 'mock-jti' } });
       (socket as unknown as { id: string }).id = 'sock-d';
-      (socket as unknown as { rooms: Set<string> }).rooms = new Set(['sock-d', 'shipment_abc']);
+      (socket as unknown as { rooms: Set<string> }).rooms = new Set(['sock-d', `shipment_${SHIPMENT_ID}`]);
 
       // Simulate the disconnecting handler directly
       socket.on('disconnecting', (reason: unknown) => {
@@ -212,7 +219,7 @@ describe('io.ts — disconnect cleanup handlers', () => {
       socket.trigger('disconnecting', 'transport close');
 
       expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('[Socket] Disconnecting:'));
-      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('shipment_abc'));
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining(`shipment_${SHIPMENT_ID}`));
 
       consoleSpy.mockRestore();
     });
