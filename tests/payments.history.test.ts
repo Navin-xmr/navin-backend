@@ -15,6 +15,8 @@ const getPaymentsByOrganizationMock =
   jest.fn<(orgId: string, filters?: unknown) => Promise<unknown>>();
 const getPaymentByIdMock = jest.fn<(id: string) => Promise<unknown>>();
 
+jest.resetModules();
+
 await jest.unstable_mockModule('../src/modules/payments/payments.repo.js', () => ({
   getPaymentsByOrganization: getPaymentsByOrganizationMock,
   getPaymentById: getPaymentByIdMock,

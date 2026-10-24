@@ -36,6 +36,7 @@ describe('settlement:status socket event', () => {
   const OTHER_SHIPMENT_ID = '671000000000000000000098';
 
   beforeAll(async () => {
+    jest.resetModules();
     await jest.unstable_mockModule('../src/modules/shipments/shipments.model.js', () => ({
       Shipment: {
         findById: jest.fn(() => ({

@@ -22,6 +22,8 @@ type ShipmentRecord = {
 
 const shipmentsData: ShipmentRecord[] = [];
 
+jest.resetModules();
+
 await jest.unstable_mockModule('../src/modules/shipments/shipments.model.js', () => {
   const ShipmentConstructor = {
     new(doc: Record<string, unknown>) {

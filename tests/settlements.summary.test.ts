@@ -23,6 +23,8 @@ const redisSet = jest.fn(async (key: string, value: string) => {
   return 'OK';
 });
 
+jest.resetModules();
+
 await jest.unstable_mockModule('../src/infra/redis/connection.js', () => ({
   getRedisClient: jest.fn(() => ({ get: redisGet, set: redisSet })),
   getRedisConnection: jest.fn(),

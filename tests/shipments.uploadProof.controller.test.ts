@@ -42,6 +42,8 @@ const mockShipmentsServiceExports = {
 // local stub is what previously left `ErrorCodes` unexported and broke ESM
 // linking of shipments.controller.js.
 
+jest.resetModules();
+
 await jest.unstable_mockModule('../src/shared/http/sendResponse.js', () => ({
   sendResponse: mockSendResponse,
 }));

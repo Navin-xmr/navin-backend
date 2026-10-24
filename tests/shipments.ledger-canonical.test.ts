@@ -36,6 +36,8 @@ const invalidateShipmentEtaCacheMock = jest.fn<() => Promise<void>>();
 
 // ─── Module mocks ─────────────────────────────────────────────────────────────
 
+jest.resetModules();
+
 await jest.unstable_mockModule('../src/modules/shipments/shipments.model.js', () => ({
   Shipment: {
     findById: shipmentFindByIdMock,

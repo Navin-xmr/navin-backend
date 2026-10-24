@@ -22,6 +22,8 @@ const ORG_A = 'aaaaaaaaaaaaaaaaaaaaaaaa';
 const ORG_B = 'bbbbbbbbbbbbbbbbbbbbbbbb';
 const SHIPMENT_ID = 'cccccccccccccccccccccccc';
 
+jest.resetModules();
+
 await jest.unstable_mockModule('../src/modules/shipments/shipments.model.js', () => {
   const ShipmentStatus = {
     CREATED: 'CREATED',

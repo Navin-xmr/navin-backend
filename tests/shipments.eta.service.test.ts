@@ -35,6 +35,8 @@ const mockWriteShipmentEtaCache = jest.fn<
 >();
 const mockInvalidateShipmentEtaCache = jest.fn<(shipmentId: string) => Promise<void>>();
 
+jest.resetModules();
+
 await jest.unstable_mockModule('../src/modules/shipments/shipments.model.js', () => ({
   Shipment: {
     findById: mockShipmentFindById,
