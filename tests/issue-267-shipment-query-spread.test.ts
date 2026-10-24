@@ -1,5 +1,9 @@
 import { jest, describe, it, expect, beforeEach } from '@jest/globals';
 import { createChainFactoryMock } from './helpers/mocks.js';
+import { createMockOrganization } from './fixtures/factories.js';
+
+const ORG_ID_1 = createMockOrganization()._id;
+const ORG_ID_2 = createMockOrganization()._id;
 
 await jest.unstable_mockModule('../src/modules/shipments/shipments.model.js', () => ({
   Shipment: {
@@ -83,15 +87,15 @@ describe('Issue #267: No ...filters spread into MongoDB query', () => {
     await getShipmentsService({
       page: 1,
       limit: 20,
-      filters: { organizationId: 'org-123' },
+      filters: { organizationId: ORG_ID_1 },
     });
 
     expect(ShipmentMock.find).toHaveBeenCalledWith(
       expect.objectContaining({
         $or: [
-          { enterpriseId: 'org-123' },
-          { logisticsId: 'org-123' },
-          { organizationId: 'org-123' },
+          { enterpriseId: ORG_ID_1 },
+          { logisticsId: ORG_ID_1 },
+          { organizationId: ORG_ID_1 },
         ],
       })
     );
@@ -102,7 +106,7 @@ describe('Issue #267: No ...filters spread into MongoDB query', () => {
       page: 1,
       limit: 20,
       filters: {
-        organizationId: 'org-123',
+        organizationId: ORG_ID_1,
         maliciousField: { $gt: '' },
         anotherDangerous: true,
       },
@@ -112,9 +116,9 @@ describe('Issue #267: No ...filters spread into MongoDB query', () => {
     expect(query).not.toHaveProperty('maliciousField');
     expect(query).not.toHaveProperty('anotherDangerous');
     expect(query.$or).toEqual([
-      { enterpriseId: 'org-123' },
-      { logisticsId: 'org-123' },
-      { organizationId: 'org-123' },
+      { enterpriseId: ORG_ID_1 },
+      { logisticsId: ORG_ID_1 },
+      { organizationId: ORG_ID_1 },
     ]);
   });
 
@@ -136,14 +140,14 @@ describe('Issue #267: No ...filters spread into MongoDB query', () => {
       destination: 'Store B',
       page: 1,
       limit: 20,
-      filters: { organizationId: 'org-456' },
+      filters: { organizationId: ORG_ID_2 },
     });
 
     const query = ShipmentMock.find.mock.calls[0][0] as Record<string, unknown>;
     expect(query.$or).toEqual([
-      { enterpriseId: 'org-456' },
-      { logisticsId: 'org-456' },
-      { organizationId: 'org-456' },
+      { enterpriseId: ORG_ID_2 },
+      { logisticsId: ORG_ID_2 },
+      { organizationId: ORG_ID_2 },
     ]);
     expect(query.status).toBe('CREATED');
     expect(query.origin).toEqual({ $regex: 'Warehouse A', $options: 'i' });

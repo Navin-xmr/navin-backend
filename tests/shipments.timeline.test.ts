@@ -1,6 +1,7 @@
 import { jest, describe, beforeAll, beforeEach, it, expect } from '@jest/globals';
 import request from 'supertest';
-import { signToken } from './fixtures/factories.js';
+import { Types } from 'mongoose';
+import { createMockTelemetry, createMockUser, signToken } from './fixtures/factories.js';
 import { randomUUID } from 'crypto';
 import type { Application } from 'express';
 import { env } from '../src/env.js';
@@ -8,6 +9,9 @@ import { UserRole } from '../src/shared/constants/index.js';
 
 const ORG_A = 'aaaaaaaaaaaaaaaaaaaaaaaa';
 const SHIPMENT_ID = 'cccccccccccccccccccccccc';
+const USER_ID = createMockUser()._id;
+const TELEMETRY_ID = createMockTelemetry()._id;
+const ANOMALY_ID = new Types.ObjectId().toString();
 
 type ShipmentRecord = {
   _id: string;
@@ -110,7 +114,7 @@ await jest.unstable_mockModule('../src/infra/socket/io.js', () => ({
 const { buildApp } = await import('../src/app.js');
 
 function tokenFor(role: string) {
-  return signToken({ userId: 'user-1', role, organizationId: ORG_A, jti: randomUUID() }, { expiresIn: '1h' });
+  return signToken({ userId: USER_ID, role, organizationId: ORG_A, jti: randomUUID() }, { expiresIn: '1h' });
 }
 
 describe('GET /api/shipments/:id/timeline', () => {
@@ -151,7 +155,7 @@ describe('GET /api/shipments/:id/timeline', () => {
     });
 
     telemetryData.push({
-      _id: 'tel1',
+      _id: TELEMETRY_ID,
       shipmentId: SHIPMENT_ID,
       anchorStatus: 'ANCHORED',
       timestamp: new Date('2026-01-03T10:00:00.000Z'),
@@ -160,7 +164,7 @@ describe('GET /api/shipments/:id/timeline', () => {
     });
 
     anomalyData.push({
-      _id: 'an1',
+      _id: ANOMALY_ID,
       shipmentId: SHIPMENT_ID,
       type: 'BATTERY_LOW',
       severity: 'MEDIUM',
