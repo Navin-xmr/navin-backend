@@ -5,6 +5,8 @@ import type { Application } from 'express';
 
 const mockRegisterUser = jest.fn<(...args: unknown[]) => Promise<unknown>>();
 
+jest.resetModules();
+
 await jest.unstable_mockModule('../src/modules/users/users.service.js', () => ({
   registerUser: mockRegisterUser,
 }));

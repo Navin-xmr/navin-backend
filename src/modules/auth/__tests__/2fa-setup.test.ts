@@ -28,6 +28,8 @@ type UserDocLean = {
 const mockFindById = jest.fn();
 const mockFindByIdAndUpdate = jest.fn();
 
+jest.resetModules();
+
 jest.unstable_mockModule('../../../modules/users/users.model.js', () => ({
   UserModel: {
     findById: mockFindById,
