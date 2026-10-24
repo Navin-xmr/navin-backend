@@ -26,6 +26,8 @@ const shipmentStore: Array<{
   offChainMetadata?: Record<string, unknown>;
 }> = [];
 
+jest.resetModules();
+
 await jest.unstable_mockModule('../src/infra/redis/tokenBlocklist.js', () => ({
   isTokenBlocked: jest.fn(() => Promise.resolve(false)),
   blockToken: jest.fn(),
