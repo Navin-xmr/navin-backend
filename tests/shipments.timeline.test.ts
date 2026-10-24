@@ -32,6 +32,8 @@ const shipmentsData: ShipmentRecord[] = [];
 const telemetryData: Array<Record<string, unknown>> = [];
 const anomalyData: Array<Record<string, unknown>> = [];
 
+jest.resetModules();
+
 await jest.unstable_mockModule('../src/infra/redis/tokenBlocklist.js', () => ({
   isTokenBlocked: jest.fn(() => Promise.resolve(false)),
   blockToken: jest.fn(),
