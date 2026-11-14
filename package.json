@@ -3,9 +3,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/main.ts",
-    "build": "tsc -p tsconfig.json",
-    "start": "node dist/src/main.js",
+    "dev": "node init && tsx watch src/main.ts",
+    "build": "node init && tsc -p tsconfig.json",
+    "start": "node init && node dist/src/main.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "check:deps": "node scripts/check-undeclared-deps.js",
     "lint": "eslint src --ext .ts",
