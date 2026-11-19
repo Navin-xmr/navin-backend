@@ -26,6 +26,21 @@ export type AnchorEventInput = AnchorArgs;
 /** Input for `release_escrow(payment_id, proof_hash)` — spec-validated shape. */
 export type ReleaseEscrowInput = ReleaseEscrowArgs;
 
+/**
+ * Optional identity of the logical event being submitted (#1078). When given,
+ * the adapter derives a deterministic idempotency key from
+ * (shipment_id, event_type, event_counter): a repeat of the same event returns
+ * the original receipt instead of submitting again, and a retry after a
+ * timeout first checks chain state for the earlier attempt.
+ */
+export interface ChainSubmitOptions {
+  eventType: string;
+  /** Per-shipment, per-event-type counter; the same event must reuse the same value. */
+  eventCounter: number;
+  /** Needed for `releaseEscrow`, whose input carries a payment ID, not a shipment ID. */
+  shipmentId?: string;
+}
+
 /** Confirmed on-chain transaction. */
 export interface ChainTxReceipt {
   /** 64-char lowercase hex transaction hash. */
@@ -50,13 +65,13 @@ export interface ChainAdapter {
    * Anchor a payload hash for a shipment.
    * @throws {AppError} `ChainErrorCode` on rejection (e.g. ERR_CHAIN_ALREADY_ANCHORED).
    */
-  anchorEvent(input: AnchorEventInput): Promise<AnchorResult>;
+  anchorEvent(input: AnchorEventInput, options?: ChainSubmitOptions): Promise<AnchorResult>;
 
   /**
    * Release escrowed funds against a delivery proof hash.
    * @throws {AppError} `ChainErrorCode` on rejection (e.g. ERR_CHAIN_ESCROW_NOT_FOUND).
    */
-  releaseEscrow(input: ReleaseEscrowInput): Promise<EscrowResult>;
+  releaseEscrow(input: ReleaseEscrowInput, options?: ChainSubmitOptions): Promise<EscrowResult>;
 
   /**
    * Spec-validated contract events in ledger order, resuming strictly after

@@ -6,6 +6,11 @@
  * in env.ts.
  */
 import { z } from 'zod';
+import {
+  CHAIN_PREFLIGHT_CHECKS,
+  DEFAULT_CHAIN_PREFLIGHT_CHECKS,
+  parseChainPreflightChecks,
+} from './config/chainPreflight.js';
 
 const EnvShape = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -74,6 +79,35 @@ const EnvShape = z.object({
   SOROBAN_ADAPTER: z.enum(['simulated', 'soroban']).default('simulated'),
   SOROBAN_RPC_URL: z.string().url('SOROBAN_RPC_URL must be a valid URL').optional(),
   ESCROW_CONTRACT_ID: z.string().min(1).optional(),
+
+  // Chain preflight (#1081): read-only checks run before a submission is signed.
+  // Off by default because they call contract view functions the deployed contract may
+  // not expose yet. CHAIN_PREFLIGHT_CHECKS picks a subset of:
+  //   initialized, roles, whitelist, suspension, token_decimals
+  CHAIN_PREFLIGHT_ENABLED: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform(value => value === 'true'),
+  CHAIN_PREFLIGHT_CHECKS: z
+    .string()
+    .trim()
+    .default(DEFAULT_CHAIN_PREFLIGHT_CHECKS)
+    .transform((value, ctx) => {
+      const { checks, unknown } = parseChainPreflightChecks(value);
+      if (unknown.length > 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `CHAIN_PREFLIGHT_CHECKS has unknown checks: ${unknown.join(', ')}. Allowed: ${CHAIN_PREFLIGHT_CHECKS.join(', ')}`,
+        });
+        return z.NEVER;
+      }
+      return checks;
+    }),
+
+  // Submission retry (#1078): bounded attempts with exponential backoff for timeouts.
+  CHAIN_SUBMIT_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(10).default(3),
+  CHAIN_SUBMIT_BACKOFF_MS: z.coerce.number().int().min(0).max(60_000).default(500),
+  CHAIN_SUBMIT_BACKOFF_MAX_MS: z.coerce.number().int().min(0).max(300_000).default(8_000),
 
   // Observability
   SENTRY_DSN: z.string().url('SENTRY_DSN must be a valid URL').optional(),

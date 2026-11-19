@@ -52,6 +52,26 @@ Validated at ingress by `parseChainEvent()`; mismatch → `AppError(502, ERR_CHA
 
 Decoded via `chainErrorToAppError()`.
 
+### Submission reliability (`SorobanAdapter`, #1078)
+
+- **Retry:** a submission that is not confirmed within the polling window fails with `ERR_CHAIN_SUBMISSION_TIMEOUT` and is retried up to `CHAIN_SUBMIT_MAX_ATTEMPTS` times (default 3) with exponential backoff from `CHAIN_SUBMIT_BACKOFF_MS` (default 500 ms), capped at `CHAIN_SUBMIT_BACKOFF_MAX_MS`, with jitter. Contract rejections and validation errors are never retried.
+- **Duplicate detection:** before every retry the adapter asks the chain whether any earlier attempt's transaction confirmed (`getTransactionLedger`). If one did, its receipt is returned and nothing is sent again. A contract rejection of `AlreadyAnchored` / `EscrowAlreadyReleased` after a timeout gets the same check. If the earlier attempt cannot be verified, the call fails rather than risk a duplicate.
+- **Idempotency key:** pass `ChainSubmitOptions { eventType, eventCounter, shipmentId? }` as the second argument of `anchorEvent` / `releaseEscrow`. The key is `sha256(JSON([shipment_id, event_type, event_counter]))` (`buildIdempotencyKey`). A repeat of a completed event returns the original receipt without touching the chain, and a concurrent repeat joins the in-flight call. The record is in memory and per process (bounded to 1000 entries), so after a restart the on-chain duplicate check is what protects you. `releaseEscrow` takes `shipmentId` in the options because its input carries a payment id only. Callers that pass no options get retry but no key-based deduplication.
+
+### Preflight checks (`SorobanAdapter`, #1081)
+
+Off by default. With `CHAIN_PREFLIGHT_ENABLED=true`, read-only checks run before a transaction is signed, in this order, each selectable through `CHAIN_PREFLIGHT_CHECKS` (comma list):
+
+| Check | Passes when | Error |
+|-------|-------------|-------|
+| `initialized` | the contract is initialized | `ERR_CHAIN_NOT_INITIALIZED` |
+| `roles` | the actor holds the Company or Carrier role | `ERR_CHAIN_ROLE_REQUIRED` |
+| `whitelist` | a Carrier-only actor is whitelisted (Company actors are exempt) | `ERR_CHAIN_CARRIER_NOT_WHITELISTED` |
+| `suspension` | the actor is not suspended | `ERR_CHAIN_ACTOR_SUSPENDED` |
+| `token_decimals` | the escrow token reports 7 decimals | `ERR_CHAIN_INVALID_TOKEN_DECIMALS` |
+
+`anchorEvent` checks the `actor`; `releaseEscrow` checks initialization only. `token_decimals` runs when a token is supplied to `runChainPreflight` (escrow initialization); no current port method carries one. The checks read state through `SorobanStateReader`, which calls these **assumed** contract view functions: `is_initialized()`, `has_role(address, role)`, `is_carrier_whitelisted(address)`, `is_suspended(address)`, plus the token's SEP-41 `decimals()`. This spec does not define the first four yet, so confirm or rename them in `CONTRACT_VIEW_FUNCTIONS` before enabling preflight against a deployed contract.
+
 ---
 
 ## 4. Version policy
@@ -64,4 +84,4 @@ Decoded via `chainErrorToAppError()`.
 
 ## 5. Adapter strategy
 
-`ChainAdapter` port (`src/services/chain/types.ts`): `anchorEvent`, `releaseEscrow`, `streamEvents`. `SimulatedAdapter` for local dev/tests; `SorobanAdapter` for deployed WASM escrow. Legacy `stellar.service.ts` manage-data ops are placeholders to be replaced.
+`ChainAdapter` port (`src/services/chain/types.ts`): `anchorEvent`, `releaseEscrow`, `streamEvents`. `SimulatedAdapter` for local dev/tests; `SorobanAdapter` for deployed WASM escrow. The legacy `stellar.service.ts` was removed in #1082; its manage-data logic lives only inside `SimulatedAdapter`.
