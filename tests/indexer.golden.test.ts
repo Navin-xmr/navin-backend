@@ -93,7 +93,6 @@ describe('Event-driven indexer golden fixtures replay', () => {
       {
         $setOnInsert: {
           shipmentId: '65f1a2b3c4d5e6f708192a3b',
-          milestoneEvent: 'IN_TRANSIT',
           transactionHash: events[0].tx_hash,
           actor: 'stellar-indexer',
         },
@@ -120,7 +119,6 @@ describe('Event-driven indexer golden fixtures replay', () => {
       {
         $setOnInsert: {
           shipmentId: '65f1a2b3c4d5e6f708192a3b',
-          milestoneEvent: 'SETTLEMENT_INITIATED',
           transactionHash: events[1].tx_hash,
           actor: 'stellar-indexer',
         },
@@ -150,7 +148,6 @@ describe('Event-driven indexer golden fixtures replay', () => {
       {
         $setOnInsert: {
           shipmentId: '66a0b1c2d3e4f50617283940',
-          milestoneEvent: 'SETTLEMENT_COMPLETED',
           transactionHash: events[2].tx_hash,
           actor: 'stellar-indexer',
         },
@@ -180,14 +177,15 @@ describe('Event-driven indexer golden fixtures replay', () => {
     expect(initBlock).not.toHaveProperty('dataHash');
     expect(releaseBlock).not.toHaveProperty('dataHash');
 
-    // Canonical field assertions (#970): milestoneEvent (never legacy eventType)
-    // in every $set/$setOnInsert, and the anchor's top-level dataHash equals the event hash.
+    // Canonical field assertions (#970): milestoneEvent (never legacy eventType) in every
+    // $set and never in $setOnInsert (MongoDB rejects a path in both), and the anchor's
+    // top-level dataHash equals the event hash.
     for (const [, update] of ledgerUpdateOneMock.mock.calls as Array<
       [unknown, { $set: Record<string, unknown>; $setOnInsert: Record<string, unknown> }]
     >) {
-      expect(update.$setOnInsert).toHaveProperty('milestoneEvent');
+      expect(update.$setOnInsert).not.toHaveProperty('milestoneEvent');
       expect(update.$setOnInsert).not.toHaveProperty('eventType');
-      expect(update.$set.milestoneEvent).toBe(update.$setOnInsert.milestoneEvent);
+      expect(update.$set).toHaveProperty('milestoneEvent');
       expect(update.$set).not.toHaveProperty('eventType');
     }
     expect(anchorBlock.dataHash).toBe((events[0].data as unknown[])[0]);
