@@ -103,6 +103,26 @@ export async function indexStellarTransactions(
       metadata.proofHash = event.data[0];
       metadata.payee = event.data[1];
       metadata.amount = event.data[2];
+    } else if (event.name === CHAIN_EVENT_NAMES.ESCROW_DISPUTE) {
+      milestoneEvent = MilestoneEvent.DISPUTED;
+      shipmentId = event.topic[1];
+      metadata.paymentId = event.topic[1];
+      metadata.reasonHash = event.data[0];
+    } else if (event.name === CHAIN_EVENT_NAMES.ESCROW_RESOLVE) {
+      milestoneEvent = MilestoneEvent.RESOLVED;
+      shipmentId = event.topic[1];
+      metadata.paymentId = event.topic[1];
+      metadata.outcome = event.data[0];
+    } else if (event.name === CHAIN_EVENT_NAMES.ESCROW_FREEZE) {
+      milestoneEvent = MilestoneEvent.ESCROW_FROZEN;
+      shipmentId = event.topic[1];
+      metadata.paymentId = event.topic[1];
+      metadata.frozen = true;
+    } else if (event.name === CHAIN_EVENT_NAMES.ESCROW_UNFREEZE) {
+      milestoneEvent = MilestoneEvent.ESCROW_UNFROZEN;
+      shipmentId = event.topic[1];
+      metadata.paymentId = event.topic[1];
+      metadata.frozen = false;
     } else {
       continue;
     }
