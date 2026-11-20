@@ -15,7 +15,12 @@
  * `releaseEscrow()`. A resolved promise means the transaction is confirmed.
  */
 import type { ErrorCode } from '../../shared/http/errors.js';
-import type { AnchorArgs, ChainEvent, ReleaseEscrowArgs } from '../../shared/types/chain.js';
+import type {
+  AnchorArgs,
+  ChainEvent,
+  ConfirmDeliveryArgs,
+  ReleaseEscrowArgs,
+} from '../../shared/types/chain.js';
 
 /** Backend error codes an adapter may reject with (via `AppError.code`). */
 export type ChainErrorCode = Extract<ErrorCode, `ERR_CHAIN_${string}`>;
@@ -25,6 +30,9 @@ export type AnchorEventInput = AnchorArgs;
 
 /** Input for `release_escrow(caller, shipment_id)` — spec-validated shape (v2). */
 export type ReleaseEscrowInput = ReleaseEscrowArgs;
+
+/** Input for `confirm_delivery(receiver, shipment_id, proof_hash)` — spec-validated shape. */
+export type ConfirmDeliveryInput = ConfirmDeliveryArgs;
 
 /** Confirmed on-chain transaction. */
 export interface ChainTxReceipt {
@@ -41,6 +49,11 @@ export type AnchorResult = ChainTxReceipt;
 export interface EscrowResult extends ChainTxReceipt {
   /** Escrow is per-shipment (#1056) — this is the released shipment, not a payment id. */
   shipmentId: ReleaseEscrowInput['shipment_id'];
+}
+
+export interface ConfirmDeliveryResult extends ChainTxReceipt {
+  receiver: ConfirmDeliveryInput['receiver'];
+  shipmentId: ConfirmDeliveryInput['shipment_id'];
 }
 
 /** Opaque resume position: the `id` of the last event processed. */
@@ -61,6 +74,13 @@ export interface ChainAdapter {
    * `{ success: false }` failure flag.
    */
   releaseEscrow(input: ReleaseEscrowInput): Promise<EscrowResult>;
+
+  /**
+   * Confirm delivery of a shipment — co-emits `delivery_success` and `escrow_released` events.
+   * Only the `receiver` (auth precondition) may call this.
+   * @throws {AppError} `ChainErrorCode` on rejection (e.g. ERR_CHAIN_UNAUTHORIZED).
+   */
+  confirmDelivery(input: ConfirmDeliveryInput): Promise<ConfirmDeliveryResult>;
 
   /**
    * Spec-validated contract events in ledger order, resuming strictly after

@@ -40,6 +40,72 @@
         "GABQGAYDAMBQGAYDAMBQGAYDAMBQGAYDAMBQGAYDAMBQGAYDAMBQHGPC",
         "1500000000"
       ]
+    },
+    "esc_dispute": {
+      "id": "0002200479567253507-0000000001",
+      "contract_id": "CACAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAINCW",
+      "tx_hash": "4a7e1c8d2b3f4a5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c",
+      "ledger": 512450,
+      "ledger_closed_at": "2026-09-27T10:25:00Z",
+      "name": "esc_dispute",
+      "topic": ["esc_dispute", "66a0b1c2d3e4f50617283940"],
+      "data": ["a3e23e8160039594a33894f6564e1b1348bbd7a0088d42c4acb73eeaed59c00d"]
+    },
+    "esc_resolve": {
+      "id": "0002200479567253508-0000000001",
+      "contract_id": "CACAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAINCW",
+      "tx_hash": "5b8f2d9c3e4a5f6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b",
+      "ledger": 512500,
+      "ledger_closed_at": "2026-09-27T10:30:00Z",
+      "name": "esc_resolve",
+      "topic": ["esc_resolve", "66a0b1c2d3e4f50617283940"],
+      "data": ["refund_payer"]
+    },
+    "esc_freeze": {
+      "id": "0002200479567253509-0000000001",
+      "contract_id": "CACAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAINCW",
+      "tx_hash": "6c9a3e0d4f5b6a7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c",
+      "ledger": 512520,
+      "ledger_closed_at": "2026-09-27T10:32:00Z",
+      "name": "esc_freeze",
+      "topic": ["esc_freeze", "66a0b1c2d3e4f50617283940"],
+      "data": []
+    },
+    "esc_unfreeze": {
+      "id": "0002200479567253510-0000000001",
+      "contract_id": "CACAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAINCW",
+      "tx_hash": "7d0b4e1f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d",
+      "ledger": 512540,
+      "ledger_closed_at": "2026-09-27T10:35:00Z",
+      "name": "esc_unfreeze",
+      "topic": ["esc_unfreeze", "66a0b1c2d3e4f50617283940"],
+      "data": []
+    },
+    "delivery_success": {
+      "id": "0002200479567253511-0000000001",
+      "contract_id": "CACAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAINCW",
+      "tx_hash": "8e1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b",
+      "ledger": 512600,
+      "ledger_closed_at": "2026-09-27T11:00:00Z",
+      "name": "delivery_success",
+      "topic": ["delivery_success", "65f1a2b3c4d5e6f708192a3b"],
+      "data": [
+        "3e23e8160039594a33894f6564e1b1348bbd7a0088d42c4acb73eeaed59c009d",
+        "GABAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEJXA"
+      ]
+    },
+    "escrow_released": {
+      "id": "0002200479567253512-0000000001",
+      "contract_id": "CACAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAINCW",
+      "tx_hash": "9f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a",
+      "ledger": 512600,
+      "ledger_closed_at": "2026-09-27T11:00:00Z",
+      "name": "escrow_released",
+      "topic": ["escrow_released", "65f1a2b3c4d5e6f708192a3b"],
+      "data": [
+        "3e23e8160039594a33894f6564e1b1348bbd7a0088d42c4acb73eeaed59c009d",
+        "GABAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEJXA"
+      ]
     }
   }
 }

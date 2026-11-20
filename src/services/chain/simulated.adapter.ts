@@ -51,6 +51,8 @@ import type {
   ChainAdapter,
   ChainErrorCode,
   ChainEventCursor,
+  ConfirmDeliveryInput,
+  ConfirmDeliveryResult,
   EscrowResult,
   ReleaseEscrowInput,
 } from './types.js';
@@ -170,6 +172,34 @@ export class SimulatedAdapter implements ChainAdapter {
     return { txHash: hash, ledger, simulated: true, shipmentId: input.shipment_id };
   }
 
+  async confirmDelivery(input: ConfirmDeliveryInput): Promise<ConfirmDeliveryResult> {
+    assertBytes32(input.proof_hash, 'proof_hash', ErrorCodes.CHAIN_INVALID_PROOF);
+
+    // Auth precondition: only the receiver (signing key) may confirm delivery.
+    const signer = this.signer();
+    if (signer.publicKey() !== input.receiver) {
+      throw chainError(
+        403,
+        'Only the delivery receiver can confirm delivery',
+        ErrorCodes.CHAIN_UNAUTHORIZED
+      );
+    }
+
+    // Simulated: no contract call or funds moved. Record as a manage-data write so the
+    // indexer can observe delivery_success / escrow_released via streamEvents.
+    const { hash, ledger } = await this.submitManageData(
+      `confirm:${input.shipment_id}`,
+      input.proof_hash
+    );
+    return {
+      txHash: hash,
+      ledger,
+      simulated: true,
+      receiver: input.receiver,
+      shipmentId: input.shipment_id,
+    };
+  }
+
   async *streamEvents(cursor?: ChainEventCursor): AsyncIterable<ChainEvent> {
     const publicKey = this.signer().publicKey();
     let position = cursor;
@@ -237,9 +267,7 @@ export class SimulatedAdapter implements ChainAdapter {
       return await fn();
     } catch (err) {
       if (err instanceof AppError && err.code.startsWith('ERR_CHAIN_')) throw err;
-      throw chainError(502, 'Simulated chain (Horizon) request failed', ErrorCodes.CHAIN_UNKNOWN, {
-        cause: err instanceof Error ? err.message : String(err),
-      });
+      throw chainError(502, 'Simulated chain (Horizon) request failed', ErrorCodes.CHAIN_UNKNOWN);
     }
   }
 

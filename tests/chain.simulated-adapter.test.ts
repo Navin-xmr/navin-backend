@@ -159,7 +159,6 @@ describe('SimulatedAdapter', () => {
       await expect(promise).rejects.toMatchObject({
         statusCode: 502,
         code: ErrorCodes.CHAIN_UNKNOWN,
-        details: { cause: 'tx_bad_seq' },
       });
     });
 

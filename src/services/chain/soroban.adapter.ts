@@ -23,6 +23,8 @@ import type {
   AnchorResult,
   ChainAdapter,
   ChainEventCursor,
+  ConfirmDeliveryInput,
+  ConfirmDeliveryResult,
   EscrowResult,
   ReleaseEscrowInput,
 } from './types.js';
@@ -114,6 +116,44 @@ export class SorobanAdapter implements ChainAdapter {
     return { txHash, ledger, simulated: false, shipmentId: input.shipment_id };
   }
 
+  async confirmDelivery(input: ConfirmDeliveryInput): Promise<ConfirmDeliveryResult> {
+    if (!Bytes32HexSchema.safeParse(input.proof_hash).success) {
+      throw new AppError(
+        422,
+        'proof_hash must be 32 bytes of lowercase hex',
+        ErrorCodes.CHAIN_INVALID_PROOF
+      );
+    }
+
+    // Auth precondition: only the receiver (signing key) may confirm delivery.
+    // Check before submit so we never waste a transaction on an unauthorized caller.
+    const signer = this.signer();
+    if (signer.publicKey() !== input.receiver) {
+      throw new AppError(
+        403,
+        'Only the delivery receiver can confirm delivery',
+        ErrorCodes.CHAIN_UNAUTHORIZED
+      );
+    }
+
+    const contract = this.getContract();
+    const op = contract.call(
+      'confirm_delivery',
+      new Address(input.receiver).toScVal(),
+      nativeToScVal(input.shipment_id, { type: 'symbol' }),
+      nativeToScVal(Buffer.from(input.proof_hash, 'hex'), { type: 'bytes' })
+    );
+
+    const { txHash, ledger } = await this.invokePipeline(op);
+    return {
+      txHash,
+      ledger,
+      simulated: false,
+      receiver: input.receiver,
+      shipmentId: input.shipment_id,
+    };
+  }
+
   async *streamEvents(cursor?: ChainEventCursor): AsyncIterable<ChainEvent> {
     if (!this.contractId) return;
 
@@ -193,11 +233,7 @@ export class SorobanAdapter implements ChainAdapter {
       if (contractErrorMatch?.[1]) {
         throw chainErrorToAppError(parseInt(contractErrorMatch[1], 10));
       }
-      throw new AppError(
-        400,
-        `Soroban simulation failed: ${simRes.error}`,
-        ErrorCodes.CHAIN_UNKNOWN
-      );
+      throw new AppError(400, 'Soroban simulation failed', ErrorCodes.CHAIN_UNKNOWN);
     }
 
     // 2. Assemble
@@ -209,7 +245,7 @@ export class SorobanAdapter implements ChainAdapter {
     // 4. Send
     const sendRes = await this.server.sendTransaction(assembled);
     if (sendRes.status === 'ERROR') {
-      throw new AppError(400, `Soroban sendTransaction failed`, ErrorCodes.CHAIN_UNKNOWN, sendRes);
+      throw new AppError(400, 'Soroban sendTransaction failed', ErrorCodes.CHAIN_UNKNOWN);
     }
 
     // 5. Poll
@@ -227,8 +263,7 @@ export class SorobanAdapter implements ChainAdapter {
         throw new AppError(
           400,
           'Soroban transaction execution failed on-chain',
-          ErrorCodes.CHAIN_UNKNOWN,
-          statusRes
+          ErrorCodes.CHAIN_UNKNOWN
         );
       }
       if (Date.now() - startTime > timeoutMs) {
