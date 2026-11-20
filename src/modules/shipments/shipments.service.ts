@@ -70,20 +70,13 @@ const DEFAULT_SINGLE_POINT_SPEED_KMH = 40;
 
 /**
  * Release escrow for a delivered shipment through the ChainAdapter port.
- * Rejects with AppError(ERR_CHAIN_*) on failure; results carry `simulated`.
+ * v2 (#1056): the contract releases per shipment and authorizes the caller,
+ * so no payment id / proof hash is passed. Rejects with AppError(ERR_CHAIN_*).
  */
-function releaseEscrowOnDelivery(
-  shipment: { _id: { toString(): string }; deliveryProof?: { url?: string | null } | null },
-  paymentId: string
-): Promise<EscrowResult> {
-  const shipmentId = shipment._id.toString();
+function releaseEscrowOnDelivery(shipment: { _id: { toString(): string } }): Promise<EscrowResult> {
   return getChainAdapter().releaseEscrow({
-    payment_id: paymentId,
-    proof_hash: generateDataHash({
-      shipmentId,
-      paymentId,
-      deliveryProofUrl: shipment.deliveryProof?.url ?? null,
-    }),
+    caller: getChainActorAddress(),
+    shipment_id: shipment._id.toString(),
   });
 }
 
@@ -670,7 +663,7 @@ export const updateShipmentStatusService = async (
     try {
       const payment = await paymentsRepo.getPaymentByShipmentId(shipment._id.toString());
       if (payment) {
-        const released = await releaseEscrowOnDelivery(shipment, payment._id.toString());
+        const released = await releaseEscrowOnDelivery(shipment);
 
         simulated = released.simulated;
         await paymentsRepo.updatePaymentStatus(
@@ -860,7 +853,7 @@ export const bulkUpdateShipmentStatusService = async (
         try {
           const payment = await paymentsRepo.getPaymentByShipmentId(id);
           if (payment) {
-            const released = await releaseEscrowOnDelivery(shipment, payment._id.toString());
+            const released = await releaseEscrowOnDelivery(shipment);
             await paymentsRepo.updatePaymentStatus(
               payment._id.toString(),
               PaymentStatus.RELEASED,

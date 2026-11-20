@@ -99,6 +99,8 @@ describe('Event-driven indexer golden fixtures replay', () => {
         },
         $set: {
           milestoneEvent: 'IN_TRANSIT',
+          confirmations: 3,
+          verified: true,
           dataHash: events[0].data[0],
           metadata: {
             blockNumber: 512345,
@@ -126,6 +128,8 @@ describe('Event-driven indexer golden fixtures replay', () => {
         },
         $set: {
           milestoneEvent: 'SETTLEMENT_INITIATED',
+          confirmations: 3,
+          verified: true,
           metadata: {
             blockNumber: 512346,
             ledger: 512346,
@@ -156,6 +160,8 @@ describe('Event-driven indexer golden fixtures replay', () => {
         },
         $set: {
           milestoneEvent: 'SETTLEMENT_COMPLETED',
+          confirmations: 3,
+          verified: true,
           metadata: {
             blockNumber: 512400,
             ledger: 512400,

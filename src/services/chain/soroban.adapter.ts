@@ -11,7 +11,9 @@ import { config } from '../../config/index.js';
 import { stellarNetworkPassphrase } from '../../config/stellarNetwork.js';
 import { AppError, ErrorCodes } from '../../shared/http/errors.js';
 import {
+  AddressSchema,
   Bytes32HexSchema,
+  SymbolSchema,
   parseChainEvent,
   chainErrorToAppError,
 } from '../../shared/types/chain.js';
@@ -84,23 +86,32 @@ export class SorobanAdapter implements ChainAdapter {
   }
 
   async releaseEscrow(input: ReleaseEscrowInput): Promise<EscrowResult> {
-    if (!Bytes32HexSchema.safeParse(input.proof_hash).success) {
+    // v2 (#1056): real contract signature is (caller, shipment_id). Escrow is
+    // per-shipment, so no payment_id/proof_hash are invented here.
+    if (!AddressSchema.safeParse(input.caller).success) {
       throw new AppError(
         422,
-        'proof_hash must be 32 bytes of lowercase hex',
-        ErrorCodes.CHAIN_INVALID_PROOF
+        'caller must be a valid Stellar address',
+        ErrorCodes.CHAIN_UNAUTHORIZED
+      );
+    }
+    if (!SymbolSchema.safeParse(input.shipment_id).success) {
+      throw new AppError(
+        422,
+        'shipment_id must be a valid Soroban Symbol',
+        ErrorCodes.CHAIN_UNKNOWN
       );
     }
 
     const contract = this.getContract();
     const op = contract.call(
       'release_escrow',
-      nativeToScVal(input.payment_id, { type: 'symbol' }),
-      nativeToScVal(Buffer.from(input.proof_hash, 'hex'), { type: 'bytes' })
+      new Address(input.caller).toScVal(),
+      nativeToScVal(input.shipment_id, { type: 'symbol' })
     );
 
     const { txHash, ledger } = await this.invokePipeline(op);
-    return { txHash, ledger, simulated: false, paymentId: input.payment_id };
+    return { txHash, ledger, simulated: false, shipmentId: input.shipment_id };
   }
 
   async *streamEvents(cursor?: ChainEventCursor): AsyncIterable<ChainEvent> {
