@@ -113,6 +113,8 @@ Content-Type: application/json
 - `ERR_FILE_DELETE_FAILED` (502) — Provider rejected the delete (#701)
 - `ERR_FILE_TOO_LARGE` (413) — Upload exceeds the configured size cap
 - `ERR_INVALID_MIME_TYPE` (415) — Upload MIME type is not accepted
+- `ERR_IDEMPOTENCY_IN_PROGRESS` (409) — A request with the same `Idempotency-Key` is still being processed; retry shortly
+- `ERR_IDEMPOTENCY_KEY_REUSED` (422) — `Idempotency-Key` was already used with a different request body
 - `ERR_INVALID_DOCUMENT_TYPE` (415) — Uploaded document type is not accepted
 - `ERR_PHOTO_LIMIT_EXCEEDED` (400) — Photo count limit reached for this resource
 

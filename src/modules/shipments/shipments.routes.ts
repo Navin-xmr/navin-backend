@@ -20,6 +20,7 @@ import {
 } from './shipments.controller.js';
 import { requireRole } from '../../shared/middleware/requireRole.js';
 import { requireAuth } from '../../shared/middleware/requireAuth.js';
+import { idempotency } from '../../shared/middleware/idempotency.js';
 import multer from 'multer';
 import {
   getShipmentsQuerySchema,
@@ -122,6 +123,7 @@ shipmentsRouter.post(
   '/',
   requireAuth,
   requireRole(UserRole.MANAGER, UserRole.ADMIN),
+  idempotency(),
   validateRequest({ body: CreateShipmentBodySchema }),
   asyncHandler(createShipment)
 );
@@ -136,6 +138,7 @@ shipmentsRouter.patch(
   '/:id/status',
   requireAuth,
   requireRole(UserRole.ADMIN, UserRole.MANAGER),
+  idempotency(),
   validateRequest({ params: ShipmentIdParamSchema, body: ShipmentStatusBodySchema }),
   asyncHandler(patchShipmentStatus)
 );
