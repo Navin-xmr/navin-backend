@@ -15,7 +15,12 @@
  * `releaseEscrow()`. A resolved promise means the transaction is confirmed.
  */
 import type { ErrorCode } from '../../shared/http/errors.js';
-import type { AnchorArgs, ChainEvent, ReleaseEscrowArgs } from '../../shared/types/chain.js';
+import type {
+  AnchorArgs,
+  ChainEvent,
+  ChainEventDecodeFailure,
+  ReleaseEscrowArgs,
+} from '../../shared/types/chain.js';
 
 /** Backend error codes an adapter may reject with (via `AppError.code`). */
 export type ChainErrorCode = Extract<ErrorCode, `ERR_CHAIN_${string}`>;
@@ -62,9 +67,10 @@ export interface ChainAdapter {
    * Spec-validated contract events in ledger order, resuming strictly after
    * `cursor` (from the beginning when omitted). Consumers stop with `break`;
    * implementations must release resources in the iterator's `return()`.
-   * @throws {AppError} ERR_CHAIN_INVALID_EVENT when an emitted event violates the spec.
+  * Invalid RPC events are yielded as ChainEventDecodeFailure so consumers can
+  * persist and alert on them without stopping the stream.
    */
-  streamEvents(cursor?: ChainEventCursor): AsyncIterable<ChainEvent>;
+  streamEvents(cursor?: ChainEventCursor): AsyncIterable<ChainEvent | ChainEventDecodeFailure>;
 
   /**
    * Optional read-only ledger queries used by confirmation tracking (#818).

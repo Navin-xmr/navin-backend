@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Persist malformed Soroban indexer events with raw payloads, alert through BullMQ, and provide `npm run replay:indexer-dead-letters` for retries.
 - Three-ledger Stellar confirmation tracking for released payments and telemetry anchors, with immediate confirmations in simulated mode (#838, #837).
 
 **Phase 6 — Hash-and-Emit chain architecture**

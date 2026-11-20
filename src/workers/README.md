@@ -39,7 +39,16 @@ node dist/src/workers/stellar.worker.js
 # Indexer worker (Horizon-backed poller, dedicated service)
 npm run worker:stellar-indexer
 node dist/src/workers/stellar-indexer.worker.js
+
+# Retry pending malformed indexer events after deploying a decoder fix
+npm run replay:indexer-dead-letters
 ```
+
+Malformed Soroban events are stored in the `IndexerDeadLetter` collection with
+their raw RPC payload, normalized candidate, error, contract ID, and stream cursor.
+Each failure also enters the alert queue. Replay leaves still-invalid records
+pending and records the latest replay error; successfully indexed records are
+marked `replayed`.
 
 ### Configuration
 
