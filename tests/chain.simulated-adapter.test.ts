@@ -12,7 +12,6 @@ import type { HorizonTransactionRecordMock, SimulatedHorizonClientMock } from '.
 const signer = Keypair.random();
 const PASSPHRASE = Networks.TESTNET;
 const SHIPMENT_ID = '65f1a2b3c4d5e6f708192a3b';
-const PAYMENT_ID = '66a0b1c2d3e4f50617283940';
 const HASH_A = generateDataHash({ reading: 'a' });
 const HASH_B = generateDataHash({ reading: 'b' });
 
@@ -129,24 +128,33 @@ describe('SimulatedAdapter', () => {
     });
   });
 
-  describe('releaseEscrow (legacy releaseEscrow flow)', () => {
+  describe('releaseEscrow (v2 per-shipment flow)', () => {
     it('records the release via manage-data and returns a simulated receipt', async () => {
-      const result = await adapter.releaseEscrow({ payment_id: PAYMENT_ID, proof_hash: HASH_B });
+      const result = await adapter.releaseEscrow({
+        caller: signer.publicKey(),
+        shipment_id: SHIPMENT_ID,
+      });
 
       const [tx] = horizon.submitted;
-      expect(manageDataOps(tx!)).toEqual([{ name: `release:${PAYMENT_ID}`, value: HASH_B }]);
+      const ops = manageDataOps(tx!);
+      expect(ops).toHaveLength(1);
+      expect(ops[0]!.name).toBe(`release:${SHIPMENT_ID}`);
+      expect(ops[0]!.value).toMatch(/^[0-9a-f]{64}$/);
       expect(tx!.memo.type).toBe('hash');
       expect(result).toEqual({
         txHash: tx!.hash().toString('hex'),
         ledger: 1001,
         simulated: true,
-        paymentId: PAYMENT_ID,
+        shipmentId: SHIPMENT_ID,
       });
     });
 
     it('rejects with AppError(502, ERR_CHAIN_UNKNOWN) instead of resolving { success: false }', async () => {
       horizon.client.submitTransaction.mockRejectedValueOnce(new Error('tx_bad_seq'));
-      const promise = adapter.releaseEscrow({ payment_id: PAYMENT_ID, proof_hash: HASH_B });
+      const promise = adapter.releaseEscrow({
+        caller: signer.publicKey(),
+        shipment_id: SHIPMENT_ID,
+      });
       await expect(promise).rejects.toBeInstanceOf(AppError);
       await expect(promise).rejects.toMatchObject({
         statusCode: 502,
@@ -155,10 +163,10 @@ describe('SimulatedAdapter', () => {
       });
     });
 
-    it('rejects a malformed proof_hash with ERR_CHAIN_INVALID_PROOF', async () => {
+    it('rejects a malformed caller with ERR_CHAIN_UNAUTHORIZED', async () => {
       await expect(
-        adapter.releaseEscrow({ payment_id: PAYMENT_ID, proof_hash: HASH_B.toUpperCase() })
-      ).rejects.toMatchObject({ statusCode: 422, code: ErrorCodes.CHAIN_INVALID_PROOF });
+        adapter.releaseEscrow({ caller: 'not-an-address', shipment_id: SHIPMENT_ID })
+      ).rejects.toMatchObject({ statusCode: 422, code: ErrorCodes.CHAIN_UNAUTHORIZED });
     });
   });
 
@@ -177,7 +185,7 @@ describe('SimulatedAdapter', () => {
       })
     ).rejects.toMatchObject(expected);
     await expect(
-      unconfigured.releaseEscrow({ payment_id: PAYMENT_ID, proof_hash: HASH_B })
+      unconfigured.releaseEscrow({ caller: signer.publicKey(), shipment_id: SHIPMENT_ID })
     ).rejects.toMatchObject(expected);
     await expect(collect(unconfigured.streamEvents())).rejects.toMatchObject(expected);
   });
@@ -189,7 +197,7 @@ describe('SimulatedAdapter', () => {
         data_hash: HASH_A,
         actor: signer.publicKey(),
       });
-      await adapter.releaseEscrow({ payment_id: PAYMENT_ID, proof_hash: HASH_B });
+      await adapter.releaseEscrow({ caller: signer.publicKey(), shipment_id: SHIPMENT_ID });
       await adapter.anchorEvent({
         shipment_id: 'ship_2',
         data_hash: HASH_B,

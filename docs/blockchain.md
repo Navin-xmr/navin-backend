@@ -23,7 +23,7 @@ today (env placeholders exist; see below).
 | ----------------- | --------------------- | ----------------------------------------------------------------------------------- | ------------------------------------- |
 | Tokenize shipment | `tokenizeShipment`    | Horizon `Operation.manageData` for `tracking:{shipmentId}` and `route:{shipmentId}` | Shipment create                       |
 | Anchor telemetry  | `anchorTelemetryHash` | Horizon `manageData` + `Memo.hash`                                                  | Stellar worker after telemetry ingest |
-| Release escrow    | `releaseEscrow`       | Horizon `manageData` `release:{paymentId}` + memo `escrow-release:…`                | Shipment reaches `DELIVERED`          |
+| Release escrow    | `releaseEscrow`       | Horizon `manageData` `release:{shipmentId}` + memo `escrow-release:…`               | Shipment reaches `DELIVERED`          |
 
 Config / network:
 
@@ -132,10 +132,10 @@ sequenceDiagram
 
   Client->>API: PATCH status DELIVERED
   alt Soroban configured
-    API->>Soroban: release(escrowId)
+    API->>Soroban: release_escrow(caller, shipment_id)
     Soroban-->>API: release txHash
   else Horizon fallback
-    API->>Horizon: manageData release:{paymentId}
+    API->>Horizon: manageData release:{shipmentId}
     Horizon-->>API: transactionHash
   end
   API->>DB: Mark settlement / payment released
@@ -296,7 +296,7 @@ Query the network named by `network` (`testnet` | `public`) for `txHash` and com
 committed digest against `dataHash`.
 
 **Horizon / `SOROBAN_ADAPTER=simulated`.** `SimulatedAdapter.submitManageData` writes a
-single `manageData` operation named `telemetry:{shipmentId}` (or `release:{paymentId}` for
+single `manageData` operation named `telemetry:{shipmentId}` (or `release:{shipmentId}` for
 escrow release) whose value is the `dataHash` hex string, **and** a `Memo.hash` carrying the
 same 32 bytes.
 
@@ -310,7 +310,7 @@ interface HorizonTransaction {
 
 interface HorizonOperation {
   type: string;
-  name?: string; // 'telemetry:<shipmentId>' | 'release:<paymentId>'
+  name?: string; // 'telemetry:<shipmentId>' | 'release:<shipmentId>'
   value?: string; // base64 of the ASCII hex digest
 }
 

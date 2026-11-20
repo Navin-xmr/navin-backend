@@ -177,7 +177,7 @@ export function createChainAdapterMock(
       txHash: MOCK_TX_HASH,
       ledger: 1,
       simulated: true,
-      paymentId: (input as { payment_id: string }).payment_id,
+      shipmentId: (input as { shipment_id: string }).shipment_id,
       ...script.releaseResult,
     })),
     streamEvents: jest.fn(async function* () {

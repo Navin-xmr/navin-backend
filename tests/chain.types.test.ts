@@ -92,7 +92,7 @@ describe('chain function payloads', () => {
     ['init_escrow', 'amount', 1500000000],
     ['init_escrow', 'amount', I128_OVERFLOW],
     ['init_escrow', 'token', G_OTHER],
-    ['release_escrow', 'proof_hash', ''],
+    ['release_escrow', 'caller', 'GBAD'],
   ] as const)('%s rejects mutated %s = %p', (fn, key, value) => {
     const mutated = { ...functions.args[fn], [key]: value };
     expect(ChainFunctionArgsSchemas[fn].safeParse(mutated).success).toBe(false);
