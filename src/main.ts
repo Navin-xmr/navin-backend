@@ -10,6 +10,8 @@ import { initSseHub, closeSseHub } from './infra/sse/sseHub.js';
 import { startAlertWorker } from './workers/alert.worker.js';
 import { startMaintenanceWorker, scheduleMaintenanceJobs } from './workers/maintenance.worker.js';
 import { logger } from './shared/logger/logger.js';
+import { getChainAdapter } from './services/chain/factory.js';
+import { checkChainReadiness } from './services/chain/readiness.js';
 
 async function main() {
   await connectMongo(config.mongoUri);
@@ -27,6 +29,12 @@ async function main() {
   httpServer.listen(config.port, () => {
     logger.info({ port: config.port }, 'HTTP server listening');
   });
+
+  // Not awaited: a slow or unreachable RPC must not delay startup. The check
+  // logs its own outcome and never rejects.
+  checkChainReadiness(getChainAdapter()).catch(err =>
+    logger.error({ err }, 'Chain readiness check crashed')
+  );
 
   function shutdown(signal: string) {
     logger.info({ signal }, 'Shutdown signal received');
