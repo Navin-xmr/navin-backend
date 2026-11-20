@@ -3,6 +3,7 @@ import './loadEnv.js';
 import { createServer } from 'http';
 import { buildApp } from './app.js';
 import { config } from './config/index.js';
+import { validateChainAdapterForEnvironment } from './shared/flags/chain-adapter.flags.js';
 import { connectMongo, disconnectMongo } from './infra/mongo/connection.js';
 import { disconnectRedis } from './infra/redis/connection.js';
 import { initSocketIO, closeSocketIO } from './infra/socket/io.js';
@@ -12,6 +13,7 @@ import { startMaintenanceWorker, scheduleMaintenanceJobs } from './workers/maint
 import { logger } from './shared/logger/logger.js';
 
 async function main() {
+  validateChainAdapterForEnvironment();
   await connectMongo(config.mongoUri);
 
   const app = buildApp();
