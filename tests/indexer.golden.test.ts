@@ -61,6 +61,10 @@ describe('Event-driven indexer golden fixtures replay', () => {
       fixtureData.events.anchor,
       fixtureData.events.esc_init,
       fixtureData.events.esc_rel,
+      fixtureData.events.esc_dispute,
+      fixtureData.events.esc_resolve,
+      fixtureData.events.esc_freeze,
+      fixtureData.events.esc_unfreeze,
     ];
 
     const mockAdapter: ChainAdapter = {
@@ -82,9 +86,9 @@ describe('Event-driven indexer golden fixtures replay', () => {
 
     const summary = await indexStellarTransactions(mockAdapter);
 
-    expect(summary.processed).toBe(3);
-    expect(summary.upserted).toBe(3);
-    expect(summary.lastCursor).toBe(events[2].id);
+    expect(summary.processed).toBe(7);
+    expect(summary.upserted).toBe(7);
+    expect(summary.lastCursor).toBe(events[6].id);
 
     // Verify call 1: anchor -> IN_TRANSIT
     expect(ledgerUpdateOneMock).toHaveBeenNthCalledWith(
@@ -171,6 +175,114 @@ describe('Event-driven indexer golden fixtures replay', () => {
             proofHash: events[2].data[0],
             payee: events[2].data[1],
             amount: '1500000000',
+            indexedAt: expect.any(String),
+          },
+        },
+      },
+      { upsert: true }
+    );
+
+    // Verify call 4: esc_dispute -> DISPUTED (reason hash stored, no free-text parsing)
+    expect(ledgerUpdateOneMock).toHaveBeenNthCalledWith(
+      4,
+      { transactionHash: events[3].tx_hash },
+      {
+        $setOnInsert: {
+          shipmentId: '66a0b1c2d3e4f50617283940',
+          milestoneEvent: 'DISPUTED',
+          transactionHash: events[3].tx_hash,
+          actor: 'stellar-indexer',
+        },
+        $set: {
+          milestoneEvent: 'DISPUTED',
+          metadata: {
+            blockNumber: 512450,
+            ledger: 512450,
+            contractId: events[3].contract_id,
+            eventId: events[3].id,
+            paymentId: '66a0b1c2d3e4f50617283940',
+            reasonHash: events[3].data[0],
+            indexedAt: expect.any(String),
+          },
+        },
+      },
+      { upsert: true }
+    );
+
+    // Verify call 5: esc_resolve -> RESOLVED (outcome reflected, not inferred)
+    expect(ledgerUpdateOneMock).toHaveBeenNthCalledWith(
+      5,
+      { transactionHash: events[4].tx_hash },
+      {
+        $setOnInsert: {
+          shipmentId: '66a0b1c2d3e4f50617283940',
+          milestoneEvent: 'RESOLVED',
+          transactionHash: events[4].tx_hash,
+          actor: 'stellar-indexer',
+        },
+        $set: {
+          milestoneEvent: 'RESOLVED',
+          metadata: {
+            blockNumber: 512500,
+            ledger: 512500,
+            contractId: events[4].contract_id,
+            eventId: events[4].id,
+            paymentId: '66a0b1c2d3e4f50617283940',
+            outcome: events[4].data[0],
+            indexedAt: expect.any(String),
+          },
+        },
+      },
+      { upsert: true }
+    );
+
+    // Verify call 6: esc_freeze -> ESCROW_FROZEN
+    expect(ledgerUpdateOneMock).toHaveBeenNthCalledWith(
+      6,
+      { transactionHash: events[5].tx_hash },
+      {
+        $setOnInsert: {
+          shipmentId: '66a0b1c2d3e4f50617283940',
+          milestoneEvent: 'ESCROW_FROZEN',
+          transactionHash: events[5].tx_hash,
+          actor: 'stellar-indexer',
+        },
+        $set: {
+          milestoneEvent: 'ESCROW_FROZEN',
+          metadata: {
+            blockNumber: 512520,
+            ledger: 512520,
+            contractId: events[5].contract_id,
+            eventId: events[5].id,
+            paymentId: '66a0b1c2d3e4f50617283940',
+            frozen: true,
+            indexedAt: expect.any(String),
+          },
+        },
+      },
+      { upsert: true }
+    );
+
+    // Verify call 7: esc_unfreeze -> ESCROW_UNFROZEN
+    expect(ledgerUpdateOneMock).toHaveBeenNthCalledWith(
+      7,
+      { transactionHash: events[6].tx_hash },
+      {
+        $setOnInsert: {
+          shipmentId: '66a0b1c2d3e4f50617283940',
+          milestoneEvent: 'ESCROW_UNFROZEN',
+          transactionHash: events[6].tx_hash,
+          actor: 'stellar-indexer',
+        },
+        $set: {
+          milestoneEvent: 'ESCROW_UNFROZEN',
+          metadata: {
+            blockNumber: 512540,
+            ledger: 512540,
+            contractId: events[6].contract_id,
+            eventId: events[6].id,
+            paymentId: '66a0b1c2d3e4f50617283940',
+            frozen: false,
             indexedAt: expect.any(String),
           },
         },
