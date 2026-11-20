@@ -7,12 +7,27 @@ import {
   updateTelemetryAnchor,
   markTelemetryAnchorFailed,
 } from '../modules/telemetry/telemetry.service.js';
+import { AppError, ErrorCodes } from '../shared/http/errors.js';
 import { logger } from '../shared/logger/logger.js';
 
 interface AnchorTelemetryJob {
   telemetryId: string;
   shipmentId: string;
   dataHash: string;
+}
+
+/** Serializes an error to log-safe primitives only — never the raw object or stack,
+ *  which can carry secrets, SDK payloads, or internal paths. */
+function safeError(err: unknown): { message: string; code?: string } {
+  if (err instanceof Error) {
+    const out: { message: string; code?: string } = { message: err.message };
+    const typed = err as { code?: string };
+    if (typed.code) {
+      out.code = typed.code;
+    }
+    return out;
+  }
+  return { message: String(err) };
 }
 
 async function processStellarAnchor(job: Job<AnchorTelemetryJob>) {
@@ -37,13 +52,13 @@ async function processStellarAnchor(job: Job<AnchorTelemetryJob>) {
 
     return { success: true, stellarTxHash };
   } catch (error) {
+    const errorCode = error instanceof AppError ? error.code : ErrorCodes.CHAIN_UNKNOWN;
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    logger.error({ telemetryId, errorMessage }, 'Failed to anchor telemetry');
+    logger.error({ telemetryId, errorCode, errorMessage }, 'Failed to anchor telemetry');
 
-    // Mark as failed in database
-    await markTelemetryAnchorFailed(telemetryId, errorMessage);
+    await markTelemetryAnchorFailed(telemetryId, errorCode);
 
-    throw error; // Re-throw to trigger BullMQ retry mechanism
+    throw error;
   }
 }
 
@@ -69,11 +84,11 @@ async function startWorker() {
   });
 
   worker.on('failed', (job, err) => {
-    logger.error({ jobId: job?.id, err }, 'Stellar worker job failed');
+    logger.error({ jobId: job?.id, ...safeError(err) }, 'Stellar worker job failed');
   });
 
   worker.on('error', err => {
-    logger.error({ err }, 'Stellar worker error');
+    logger.error({ ...safeError(err) }, 'Stellar worker error');
   });
 
   logger.info('Stellar worker listening on transaction_queue');
@@ -93,6 +108,6 @@ async function startWorker() {
 }
 
 startWorker().catch(err => {
-  logger.error({ err }, 'Failed to start stellar worker');
+  logger.error({ ...safeError(err) }, 'Failed to start stellar worker');
   process.exit(1);
 });
