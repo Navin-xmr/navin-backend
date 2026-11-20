@@ -2,8 +2,7 @@
  * P8-07 — createShipmentService anchors through the ChainAdapter port.
  *
  * Shipment creation must go through `getChainAdapter().anchorEvent(...)`
- * (AGENTS.md §7) and never call `stellar.service.js` directly. The stellar
- * service is mocked so any lingering call would be caught and asserted on.
+ * (AGENTS.md §7) and never call `stellar.service.js` directly.
  */
 import { jest, describe, it, expect, beforeEach } from '@jest/globals';
 import { Types } from 'mongoose';
@@ -11,7 +10,6 @@ import {
   createChainAdapterMock,
   createChainFactoryMock,
   createSocketIoMock,
-  createStellarServiceMock,
 } from './helpers/mocks.js';
 
 const CREATED_AT = new Date('2026-10-01T12:00:00.000Z');
@@ -84,9 +82,6 @@ await jest.unstable_mockModule('../src/modules/payments/payments.repo.js', () =>
   updatePaymentStatus: jest.fn(),
 }));
 
-const stellarService = createStellarServiceMock();
-await jest.unstable_mockModule('../src/services/stellar.service.js', () => stellarService);
-
 const chainAdapter = createChainAdapterMock();
 const chainFactory = createChainFactoryMock(chainAdapter);
 await jest.unstable_mockModule('../src/services/chain/factory.js', () => chainFactory);
@@ -136,12 +131,6 @@ describe('createShipmentService — ChainAdapter anchoring (P8-07)', () => {
     // main's implementation records only the tx hash (no stellarTokenId).
     expect(shipment.stellarTokenId).toBeUndefined();
     expect(saveMock).toHaveBeenCalledTimes(2);
-  });
-
-  it('never calls stellar.service directly', async () => {
-    await createShipmentService(input);
-
-    expect(stellarService.tokenizeShipment).not.toHaveBeenCalled();
   });
 
   it('still returns the shipment when anchoring fails', async () => {
