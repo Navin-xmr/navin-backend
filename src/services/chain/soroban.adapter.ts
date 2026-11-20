@@ -1,11 +1,14 @@
 import {
   rpc,
+  Account,
   Contract,
   Address,
+  contract as contractClient,
   nativeToScVal,
   TransactionBuilder,
   Keypair,
   BASE_FEE,
+  xdr,
 } from '@stellar/stellar-sdk';
 import { config } from '../../config/index.js';
 import { stellarNetworkPassphrase } from '../../config/stellarNetwork.js';
@@ -16,14 +19,31 @@ import {
   chainErrorToAppError,
 } from '../../shared/types/chain.js';
 import type { ChainEvent } from '../../shared/types/chain.js';
+import {
+  decodeAddress,
+  decodeI128,
+  decodeShipment,
+  decodeShipmentStatus,
+  decodeU32,
+} from './decoders.js';
 import type {
   AnchorEventInput,
   AnchorResult,
   ChainAdapter,
   ChainEventCursor,
+  ChainShipmentId,
+  ChainShipmentRecord,
+  ChainShipmentStatus,
   EscrowResult,
   ReleaseEscrowInput,
 } from './types.js';
+
+/**
+ * `NavinError::ShipmentNotFound` in the shipment contract ABI. Read directly
+ * rather than through CHAIN_ERROR_MAP, whose v1 codes don't match the real
+ * contract (4 is EscrowExists there); P11-08 replaces that map.
+ */
+const SHIPMENT_NOT_FOUND = 4;
 
 export interface SorobanAdapterOptions {
   sorobanRpcUrl?: string;
@@ -227,6 +247,94 @@ export class SorobanAdapter implements ChainAdapter {
     }
   }
 
+  // ─── Contract reads (P12-14): simulation only, never submitted ─────────────
+
+  async getShipment(shipmentId: ChainShipmentId): Promise<ChainShipmentRecord | null> {
+    const value = await this.simulateRead('get_shipment', [u64(shipmentId)], true);
+    return value && decodeShipment(value);
+  }
+
+  async getShipmentStatus(shipmentId: ChainShipmentId): Promise<ChainShipmentStatus | null> {
+    const value = await this.simulateRead('get_shipment_status', [u64(shipmentId)], true);
+    return value && decodeShipmentStatus(value);
+  }
+
+  async getEscrowBalance(shipmentId: ChainShipmentId): Promise<bigint | null> {
+    const value = await this.simulateRead('get_escrow_balance', [u64(shipmentId)], true);
+    return value && decodeI128(value);
+  }
+
+  async getVersion(): Promise<number> {
+    return decodeU32(await this.simulateRead('get_version', []));
+  }
+
+  async getAdmin(): Promise<string> {
+    return decodeAddress(await this.simulateRead('get_admin', []));
+  }
+
+  async getExpectedTokenDecimals(): Promise<number> {
+    return decodeU32(await this.simulateRead('get_expected_token_decimals', []));
+  }
+
+  /**
+   * Simulate a read-only contract call and return its result ScVal. The
+   * transaction is built for the SDK's null account and only simulated, so no
+   * signing key, sequence number or fee is involved. With `notFoundAsNull`,
+   * a `ShipmentNotFound` contract error resolves to `null`.
+   */
+  private async simulateRead(method: string, args: xdr.ScVal[]): Promise<xdr.ScVal>;
+  private async simulateRead(
+    method: string,
+    args: xdr.ScVal[],
+    notFoundAsNull: true
+  ): Promise<xdr.ScVal | null>;
+  private async simulateRead(
+    method: string,
+    args: xdr.ScVal[],
+    notFoundAsNull = false
+  ): Promise<xdr.ScVal | null> {
+    const tx = new TransactionBuilder(new Account(contractClient.NULL_ACCOUNT, '0'), {
+      fee: BASE_FEE,
+      networkPassphrase: this.networkPassphrase,
+    })
+      .addOperation(this.getContract().call(method, ...args))
+      .setTimeout(30)
+      .build();
+
+    let sim: rpc.Api.SimulateTransactionResponse;
+    try {
+      sim = await this.server.simulateTransaction(tx);
+    } catch (err) {
+      throw new AppError(502, `Soroban read ${method} failed`, ErrorCodes.CHAIN_UNKNOWN, {
+        cause: err instanceof Error ? err.message : String(err),
+      });
+    }
+
+    if (rpc.Api.isSimulationError(sim)) {
+      const code = Number(String(sim.error).match(/Error\(Contract, #(\d+)\)/)?.[1]);
+      if (notFoundAsNull && code === SHIPMENT_NOT_FOUND) return null;
+      throw new AppError(
+        502,
+        `Soroban read ${method} failed: ${sim.error}`,
+        ErrorCodes.CHAIN_UNKNOWN,
+        {
+          method,
+          ...(Number.isInteger(code) ? { contractCode: code } : {}),
+        }
+      );
+    }
+
+    const retval = rpc.Api.isSimulationSuccess(sim) ? sim.result?.retval : undefined;
+    if (!retval) {
+      throw new AppError(
+        502,
+        `Soroban read ${method} returned no result`,
+        ErrorCodes.CHAIN_UNKNOWN
+      );
+    }
+    return retval;
+  }
+
   /** Latest ledger sequence reported by the RPC node (#818). */
   async getLatestLedger(): Promise<number> {
     const latest = await this.server.getLatestLedger();
@@ -241,4 +349,8 @@ export class SorobanAdapter implements ChainAdapter {
     }
     return null;
   }
+}
+
+function u64(value: ChainShipmentId): xdr.ScVal {
+  return nativeToScVal(value, { type: 'u64' });
 }

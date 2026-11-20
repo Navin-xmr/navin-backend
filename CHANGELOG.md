@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Simulation-only contract reads on the `ChainAdapter` port (`getShipment`, `getShipmentStatus`, `getEscrowBalance`, `getVersion`, `getAdmin`, `getExpectedTokenDecimals`), implemented by `SorobanAdapter` with typed ScVal decoders, plus a non-blocking startup readiness check (`src/services/chain/readiness.ts`) (#1060).
 - Three-ledger Stellar confirmation tracking for released payments and telemetry anchors, with immediate confirmations in simulated mode (#838, #837).
 
 **Phase 6 — Hash-and-Emit chain architecture**
