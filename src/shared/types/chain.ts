@@ -25,7 +25,7 @@ import { z } from 'zod';
 import { AppError, ErrorCodes } from '../http/errors.js';
 import type { ErrorCode } from '../http/errors.js';
 
-export const CHAIN_SPEC_VERSION = '1.1.0-draft' as const;
+export const CHAIN_SPEC_VERSION = '1.2.0-draft' as const;
 
 // ─── Soroban primitives ──────────────────────────────────────────────────────
 
@@ -97,6 +97,15 @@ export const ReleaseEscrowArgsSchema = z
   })
   .strict();
 
+/** `confirm_delivery(receiver: Address, shipment_id: Symbol, proof_hash: BytesN<32>)` — auth: `receiver`. */
+export const ConfirmDeliveryArgsSchema = z
+  .object({
+    receiver: AddressSchema,
+    shipment_id: SymbolSchema,
+    proof_hash: Bytes32HexSchema,
+  })
+  .strict();
+
 /** Result of any confirmed state-changing invocation. */
 export const ChainTxResultSchema = z
   .object({
@@ -105,26 +114,35 @@ export const ChainTxResultSchema = z
   })
   .strict();
 
-export const CHAIN_FUNCTIONS = ['anchor', 'init_escrow', 'release_escrow'] as const;
+export const CHAIN_FUNCTIONS = [
+  'anchor',
+  'init_escrow',
+  'release_escrow',
+  'confirm_delivery',
+] as const;
 export type ChainFunctionName = (typeof CHAIN_FUNCTIONS)[number];
 
 /** Who must `require_auth()` for each function, per spec. */
-export const CHAIN_FUNCTION_AUTH: Readonly<Record<ChainFunctionName, 'actor' | 'payer' | 'admin'>> =
-  {
-    anchor: 'actor',
-    init_escrow: 'payer',
-    release_escrow: 'admin',
-  };
+export const CHAIN_FUNCTION_AUTH: Readonly<
+  Record<ChainFunctionName, 'actor' | 'payer' | 'admin' | 'receiver'>
+> = {
+  anchor: 'actor',
+  init_escrow: 'payer',
+  release_escrow: 'admin',
+  confirm_delivery: 'receiver',
+};
 
 export const ChainFunctionArgsSchemas = {
   anchor: AnchorArgsSchema,
   init_escrow: InitEscrowArgsSchema,
   release_escrow: ReleaseEscrowArgsSchema,
+  confirm_delivery: ConfirmDeliveryArgsSchema,
 } as const satisfies Record<ChainFunctionName, z.ZodTypeAny>;
 
 export type AnchorArgs = z.infer<typeof AnchorArgsSchema>;
 export type InitEscrowArgs = z.infer<typeof InitEscrowArgsSchema>;
 export type ReleaseEscrowArgs = z.infer<typeof ReleaseEscrowArgsSchema>;
+export type ConfirmDeliveryArgs = z.infer<typeof ConfirmDeliveryArgsSchema>;
 export type ChainTxResult = z.infer<typeof ChainTxResultSchema>;
 
 // ─── Events ──────────────────────────────────────────────────────────────────
@@ -137,6 +155,8 @@ export const CHAIN_EVENT_NAMES = {
   ESCROW_RESOLVE: 'esc_resolve',
   ESCROW_FREEZE: 'esc_freeze',
   ESCROW_UNFREEZE: 'esc_unfreeze',
+  DELIVERY_SUCCESS: 'delivery_success',
+  ESCROW_RELEASED: 'escrow_released',
 } as const;
 export type ChainEventName = (typeof CHAIN_EVENT_NAMES)[keyof typeof CHAIN_EVENT_NAMES];
 
@@ -226,6 +246,26 @@ export const EscrowUnfreezeEventSchema = z
   })
   .strict();
 
+/** topic `["delivery_success", shipment_id]` · data `(proof_hash, receiver)` — co-emitted by confirm_delivery */
+export const DeliverySuccessEventSchema = z
+  .object({
+    ...eventEnvelope,
+    name: z.literal(CHAIN_EVENT_NAMES.DELIVERY_SUCCESS),
+    topic: z.tuple([z.literal(CHAIN_EVENT_NAMES.DELIVERY_SUCCESS), SymbolSchema]),
+    data: z.tuple([Bytes32HexSchema, AddressSchema]),
+  })
+  .strict();
+
+/** topic `["escrow_released", shipment_id]` · data `(proof_hash, receiver)` — co-emitted by confirm_delivery */
+export const EscrowReleasedEventSchema = z
+  .object({
+    ...eventEnvelope,
+    name: z.literal(CHAIN_EVENT_NAMES.ESCROW_RELEASED),
+    topic: z.tuple([z.literal(CHAIN_EVENT_NAMES.ESCROW_RELEASED), SymbolSchema]),
+    data: z.tuple([Bytes32HexSchema, AddressSchema]),
+  })
+  .strict();
+
 /** Runtime validator for the indexer and golden fixtures. */
 export const ChainEventSchema = z.discriminatedUnion('name', [
   AnchorEventSchema,
@@ -235,6 +275,8 @@ export const ChainEventSchema = z.discriminatedUnion('name', [
   EscrowResolveEventSchema,
   EscrowFreezeEventSchema,
   EscrowUnfreezeEventSchema,
+  DeliverySuccessEventSchema,
+  EscrowReleasedEventSchema,
 ]);
 
 export type AnchorEvent = z.infer<typeof AnchorEventSchema>;
@@ -244,6 +286,8 @@ export type EscrowDisputeEvent = z.infer<typeof EscrowDisputeEventSchema>;
 export type EscrowResolveEvent = z.infer<typeof EscrowResolveEventSchema>;
 export type EscrowFreezeEvent = z.infer<typeof EscrowFreezeEventSchema>;
 export type EscrowUnfreezeEvent = z.infer<typeof EscrowUnfreezeEventSchema>;
+export type DeliverySuccessEvent = z.infer<typeof DeliverySuccessEventSchema>;
+export type EscrowReleasedEvent = z.infer<typeof EscrowReleasedEventSchema>;
 export type ChainEvent = z.infer<typeof ChainEventSchema>;
 
 // ─── Errors ──────────────────────────────────────────────────────────────────
