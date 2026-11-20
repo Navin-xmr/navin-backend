@@ -221,6 +221,156 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /api/webhooks/chain/subscriptions:
+    post:
+      operationId: webhooks_create_chain_subscription
+      tags:
+        - Webhooks
+      summary: Create a chain webhook subscription
+      description: |
+        Registers an HTTPS endpoint for selected confirmed chain events belonging to the caller's
+        organization shipments. The generated signing secret is returned once and is encrypted at rest.
+      security:
+        - bearerAuth: []
+      x-required-role:
+        - ADMIN
+        - SUPER_ADMIN
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateChainWebhookSubscription'
+            example:
+              endpoint: https://integrator.example.com/navin/events
+              events: [anchor, esc_rel]
+      responses:
+        '201':
+          description: Subscription created; secret is returned once.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChainWebhookSubscriptionCreatedResponse'
+        '400':
+          description: Invalid endpoint or event list.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Missing or invalid bearer token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Caller is not an organization administrator.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: Chain webhook encryption key is not configured.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    get:
+      operationId: webhooks_list_chain_subscriptions
+      tags:
+        - Webhooks
+      summary: List chain webhook subscriptions
+      description: Lists active subscriptions for the authenticated user's organization. Signing secrets are never returned.
+      security:
+        - bearerAuth: []
+      x-required-role:
+        - ADMIN
+        - SUPER_ADMIN
+      responses:
+        '200':
+          description: Active subscriptions retrieved.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, message, data]
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ChainWebhookSubscription'
+        '401':
+          description: Missing or invalid bearer token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Caller is not an organization administrator.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/webhooks/chain/subscriptions/{subscriptionId}:
+    delete:
+      operationId: webhooks_revoke_chain_subscription
+      tags:
+        - Webhooks
+      summary: Revoke a chain webhook subscription
+      description: Deactivates a subscription owned by the authenticated user's organization.
+      security:
+        - bearerAuth: []
+      x-required-role:
+        - ADMIN
+        - SUPER_ADMIN
+      parameters:
+        - in: path
+          name: subscriptionId
+          required: true
+          description: Subscription MongoDB ObjectId.
+          schema:
+            $ref: '#/components/schemas/ChainWebhookSubscriptionId'
+      responses:
+        '200':
+          description: Subscription revoked.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, message, data]
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                  data:
+                    type: string
+                    nullable: true
+                    example: null
+        '401':
+          description: Missing or invalid bearer token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Caller is not an organization administrator.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Subscription not found in the caller's organization.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/health:
     get:
       operationId: health_get_health
@@ -6577,6 +6727,89 @@ paths:
 
 components:
   schemas:
+    CreateChainWebhookSubscription:
+      type: object
+      additionalProperties: false
+      required: [endpoint, events]
+      properties:
+        endpoint:
+          type: string
+          format: uri
+          pattern: '^https://'
+          description: Public HTTPS subscriber endpoint; IP literals and embedded credentials are not accepted.
+        events:
+          type: array
+          minItems: 1
+          maxItems: 3
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/ChainWebhookEventName'
+    ChainWebhookEventName:
+      type: string
+      enum: [anchor, esc_init, esc_rel]
+    ChainWebhookSubscriptionId:
+      type: string
+      pattern: '^[0-9a-fA-F]{24}$'
+      description: MongoDB ObjectId of the webhook subscription.
+    ChainWebhookSubscription:
+      type: object
+      required: [id, endpoint, events, createdAt]
+      properties:
+        id:
+          $ref: '#/components/schemas/ChainWebhookSubscriptionId'
+        endpoint:
+          type: string
+          format: uri
+        events:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChainWebhookEventName'
+        createdAt:
+          type: string
+          format: date-time
+    ChainWebhookSubscriptionCreatedResponse:
+      type: object
+      required: [success, message, data]
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+        data:
+          allOf:
+            - $ref: '#/components/schemas/ChainWebhookSubscription'
+            - type: object
+              required: [secret]
+              properties:
+                secret:
+                  type: string
+                  description: Generated HMAC secret; shown only once.
+    ChainWebhookPayload:
+      type: object
+      required: [eventId, eventName, shipmentReference, txHash, ledger, schemaVersion, occurredAt]
+      properties:
+        eventId:
+          type: string
+        eventName:
+          $ref: '#/components/schemas/ChainWebhookEventName'
+        shipmentReference:
+          type: string
+        txHash:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+        ledger:
+          type: integer
+          minimum: 0
+        schemaVersion:
+          type: integer
+          enum: [1]
+        occurredAt:
+          type: string
+          format: date-time
+        dataHash:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
     Session:
       type: object
       description: A per-device session record created on login or signup.

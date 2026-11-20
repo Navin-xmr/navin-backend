@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Soroban simulation fee/CPU/ledger-byte ceilings with a typed retryable error and observable over-budget metric (#1074).
+- Frontend chain verification v2 guide and deterministic fixture covering canonical payload hashing and idempotency keys (#1071, #1079).
+- Soroban submission operations runbook and per-network resource policy configuration (#1074).
+- Organization-scoped chain webhook subscriptions with signed payloads, exponential retries, and a persistent dead-letter queue (#1072).
 - Three-ledger Stellar confirmation tracking for released payments and telemetry anchors, with immediate confirmations in simulated mode (#838, #837).
 
 **Phase 6 — Hash-and-Emit chain architecture**

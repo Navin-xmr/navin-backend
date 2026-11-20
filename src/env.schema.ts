@@ -74,6 +74,18 @@ const EnvShape = z.object({
   SOROBAN_ADAPTER: z.enum(['simulated', 'soroban']).default('simulated'),
   SOROBAN_RPC_URL: z.string().url('SOROBAN_RPC_URL must be a valid URL').optional(),
   ESCROW_CONTRACT_ID: z.string().min(1).optional(),
+  SOROBAN_MAX_RESOURCE_FEE_TESTNET: z.coerce.number().int().positive().safe().default(10_000_000),
+  SOROBAN_MAX_RESOURCE_FEE_PUBLIC: z.coerce.number().int().positive().safe().default(1_000_000),
+  SOROBAN_MAX_CPU_INSTRUCTIONS: z.coerce.number().int().positive().safe().default(100_000_000),
+  SOROBAN_MAX_LEDGER_BYTES: z.coerce.number().int().positive().safe().default(40_000_000),
+  CHAIN_WEBHOOK_ENCRYPTION_KEY: z.preprocess(
+    value => (typeof value === 'string' && value.trim() === '' ? undefined : value),
+    z
+      .string()
+      .trim()
+      .regex(/^[0-9a-fA-F]{64}$/, 'CHAIN_WEBHOOK_ENCRYPTION_KEY must be 64 hex characters')
+      .optional()
+  ),
 
   // Observability
   SENTRY_DSN: z.string().url('SENTRY_DSN must be a valid URL').optional(),
