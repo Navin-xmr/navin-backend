@@ -237,9 +237,7 @@ export class SimulatedAdapter implements ChainAdapter {
       return await fn();
     } catch (err) {
       if (err instanceof AppError && err.code.startsWith('ERR_CHAIN_')) throw err;
-      throw chainError(502, 'Simulated chain (Horizon) request failed', ErrorCodes.CHAIN_UNKNOWN, {
-        cause: err instanceof Error ? err.message : String(err),
-      });
+      throw chainError(502, 'Simulated chain (Horizon) request failed', ErrorCodes.CHAIN_UNKNOWN);
     }
   }
 
