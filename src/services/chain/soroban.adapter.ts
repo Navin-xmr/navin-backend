@@ -24,6 +24,7 @@ import type {
   EscrowResult,
   ReleaseEscrowInput,
 } from './types.js';
+import { serializeSubmission } from './sequence-lock.js';
 
 export interface SorobanAdapterOptions {
   sorobanRpcUrl?: string;
@@ -71,15 +72,17 @@ export class SorobanAdapter implements ChainAdapter {
       );
     }
 
-    const contract = this.getContract();
-    const op = contract.call(
-      'anchor',
-      nativeToScVal(input.shipment_id, { type: 'symbol' }),
-      nativeToScVal(Buffer.from(input.data_hash, 'hex'), { type: 'bytes' }),
-      new Address(input.actor).toScVal()
-    );
-
-    const { txHash, ledger } = await this.invokePipeline(op);
+    const keypair = this.signer();
+    const { txHash, ledger } = await serializeSubmission(keypair.publicKey(), async () => {
+      const contract = this.getContract();
+      const op = contract.call(
+        'anchor',
+        nativeToScVal(input.shipment_id, { type: 'symbol' }),
+        nativeToScVal(Buffer.from(input.data_hash, 'hex'), { type: 'bytes' }),
+        new Address(input.actor).toScVal()
+      );
+      return this.invokePipeline(op);
+    });
     return { txHash, ledger, simulated: false };
   }
 
@@ -92,14 +95,16 @@ export class SorobanAdapter implements ChainAdapter {
       );
     }
 
-    const contract = this.getContract();
-    const op = contract.call(
-      'release_escrow',
-      nativeToScVal(input.payment_id, { type: 'symbol' }),
-      nativeToScVal(Buffer.from(input.proof_hash, 'hex'), { type: 'bytes' })
-    );
-
-    const { txHash, ledger } = await this.invokePipeline(op);
+    const keypair = this.signer();
+    const { txHash, ledger } = await serializeSubmission(keypair.publicKey(), async () => {
+      const contract = this.getContract();
+      const op = contract.call(
+        'release_escrow',
+        nativeToScVal(input.payment_id, { type: 'symbol' }),
+        nativeToScVal(Buffer.from(input.proof_hash, 'hex'), { type: 'bytes' })
+      );
+      return this.invokePipeline(op);
+    });
     return { txHash, ledger, simulated: false, paymentId: input.payment_id };
   }
 
