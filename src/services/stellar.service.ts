@@ -133,8 +133,3 @@ export async function releaseEscrow(escrowData: {
     simulated: result.simulated,
   };
 }
-
-export function getStellarExplorerUrl(txHash: string): string {
-  const network = config.stellarNetwork === 'public' ? 'public' : 'testnet';
-  return `https://stellar.expert/explorer/${network}/tx/${txHash}`;
-}
