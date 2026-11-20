@@ -7,6 +7,7 @@ import {
   updateTelemetryAnchor,
   markTelemetryAnchorFailed,
 } from '../modules/telemetry/telemetry.service.js';
+import { AppError, ErrorCodes } from '../shared/http/errors.js';
 import { logger } from '../shared/logger/logger.js';
 
 interface AnchorTelemetryJob {
@@ -37,13 +38,13 @@ async function processStellarAnchor(job: Job<AnchorTelemetryJob>) {
 
     return { success: true, stellarTxHash };
   } catch (error) {
+    const errorCode = error instanceof AppError ? error.code : ErrorCodes.CHAIN_UNKNOWN;
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    logger.error({ telemetryId, errorMessage }, 'Failed to anchor telemetry');
+    logger.error({ telemetryId, errorCode, errorMessage }, 'Failed to anchor telemetry');
 
-    // Mark as failed in database
-    await markTelemetryAnchorFailed(telemetryId, errorMessage);
+    await markTelemetryAnchorFailed(telemetryId, errorCode);
 
-    throw error; // Re-throw to trigger BullMQ retry mechanism
+    throw error;
   }
 }
 

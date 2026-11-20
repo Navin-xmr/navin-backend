@@ -171,11 +171,7 @@ export class SorobanAdapter implements ChainAdapter {
       if (contractErrorMatch?.[1]) {
         throw chainErrorToAppError(parseInt(contractErrorMatch[1], 10));
       }
-      throw new AppError(
-        400,
-        `Soroban simulation failed: ${simRes.error}`,
-        ErrorCodes.CHAIN_UNKNOWN
-      );
+      throw new AppError(400, 'Soroban simulation failed', ErrorCodes.CHAIN_UNKNOWN);
     }
 
     // 2. Assemble
@@ -187,7 +183,7 @@ export class SorobanAdapter implements ChainAdapter {
     // 4. Send
     const sendRes = await this.server.sendTransaction(assembled);
     if (sendRes.status === 'ERROR') {
-      throw new AppError(400, `Soroban sendTransaction failed`, ErrorCodes.CHAIN_UNKNOWN, sendRes);
+      throw new AppError(400, 'Soroban sendTransaction failed', ErrorCodes.CHAIN_UNKNOWN);
     }
 
     // 5. Poll
@@ -205,8 +201,7 @@ export class SorobanAdapter implements ChainAdapter {
         throw new AppError(
           400,
           'Soroban transaction execution failed on-chain',
-          ErrorCodes.CHAIN_UNKNOWN,
-          statusRes
+          ErrorCodes.CHAIN_UNKNOWN
         );
       }
       if (Date.now() - startTime > timeoutMs) {
