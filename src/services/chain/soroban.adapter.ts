@@ -26,6 +26,7 @@ import type {
   EscrowResult,
   ReleaseEscrowInput,
 } from './types.js';
+import { enforceSorobanResourceBudget } from './fee-policy.js';
 
 export interface SorobanAdapterOptions {
   sorobanRpcUrl?: string;
@@ -199,6 +200,16 @@ export class SorobanAdapter implements ChainAdapter {
         ErrorCodes.CHAIN_UNKNOWN
       );
     }
+
+    const resources = simRes.transactionData.build().resources();
+    enforceSorobanResourceBudget(
+      {
+        resourceFee: simRes.minResourceFee,
+        cpuInstructions: resources.instructions(),
+        ledgerBytes: resources.diskReadBytes() + resources.writeBytes(),
+      },
+      config.stellarNetwork
+    );
 
     // 2. Assemble
     const assembled = rpc.assembleTransaction(tx, simRes).build();

@@ -1,5 +1,6 @@
 # Chain Adapter Interface Specification
 
+**Status:** v1 backend adapter wire format (`CHAIN_SPEC_VERSION = 1.0.0-draft`); frontend verification v2 is defined in §6.
 **Status:** v2 (`CHAIN_SPEC_VERSION = 2.0.0`)
 
 This document is the normative v2 surface for Navin Backend's Stellar / Soroban integration (v1 closed #649; v2 evolves the escrow signature and event verification per #1056 / #1058).
@@ -16,6 +17,7 @@ Single source of truth for shapes: `src/shared/types/chain.ts`. Cross-repo golde
 | ---------------- | -------------------------------------------------------------------------------------------------------------------- | --------------------- |
 | `anchor`         | `anchor(shipment_id: Symbol, data_hash: BytesN<32>, actor: Address)`                                                 | `actor`               |
 | `init_escrow`    | `init_escrow(payment_id: Symbol, shipment_id: Symbol, payer: Address, payee: Address, token: Address, amount: i128)` | `payer`               |
+| `release_escrow` | `release_escrow(payment_id: Symbol, proof_hash: BytesN<32>)`                                                         | contract admin        |
 | `release_escrow` | `release_escrow(caller: Address, shipment_id: Symbol)`                                                               | `caller`              |
 
 > **v2 escrow semantics (#1056):** escrow is **per-shipment**, not per-payment. The v1
@@ -89,6 +91,17 @@ Fixture tests exercise depths `0, 2, 3, 10`.
 
 ## 6. Adapter strategy
 
+`ChainAdapter` port (`src/services/chain/types.ts`): `anchorEvent`, `releaseEscrow`, `streamEvents`. `SimulatedAdapter` for local dev/tests; `SorobanAdapter` for deployed WASM escrow. Legacy `stellar.service.ts` manage-data ops are placeholders to be replaced.
+
+## 6. Frontend verification v2
+
+The backend adapter schemas above remain v1. The contracts v2 frontend flow verifies the contract's `shipment_created`, `status_updated`, and `milestone_recorded` events directly; it does **not** look for the legacy `anchor` event or a `dataHash` bundle. See the [frontend verification guide](./frontend-chain-verification.md) for a runnable example and fixture.
+
+For each action, fetch the canonical payload and expected hash from the verification API, then query the selected network's Soroban RPC for the transaction and event. Accept only a successful transaction and an event from the configured contract, on the configured network, with the expected event name and transaction hash. Decode the event's `data_hash`, schema version (`version` in the v2 event data), counter, and `idempotency_key` using the contract ABI.
+
+The payload is recursively key-sorted and compact-JSON serialized before SHA-256. The payload's `schema_version` and `idempotency_key` are included in those bytes, so neither may be dropped, defaulted, or substituted during canonicalization. Independently recompute the idempotency key as SHA-256 of `shipment_id` encoded as u64 big-endian, the event type encoded as a Soroban Symbol XDR value, and `event_counter` encoded as u32 big-endian. Require the decoded version and recomputed key to match the canonical payload before comparing its digest with the event's `data_hash`.
+
+The canonical tuple ordering and event-specific ABI are owned by [navin-contracts `FRONTEND_VERIFICATION.md`](https://github.com/Navin-xmr/navin-contracts/blob/main/docs/FRONTEND_VERIFICATION.md). Treat an unknown version, network/contract mismatch, missing event, or any mismatch as **unverified**; do not fall back to backend-provided status. The v2 flow is not yet a change to `src/shared/types/chain.ts` or the v1 golden event fixtures.
 `ChainAdapter` port (`src/services/chain/types.ts`): `anchorEvent`, `releaseEscrow`, `streamEvents`
 plus `getConfirmationCount` (and optional ledger query helpers). `SimulatedAdapter` for local
 dev/tests; `SorobanAdapter` for deployed WASM escrow. Legacy `stellar.service.ts` manage-data

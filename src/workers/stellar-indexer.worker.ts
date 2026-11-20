@@ -15,6 +15,7 @@ import type { ChainAdapter } from '../services/chain/types.js';
 import { getChainAdapter } from '../services/chain/factory.js';
 import { confirmAnchoredTelemetry } from '../modules/telemetry/telemetry.confirmation.js';
 import { logger } from '../shared/logger/logger.js';
+import { enqueueChainWebhookEvent } from '../modules/webhooks/chainWebhook.service.js';
 
 export const STELLAR_INDEXER_QUEUE = 'stellar_indexer_queue';
 export const STELLAR_INDEXER_JOB = 'poll_stellar_transactions';
@@ -269,7 +270,10 @@ export async function indexStellarTransactions(
       metadata.amount = event.data[4];
     } else if (event.name === CHAIN_EVENT_NAMES.ESCROW_RELEASE) {
       milestoneEvent = MilestoneEvent.SETTLEMENT_COMPLETED;
-      shipmentId = event.topic[1];
+      const payment = await PaymentModel.findById(event.topic[1])
+        .select('shipmentId')
+        .lean<{ shipmentId: { toString(): string } } | null>();
+      shipmentId = payment?.shipmentId.toString() ?? event.topic[1];
       metadata.paymentId = event.topic[1];
       metadata.proofHash = event.data[0];
       metadata.payee = event.data[1];
@@ -309,6 +313,16 @@ export async function indexStellarTransactions(
     } else if (event.name === CHAIN_EVENT_NAMES.ESCROW_RELEASE) {
       await recordPaymentConfirmation(adapter, event.tx_hash, event.ledger);
     }
+
+    await enqueueChainWebhookEvent({
+      eventId: event.id,
+      eventName: event.name,
+      shipmentId,
+      txHash: event.tx_hash,
+      ledger: event.ledger,
+      occurredAt: event.ledger_closed_at,
+      ...(dataHash && { dataHash }),
+    });
 
     if (cursor) {
       await saveStoredCursor(cursor);

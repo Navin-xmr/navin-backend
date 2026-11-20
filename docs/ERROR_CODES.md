@@ -201,6 +201,14 @@ Mapped from Soroban contract errors by `chainErrorToAppError()` in `src/shared/t
 - `ERR_CHAIN_INVALID_PROOF` (422) — Contract `InvalidProof` (8)
 - `ERR_CHAIN_UNKNOWN` (502) — Contract error code not in the spec (spec drift)
 - `ERR_CHAIN_INVALID_EVENT` (502) — Indexed contract event failed spec validation
+- `ERR_CHAIN_FEE_BUDGET_EXCEEDED` (503) — Soroban simulation exceeded the configured fee or resource ceilings; retry only after reviewing congestion/resource usage
+
+### Webhook Errors
+
+- `ERR_WEBHOOKS_ENCRYPTION_KEY_MISSING` (503) — Chain webhook encryption key is required to create a subscription
+- `ERR_WEBHOOKS_INVALID_SECRET` (500) — Stored chain webhook signing secret is malformed or cannot be decrypted
+- `ERR_WEBHOOKS_DELIVERY_FAILED` (502) — External chain webhook delivery failed and will be retried
+- `ERR_WEBHOOKS_ENDPOINT_NOT_PUBLIC` (400) — Subscriber endpoint resolved to a private or reserved address
 
 ### Server Errors
 
