@@ -194,6 +194,16 @@ export type EscrowInitEvent = z.infer<typeof EscrowInitEventSchema>;
 export type EscrowReleaseEvent = z.infer<typeof EscrowReleaseEventSchema>;
 export type ChainEvent = z.infer<typeof ChainEventSchema>;
 
+/** An RPC event that could not be decoded, retained for indexing and replay. */
+export interface ChainEventDecodeFailure {
+  kind: 'decode_error';
+  cursor: string;
+  contract_id: string;
+  raw_payload: unknown;
+  candidate_payload: unknown;
+  error: string;
+}
+
 // ─── Errors ──────────────────────────────────────────────────────────────────
 
 /** `#[contracterror]` u32 discriminants emitted by the contract. */
