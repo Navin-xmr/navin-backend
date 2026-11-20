@@ -1,5 +1,5 @@
 {
-  "spec_version": "1.1.0-draft",
+  "spec_version": "2.0.0",
   "args": {
     "anchor": {
       "shipment_id": "65f1a2b3c4d5e6f708192a3b",
@@ -15,8 +15,8 @@
       "amount": "1500000000"
     },
     "release_escrow": {
-      "payment_id": "66a0b1c2d3e4f50617283940",
-      "proof_hash": "3e23e8160039594a33894f6564e1b1348bbd7a0088d42c4acb73eeaed59c009d"
+      "caller": "GAAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQDZ7H",
+      "shipment_id": "65f1a2b3c4d5e6f708192a3b"
     }
   },
   "tx_result": {

@@ -7,11 +7,11 @@
  *
  * Mapping (legacy stellar.service.ts → port):
  * - anchorTelemetryHash → anchorEvent: manage-data `telemetry:<shipment_id>` = data_hash, hash memo
- * - tokenizeShipment    → anchorEvent: tokenized fields anchored as a SHA-256 hash (hash-and-emit)
- * - releaseEscrow       → releaseEscrow: manage-data `release:<payment_id>` = proof_hash, hash memo.
- *   (The legacy `Memo.text('escrow-release:<id>')` exceeds Stellar's 28-byte text-memo limit for
- *   ObjectId payment ids, so it is not reproduced here.) Failures reject with AppError instead of
- *   resolving `{ success: false }`.
+ * - tokenizeShipment    → anchorEvent: hash of the tokenized shipment fields
+ * - releaseEscrow       → releaseEscrow (v2): manage-data `release:<shipment_id>` holds a
+ *   deterministic digest of `(caller, shipment_id)` with a matching hash memo. Escrow is
+ *   per-shipment; the v1 payment_id/proof_hash pair is gone. Failures reject with AppError
+ *   (ERR_CHAIN_*) instead of resolving `{ success: false }`.
  * - streamEvents: replays anchor manage-data writes from the signer account's Horizon history as
  *   spec `anchor` events. Release writes are not streamed — manage-data never recorded the payee
  *   or amount that a spec `esc_rel` event requires, and fabricating them would be dishonest.
@@ -36,13 +36,14 @@ import type { Account, Transaction } from '@stellar/stellar-sdk';
 import { config } from '../../config/index.js';
 import { AppError, ErrorCodes } from '../../shared/http/errors.js';
 import {
+  AddressSchema,
   Bytes32HexSchema,
   CHAIN_EVENT_NAMES,
   SymbolSchema,
   parseChainEvent,
 } from '../../shared/types/chain.js';
 import type { ChainEvent } from '../../shared/types/chain.js';
-
+import { generateDataHash } from '../../shared/utils/crypto.js';
 import { KeyedSerializer } from './serializer.js';
 import type {
   AnchorEventInput,
@@ -65,15 +66,7 @@ const MAX_BAD_SEQ_RETRIES = 2;
 /** Process-wide: every adapter instance signing for an account shares its queue. */
 const accountSerializer = new KeyedSerializer();
 
-/**
- * Module-private Horizon plumbing (#814): nothing below is exported — only
- * `SimulatedAdapter` leaves this file. Domain modules must depend on the port
- * (./types.ts) via getChainAdapter(); the chain.* suites inject their own fake
- * Horizon instead of importing these internals.
- *
- * isBadSequence: Horizon rejects a stale sequence with
- * `extras.result_codes.transaction === 'tx_bad_seq'`.
- */
+/** Horizon rejects a stale sequence with `tx_bad_seq`. */
 function isBadSequence(err: unknown): boolean {
   const data = (err as { response?: { data?: unknown } } | null)?.response?.data as
     { extras?: { result_codes?: { transaction?: string } } } | undefined;
@@ -155,12 +148,26 @@ export class SimulatedAdapter implements ChainAdapter {
   }
 
   async releaseEscrow(input: ReleaseEscrowInput): Promise<EscrowResult> {
-    assertBytes32(input.proof_hash, 'proof_hash', ErrorCodes.CHAIN_INVALID_PROOF);
+    if (!AddressSchema.safeParse(input.caller).success) {
+      throw chainError(
+        422,
+        'caller must be a valid Stellar address strkey',
+        ErrorCodes.CHAIN_UNAUTHORIZED
+      );
+    }
+    if (!SymbolSchema.safeParse(input.shipment_id).success) {
+      throw chainError(422, 'shipment_id must be a valid Soroban Symbol', ErrorCodes.CHAIN_UNKNOWN);
+    }
+
+    const releaseDigest = generateDataHash({
+      caller: input.caller,
+      shipment_id: input.shipment_id,
+    });
     const { hash, ledger } = await this.submitManageData(
-      `${RELEASE_KEY_PREFIX}${input.payment_id}`,
-      input.proof_hash
+      `${RELEASE_KEY_PREFIX}${input.shipment_id}`,
+      releaseDigest
     );
-    return { txHash: hash, ledger, simulated: true, paymentId: input.payment_id };
+    return { txHash: hash, ledger, simulated: true, shipmentId: input.shipment_id };
   }
 
   async *streamEvents(cursor?: ChainEventCursor): AsyncIterable<ChainEvent> {
@@ -178,6 +185,10 @@ export class SimulatedAdapter implements ChainAdapter {
       }
       if (records.length < PAGE_SIZE) return;
     }
+  }
+
+  async getConfirmationCount(_ledger: number): Promise<number> {
+    return 3;
   }
 
   private signer(): Keypair {

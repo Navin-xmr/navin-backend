@@ -2,11 +2,15 @@
  * Chain interface — typed mirror of docs/chain-interface.md (TODO I2).
  *
  * ┌──────────────────────────────────────────────────────────────────────┐
- * │ SPEC VERSION: 1.0.0-draft  (see CHAIN_SPEC_VERSION below)            │
- * │ Mirrors the v1 surface defined by P6-01 (#649) / TODO I1:            │
+ * │ SPEC VERSION: 2.0.0  (see CHAIN_SPEC_VERSION below)                  │
+ * │ Mirrors the v2 surface (v1 from P6-01/#649, evolved by #1056/#1058):  │
  * │   functions  anchor · init_escrow · release_escrow (+ authz)         │
+ * │              release_escrow = (caller, shipment_id), escrow is       │
+ * │              per-shipment — there is no proof_hash argument.         │
  * │   events     anchor · esc_init · esc_rel (topic + data tuples)       │
+ * │              every anchored event exposes confirmations + verified   │
  * │   errors     contract error codes → ERR_CHAIN_* backend codes        │
+ * │              incl. InvalidStatus and Unauthorized/NotAuthorized      │
  * └──────────────────────────────────────────────────────────────────────┘
  *
  * Rules:
@@ -25,7 +29,7 @@ import { z } from 'zod';
 import { AppError, ErrorCodes } from '../http/errors.js';
 import type { ErrorCode } from '../http/errors.js';
 
-export const CHAIN_SPEC_VERSION = '1.1.0-draft' as const;
+export const CHAIN_SPEC_VERSION = '2.0.0' as const;
 
 // ─── Soroban primitives ──────────────────────────────────────────────────────
 
@@ -89,11 +93,18 @@ export const InitEscrowArgsSchema = z
   .strict()
   .refine(a => a.payer !== a.payee, { message: 'payer and payee must differ', path: ['payee'] });
 
-/** `release_escrow(payment_id: Symbol, proof_hash: BytesN<32>)` — auth: contract admin. */
+/**
+ * `release_escrow(caller: Address, shipment_id: Symbol)` — auth: `caller`.
+ *
+ * v2 (#1056): the deployed contract releases escrow per shipment and requires
+ * the caller to authorize. The v1 `(payment_id, proof_hash)` shape was never a
+ * real contract argument — `proof_hash` was a backend-invented value — so it
+ * is removed rather than kept as a deprecated alias.
+ */
 export const ReleaseEscrowArgsSchema = z
   .object({
-    payment_id: SymbolSchema,
-    proof_hash: Bytes32HexSchema,
+    caller: AddressSchema,
+    shipment_id: SymbolSchema,
   })
   .strict();
 
@@ -109,12 +120,13 @@ export const CHAIN_FUNCTIONS = ['anchor', 'init_escrow', 'release_escrow'] as co
 export type ChainFunctionName = (typeof CHAIN_FUNCTIONS)[number];
 
 /** Who must `require_auth()` for each function, per spec. */
-export const CHAIN_FUNCTION_AUTH: Readonly<Record<ChainFunctionName, 'actor' | 'payer' | 'admin'>> =
-  {
-    anchor: 'actor',
-    init_escrow: 'payer',
-    release_escrow: 'admin',
-  };
+export const CHAIN_FUNCTION_AUTH: Readonly<
+  Record<ChainFunctionName, 'actor' | 'payer' | 'caller' | 'admin'>
+> = {
+  anchor: 'actor',
+  init_escrow: 'payer',
+  release_escrow: 'caller',
+};
 
 export const ChainFunctionArgsSchemas = {
   anchor: AnchorArgsSchema,
@@ -246,6 +258,41 @@ export type EscrowFreezeEvent = z.infer<typeof EscrowFreezeEventSchema>;
 export type EscrowUnfreezeEvent = z.infer<typeof EscrowUnfreezeEventSchema>;
 export type ChainEvent = z.infer<typeof ChainEventSchema>;
 
+// ─── Event verification / confirmation depth (v2, #1058) ────────────────────
+
+/** Default ledgers required before an anchored record is treated as `verified`. */
+export const DEFAULT_CONFIRMATION_THRESHOLD = 3;
+
+/** Confirmation metadata exposed consistently for every anchored event class. */
+export const ChainEventVerificationSchema = z
+  .object({
+    confirmations: U32Schema,
+    verified: z.boolean(),
+  })
+  .strict();
+export type ChainEventVerification = z.infer<typeof ChainEventVerificationSchema>;
+
+/**
+ * Ledgers closed strictly after `ledger`: 0 at the head, N once N more ledgers
+ * have closed. Pure so fixture tests can exercise any depth deterministically.
+ */
+export function confirmationDepth(ledger: number, headLedger: number): number {
+  return Math.max(0, headLedger - ledger);
+}
+
+/**
+ * Idempotent verification decision shared by anchors, status updates,
+ * milestones and escrow events. Re-running with a higher head is safe.
+ */
+export function verifyAnchoredLedger(
+  ledger: number,
+  headLedger: number,
+  threshold: number = DEFAULT_CONFIRMATION_THRESHOLD
+): ChainEventVerification {
+  const confirmations = confirmationDepth(ledger, headLedger);
+  return { confirmations, verified: confirmations >= threshold };
+}
+
 // ─── Errors ──────────────────────────────────────────────────────────────────
 
 /** `#[contracterror]` u32 discriminants emitted by the contract. */
@@ -258,6 +305,8 @@ export const CHAIN_CONTRACT_ERRORS = {
   EscrowAlreadyReleased: 6,
   InvalidAmount: 7,
   InvalidProof: 8,
+  /** v2 (#1056): escrow release attempted from a shipment in the wrong state. */
+  InvalidStatus: 9,
 } as const;
 export type ChainContractErrorName = keyof typeof CHAIN_CONTRACT_ERRORS;
 export type ChainContractErrorCode = (typeof CHAIN_CONTRACT_ERRORS)[ChainContractErrorName];
@@ -283,6 +332,7 @@ export const CHAIN_ERROR_MAP: Readonly<
   EscrowAlreadyReleased: { code: ErrorCodes.CHAIN_ESCROW_ALREADY_RELEASED, status: 409 },
   InvalidAmount: { code: ErrorCodes.CHAIN_INVALID_AMOUNT, status: 422 },
   InvalidProof: { code: ErrorCodes.CHAIN_INVALID_PROOF, status: 422 },
+  InvalidStatus: { code: ErrorCodes.CHAIN_INVALID_STATUS, status: 409 },
 };
 
 const errorNameByCode = new Map<number, ChainContractErrorName>(

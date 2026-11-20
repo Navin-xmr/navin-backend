@@ -1,22 +1,19 @@
 import { jest, describe, it, expect, beforeEach, beforeAll } from '@jest/globals';
 
 // Mock Redis
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const mockBlockToken = jest.fn() as any;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const mockIsTokenBlocked = jest.fn() as any;
+const mockBlockToken = jest.fn();
+const mockIsTokenBlocked = jest.fn();
 
 // Track in-memory data
 const users: Record<string, unknown>[] = [];
 const organizations: Record<string, unknown>[] = [];
 
 await jest.unstable_mockModule('../src/modules/users/users.model.js', () => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const UserModel: any = {
+  const UserModel = {
     findOne: ({ email }: { email: string }) =>
       Promise.resolve(users.find(u => u.email === email) ?? null),
     findById: (id: string) => Promise.resolve(users.find(u => u._id === id) ?? null),
-    create: jest.fn().mockImplementation(async (data, options) => {
+    create: jest.fn().mockImplementation(async (data: Record<string, unknown> | Record<string, unknown>[], _options?: unknown) => {
       // Handle both single object and array (for transactions)
       const isArray = Array.isArray(data);
       const docs = isArray ? data : [data];
@@ -45,7 +42,7 @@ await jest.unstable_mockModule('../src/modules/users/users.model.js', () => {
     findOne: ({ name }: { name: string }) =>
       Promise.resolve(organizations.find(o => o.name === name) ?? null),
     findById: (id: string) => Promise.resolve(organizations.find(o => o._id === id) ?? null),
-    create: jest.fn().mockImplementation(async (data, options) => {
+    create: jest.fn().mockImplementation(async (data: Record<string, unknown> | Record<string, unknown>[], _options?: unknown) => {
       const isArray = Array.isArray(data);
       const docs = isArray ? data : [data];
 

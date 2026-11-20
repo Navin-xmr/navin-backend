@@ -30,6 +30,8 @@ export interface IPayment {
   payeeAddress?: string;
   status: PaymentStatus;
   stellarTxHash?: string;
+  stellarTxLedger?: number;
+  confirmations?: number;
   escrowRelease?: IEscrowRelease;
   createdAt: Date;
   updatedAt: Date;
@@ -86,6 +88,8 @@ const PaymentSchema = new Schema<IPayment>(
       default: PaymentStatus.PENDING,
     },
     stellarTxHash: { type: String },
+    stellarTxLedger: { type: Number },
+    confirmations: { type: Number, default: 0 },
     escrowRelease: { type: EscrowReleaseSchema },
     deletedAt: { type: Date, default: null },
   },

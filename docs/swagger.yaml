@@ -4540,8 +4540,28 @@ paths:
                           type: string
                         stellarTxHash:
                           type: string
+                        stellarTxLedger:
+                          type: integer
+                          nullable: true
+                        verified:
+                          type: boolean
+                        confirmationMetadata:
+                          type: object
+                          nullable: true
+                          properties:
+                            ledger:
+                              type: integer
+                            confirmations:
+                              type: integer
+                              minimum: 0
+                            verified:
+                              type: boolean
+                            indexedAt:
+                              type: string
+                              format: date-time
                         anchorStatus:
                           type: string
+                          enum: [PENDING_ANCHOR, ANCHORED, ANCHOR_FAILED, VERIFIED]
                         anchorError:
                           type: string
                         createdAt:
@@ -7097,6 +7117,13 @@ components:
         stellarTxHash:
           type: string
           nullable: true
+        stellarTxLedger:
+          type: integer
+          nullable: true
+        confirmations:
+          type: integer
+          minimum: 0
+          description: Confirmed ledger depth for the Stellar transaction.
         explorerUrl:
           type: string
           nullable: true
