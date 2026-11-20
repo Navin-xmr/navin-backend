@@ -27,14 +27,6 @@ await jest.unstable_mockModule('../src/services/chain/factory.js', () =>
   createChainFactoryMock(chainAdapter)
 );
 
-// Mock stellar.service for getStellarExplorerUrl utility (not chain operations)
-await jest.unstable_mockModule('../src/services/stellar.service.js', () => ({
-  getStellarExplorerUrl: jest.fn((hash: string) => `https://stellar.expert/explorer/testnet/tx/${hash}`),
-  tokenizeShipment: jest.fn(),
-  anchorTelemetryHash: jest.fn(),
-  releaseEscrow: jest.fn(),
-}));
-
 const { createPaymentService } = await import('../src/modules/payments/payments.service.js');
 const { AppError } = await import('../src/shared/http/errors.js');
 

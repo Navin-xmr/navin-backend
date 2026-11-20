@@ -46,7 +46,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Enforced `jest.resetModules()` before ESM mock registration across chain, worker, shipment, settlement, payment, telemetry, and anomaly suites; lint now rejects direct test imports of `stellar.service.js` (#976, #809, #974, #975).
+- Enforced `jest.resetModules()` before ESM mock registration across chain, worker, shipment, settlement, payment, telemetry, and anomaly suites; lint rejects direct imports and mocks of `stellar.service.js`, and payment explorer URL formatting now lives in a shared utility (#976, #809, #974, #975).
 - Replaced explicit `any` in test fixtures, standardized realtime event constants, and used ObjectId fixtures across test suites (#982, #981, #980, #979)
 - Corrected `docs/PAGINATION.md` pagination strategy table: users dual-mode is live, documented the payments `total` meta variance, added shipment timeline to the cursor list (#576)
 - Refactored `loginLimiter` in `src/shared/middleware/rateLimiter.ts` to reuse `createRateLimitHandler()`, removing the duplicated inline 429 handler (#815)

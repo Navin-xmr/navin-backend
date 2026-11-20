@@ -96,6 +96,15 @@ export default [
           ],
         },
       ],
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector:
+            "CallExpression[callee.object.name='jest'][callee.property.name='unstable_mockModule'][arguments.0.value='../src/services/stellar.service.js']",
+          message:
+            'Mock the ChainAdapter port (src/services/chain) instead of mocking stellar.service directly.',
+        },
+      ],
     },
   },
   {
