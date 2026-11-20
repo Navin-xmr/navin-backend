@@ -14,6 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Soroban submission operations runbook and per-network resource policy configuration (#1074).
 - Organization-scoped chain webhook subscriptions with signed payloads, exponential retries, and a persistent dead-letter queue (#1072).
 - Three-ledger Stellar confirmation tracking for released payments and telemetry anchors, with immediate confirmations in simulated mode (#838, #837).
+- Chain spec **v2.0.0**: `release_escrow(caller, shipment_id)` replaces the backend-invented `(payment_id, proof_hash)` input; release receipts now carry `shipmentId` and failures reject with coded `ERR_CHAIN_UNAUTHORIZED` / `ERR_CHAIN_INVALID_STATUS` instead of `{ success: false }` (#1056).
+- Confirmation depth (`confirmations` / `verified`) on every anchored ledger event class, per-network thresholds via `CHAIN_CONFIRMATIONS_TESTNET` / `CHAIN_CONFIRMATIONS_PUBLIC`, and idempotent re-verification (#1058).
+- V2 schema round-trip/mutation suite (`tests/chain.v2.schemas.test.ts`, `reports/chain-schema-coverage.md`) and chain threat model with negative tests (`docs/chain-threat-model.md`) (#1057, #1059).
 
 **Phase 6 — Hash-and-Emit chain architecture**
 

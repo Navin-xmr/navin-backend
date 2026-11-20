@@ -23,6 +23,8 @@ export interface LedgerBlockInput {
   canonicalPayload?: Record<string, unknown>;
   transactionHash?: string;
   ledger?: number;
+  /** #1058 — confirmation depth; defaults to 0 until the head advances. */
+  confirmations?: number;
   verified?: boolean;
   actor?: string;
   metadata?: Record<string, unknown>;
@@ -45,6 +47,7 @@ export async function createLedgerBlock(input: LedgerBlockInput): Promise<ILedge
     ...(input.dataHash && { dataHash: input.dataHash }),
     ...(input.canonicalPayload && { canonicalPayload: input.canonicalPayload }),
     ledger: input.ledger ?? input.blockNumber ?? 0,
+    confirmations: input.confirmations ?? 0,
     verified: input.verified ?? false,
     ...(input.actor && { actor: input.actor }),
     ...(input.metadata && { metadata: input.metadata }),

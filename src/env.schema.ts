@@ -86,6 +86,9 @@ const EnvShape = z.object({
       .regex(/^[0-9a-fA-F]{64}$/, 'CHAIN_WEBHOOK_ENCRYPTION_KEY must be 64 hex characters')
       .optional()
   ),
+  // #1058 — ledger confirmation threshold per network for anchored events.
+  CHAIN_CONFIRMATIONS_TESTNET: z.coerce.number().int().min(0).max(1000).default(3),
+  CHAIN_CONFIRMATIONS_PUBLIC: z.coerce.number().int().min(0).max(1000).default(3),
 
   // Observability
   SENTRY_DSN: z.string().url('SENTRY_DSN must be a valid URL').optional(),

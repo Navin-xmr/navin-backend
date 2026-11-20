@@ -22,6 +22,8 @@ export interface ILedgerBlock {
   canonicalPayload?: Record<string, unknown>;
   transactionHash?: string;
   ledger: number;
+  /** #1058 — ledgers closed strictly after `ledger`; recomputed idempotently. */
+  confirmations: number;
   verified: boolean;
   actor?: string;
   metadata?: Record<string, unknown>;
@@ -63,6 +65,11 @@ const LedgerBlockSchema = new Schema(
       required: true,
       default: 0,
     },
+    confirmations: {
+      type: Number,
+      required: true,
+      default: 0,
+    },
     verified: {
       type: Boolean,
       required: true,
@@ -86,6 +93,9 @@ LedgerBlockSchema.index({ milestoneEvent: 1, createdAt: -1 });
 
 // Allows fast lookup / deduplication by on-chain data hash.
 LedgerBlockSchema.index({ dataHash: 1 }, { sparse: true });
+
+// #1058 — supports idempotent re-verification scans of not-yet-confirmed blocks.
+LedgerBlockSchema.index({ verified: 1, ledger: 1 });
 
 // Soft delete middleware
 LedgerBlockSchema.pre(['find', 'findOne', 'findOneAndUpdate', 'countDocuments'], function () {

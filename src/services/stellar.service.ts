@@ -10,7 +10,6 @@ import {
 import { config } from '../config/index.js';
 import { AppError, ErrorCodes } from '../shared/http/errors.js';
 import { getChainAdapter } from './chain/factory.js';
-import { generateDataHash } from '../shared/utils/crypto.js';
 
 export function getHorizonServer(url: string = config.horizonUrl): Horizon.Server {
   return new Horizon.Server(url);
@@ -115,22 +114,17 @@ export async function anchorTelemetryHash(telemetryData: {
 }
 
 /**
- * Releases escrow on Stellar via ChainAdapter release_escrow call.
- * Rejects with AppError codes on failure (no error swallowing).
+ * Releases escrow on Stellar via the ChainAdapter `release_escrow(caller, shipment_id)`
+ * port (v2, #1056). Escrow is per-shipment; there is no proof hash to invent.
+ * Rejects with AppError codes on failure (no error swallowing, no `{success:false}`).
  */
 export async function releaseEscrow(escrowData: {
-  paymentId: string;
+  caller: string;
   shipmentId: string;
-  proofHash?: string;
 }): Promise<{ success: boolean; transactionHash?: string; simulated?: boolean }> {
-  const adapter = getChainAdapter();
-  const proofHash =
-    escrowData.proofHash ??
-    generateDataHash({ paymentId: escrowData.paymentId, shipmentId: escrowData.shipmentId });
-
-  const result = await adapter.releaseEscrow({
-    payment_id: escrowData.paymentId,
-    proof_hash: proofHash,
+  const result = await getChainAdapter().releaseEscrow({
+    caller: escrowData.caller,
+    shipment_id: escrowData.shipmentId,
   });
 
   return {

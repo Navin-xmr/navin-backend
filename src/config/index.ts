@@ -66,6 +66,11 @@ export const config = {
     maxLedgerBytes: env.SOROBAN_MAX_LEDGER_BYTES,
   },
   chainWebhookEncryptionKey: env.CHAIN_WEBHOOK_ENCRYPTION_KEY,
+  /** #1058 — ledgers required before an anchored event is marked verified. */
+  chainConfirmations: {
+    testnet: env.CHAIN_CONFIRMATIONS_TESTNET,
+    public: env.CHAIN_CONFIRMATIONS_PUBLIC,
+  },
   sentryDsn: env.SENTRY_DSN,
   totpEncryptionKey: env.TOTP_ENCRYPTION_KEY,
 } as const;

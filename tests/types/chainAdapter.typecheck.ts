@@ -37,6 +37,7 @@ void nonChainCode;
 
 // ─── Mock adapter compiles against the port ─────────────────────────────────
 const HASH = 'a'.repeat(64);
+const ACTOR = `G${'A'.repeat(55)}`;
 
 export class MockChainAdapter implements ChainAdapter {
   constructor(
@@ -49,11 +50,11 @@ export class MockChainAdapter implements ChainAdapter {
   }
 
   async releaseEscrow(input: ReleaseEscrowInput): Promise<EscrowResult> {
-    if (!this.escrows.has(input.payment_id)) {
+    if (!this.escrows.has(input.shipment_id)) {
       const code: ChainErrorCode = ErrorCodes.CHAIN_ESCROW_NOT_FOUND;
       throw new AppError(404, 'Escrow not found', code);
     }
-    return { txHash: HASH, ledger: 2, simulated: true, paymentId: input.payment_id };
+    return { txHash: HASH, ledger: 2, simulated: true, shipmentId: input.shipment_id };
   }
 
   async *streamEvents(cursor?: ChainEventCursor): AsyncIterable<ChainEvent> {
@@ -72,7 +73,7 @@ export const literalAdapter = {
     txHash: HASH,
     ledger: 1,
     simulated: false,
-    paymentId: i.payment_id,
+    shipmentId: i.shipment_id,
   }),
   async *streamEvents() {
     yield* [] as ChainEvent[];
@@ -102,8 +103,8 @@ export const untypedEvents = {
 } satisfies ChainAdapter;
 
 export async function misuse(adapter: ChainAdapter): Promise<void> {
-  // @ts-expect-error — input must be the snake_case spec args (proof_hash required)
-  await adapter.releaseEscrow({ payment_id: 'p1' });
+  // @ts-expect-error — v2 spec args require both caller and shipment_id
+  await adapter.releaseEscrow({ caller: ACTOR });
   // @ts-expect-error — camelCase is not the spec shape
   await adapter.anchorEvent({ shipmentId: 's1', dataHash: HASH, actor: 'G' });
 }
@@ -118,7 +119,7 @@ export async function consume(adapter: ChainAdapter, cursor?: ChainEventCursor):
       hashes.push(dataHash);
     }
   }
-  const released = await adapter.releaseEscrow({ payment_id: 'p1', proof_hash: HASH });
+  const released = await adapter.releaseEscrow({ caller: ACTOR, shipment_id: 'p1' });
   hashes.push(released.txHash);
   return hashes;
 }
