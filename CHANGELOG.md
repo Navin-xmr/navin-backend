@@ -9,9 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Three-ledger Stellar confirmation tracking for released payments and telemetry anchors, with immediate confirmations in simulated mode (#838, #837).
+- Chain spec **v2.0.0**: `release_escrow(caller, shipment_id)` replaces the backend-invented `(payment_id, proof_hash)` input; release receipts now carry `shipmentId` and failures reject with coded `ERR_CHAIN_UNAUTHORIZED` / `ERR_CHAIN_INVALID_STATUS` instead of `{ success: false }` (#1056).
+- Confirmation depth (`confirmations` / `verified`) on every anchored ledger event class, per-network thresholds via `CHAIN_CONFIRMATIONS_TESTNET` / `CHAIN_CONFIRMATIONS_PUBLIC`, and idempotent re-verification (#1058).
+- V2 schema round-trip/mutation suite (`tests/chain.v2.schemas.test.ts`, `reports/chain-schema-coverage.md`) and chain threat model with negative tests (`docs/chain-threat-model.md`) (#1057, #1059).
+
 **Phase 6 — Hash-and-Emit chain architecture**
 
-- `ChainAdapter` port (`src/services/chain/types.ts`) with `anchorEvent`, `releaseEscrow`, `streamEvents` and the `AnchorResult` / `EscrowResult` / `ChainEvent` shapes; domain modules may depend on the port and the factory only, never on an adapter implementation or the Stellar SDK (#650).
+- `ChainAdapter` port (`src/services/chain/types.ts`) with `anchorEvent`, `releaseEscrow`, `streamEvents`, `getConfirmationCount` and the `AnchorResult` / `EscrowResult` / `ChainEvent` shapes; domain modules may depend on the port and the factory only, never on an adapter implementation or the Stellar SDK (#650).
 - `SimulatedAdapter` (`src/services/chain/simulated.adapter.ts`) — Horizon `manageData` anchors and releases with `simulated: true` receipts; every result is explicitly flagged so demos never imply a real escrow (#650).
 - `SorobanAdapter` (`src/services/chain/soroban.adapter.ts`) — live contract execution over Soroban RPC via `simulateTransaction` → `assembleTransaction` → sign → `sendTransaction` → poll, wired into `createChainAdapter()` (#656).
 - Config-selected adapter factory `getChainAdapter()` / `createChainAdapter()` driven by the `SOROBAN_ADAPTER` env var (`simulated` | `soroban`), with `resetChainAdapter()` as a test seam (#653).
@@ -44,9 +49,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Replaced explicit `any` in test fixtures, standardized realtime event constants, and used ObjectId fixtures across test suites (#982, #981, #980, #979)
 - Corrected `docs/PAGINATION.md` pagination strategy table: users dual-mode is live, documented the payments `total` meta variance, added shipment timeline to the cursor list (#576)
 - Refactored `loginLimiter` in `src/shared/middleware/rateLimiter.ts` to reuse `createRateLimitHandler()`, removing the duplicated inline 429 handler (#815)
 
+- `simulated.adapter.ts` now exports only `SimulatedAdapter`; its implementation helpers remain private (#839).
 - Stellar writes moved behind the `ChainAdapter` port: `telemetry` / `payments` / `shipments` / `webhooks` and the workers now import `types.ts` + `getChainAdapter()` only, and no longer construct Horizon transactions directly (#650).
 - `releaseEscrow()` manage-data marker replaced by a real `adapter.releaseEscrow()` delegation (#657).
 - `stellar-indexer.worker.ts` rewritten to consume `adapter.streamEvents()` instead of inferring events from memo text (#662).

@@ -141,6 +141,7 @@ Last updated: 2026-10-17 · branch `main` @ `113522d`
 - [x] **H4.2. Missing quality gates in CI** — `ci.yml` with parallel verify, lint, openapi-lint, docker, compose-smoke, and redis-persistence jobs — ✅ FIXED
 - [x] **H4.3. Dependabot config** — `.github/dependabot.yml` active for npm + github-actions — ✅ FIXED (#544)
 - [x] **H4.4. Branch protection** — required status checks documented in `CONTRIBUTING.md` — ✅ FIXED (#545)
+- [x] **H4.5. Tests as a blocking PR check** — `test` job (mongo + redis services) added to `ci.yml`; `tests-nightly.yml` heartbeat removed — ✅ FIXED
 
 ---
 

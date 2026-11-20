@@ -590,7 +590,7 @@ The full matrix — SMTP, SendGrid, Twilio, S3/Cloudinary keys, Soroban placehol
 | `npm run check:deps` | Check runtime imports against `package.json` dependencies |
 | `npm run lint` | Run ESLint over `src/` |
 | `npm run lint:fix` | Auto-fix lint issues |
-| `npm test` | Run test suite (Jest with ESM VM modules) |
+| `npm test` | Run test suite (Jest with ESM VM modules) — enforced CI gate on every PR |
 | `npm run test:watch` | Run tests in watch mode |
 | `npm run migrate:up` | Apply pending database migrations (migrate-mongo) |
 | `npm run migrate:down` | Rollback last migration |
@@ -601,6 +601,8 @@ The full matrix — SMTP, SendGrid, Twilio, S3/Cloudinary keys, Soroban placehol
 ## Contributing
 
 We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on branching, commits, pull requests, and our build/test requirements.
+
+CI (`.github/workflows/ci.yml`) gates every PR on deps audit, typecheck, build, lint, OpenAPI lint **and the full test suite** (`npm test` against MongoDB + Redis service containers). A failing test blocks merge.
 
 ## Security
 

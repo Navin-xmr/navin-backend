@@ -41,6 +41,7 @@ export interface ITelemetry {
   timestamp: Date;
   dataHash: string;
   stellarTxHash?: string;
+  stellarTxLedger?: number;
   anchorStatus: TelemetryAnchorStatus;
   anchorError?: string;
   rawPayload: Record<string, unknown>;

@@ -1,16 +1,19 @@
 import { describe, expect, it, jest, beforeEach } from '@jest/globals';
+import type { Request, Response } from 'express';
 import { AppError } from '../src/shared/http/errors.js';
 import { createLedgerBlock } from '../src/modules/ledger/ledger.repo.js';
 
 const getLedgerBlocksServiceMock = jest.fn();
 const getLedgerBlockByIdServiceMock = jest.fn();
+const getLedgerBlockVerificationServiceMock = jest.fn();
 
 await jest.unstable_mockModule('../src/modules/ledger/ledger.service.js', () => ({
   getLedgerBlocksService: getLedgerBlocksServiceMock,
   getLedgerBlockByIdService: getLedgerBlockByIdServiceMock,
+  getLedgerBlockVerificationService: getLedgerBlockVerificationServiceMock,
 }));
 
-const { getLedgerBlocks, getLedgerBlockById } = await import(
+const { getLedgerBlocks, getLedgerBlockById, getLedgerBlockVerification } = await import(
   '../src/modules/ledger/ledger.controller.js',
 );
 
@@ -18,16 +21,17 @@ describe('GET /api/ledger/blocks controller', () => {
   beforeEach(() => {
     getLedgerBlocksServiceMock.mockReset();
     getLedgerBlockByIdServiceMock.mockReset();
+    getLedgerBlockVerificationServiceMock.mockReset();
   });
 
   it('passes the validated ledger block id parameter to the service', async () => {
     getLedgerBlockByIdServiceMock.mockResolvedValue({ _id: 'lb1' });
 
-    const req = { params: { id: 'lb1' } } as any;
+    const req = { params: { id: 'lb1' } } as unknown as Request;
     const res = {
       status: jest.fn().mockReturnThis(),
       json: jest.fn(),
-    } as any;
+    } as unknown as Response;
 
     await getLedgerBlockById(req, res);
 
@@ -64,12 +68,12 @@ describe('GET /api/ledger/blocks controller', () => {
 
     const req = {
       query: { limit: '1' },
-    } as any;
+    } as unknown as Request;
 
     const res = {
       status: jest.fn().mockReturnThis(),
       json: jest.fn(),
-    } as any;
+    } as unknown as Response;
 
     await getLedgerBlocks(req, res);
 
@@ -96,12 +100,12 @@ describe('GET /api/ledger/blocks controller', () => {
 
     const req = {
       query: { milestoneEvent: 'SETTLEMENT_COMPLETED', limit: '10' },
-    } as any;
+    } as unknown as Request;
 
     const res = {
       status: jest.fn().mockReturnThis(),
       json: jest.fn(),
-    } as any;
+    } as unknown as Response;
 
     await getLedgerBlocks(req, res);
 
@@ -118,11 +122,11 @@ describe('GET /api/ledger/blocks controller', () => {
       total: 0,
     });
 
-    const req = { query: {} } as any;
+    const req = { query: {} } as unknown as Request;
     const res = {
       status: jest.fn().mockReturnThis(),
       json: jest.fn(),
-    } as any;
+    } as unknown as Response;
 
     await getLedgerBlocks(req, res);
 
@@ -229,5 +233,43 @@ describe('GET /api/ledger/blocks controller', () => {
 
     const payload = (res.json as jest.Mock).mock.calls[0][0];
     expect(payload.data[0]).toHaveProperty('dataHash', hash);
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Verification endpoint tests (GET /api/ledger/blocks/:id/verification)
+  // ──────────────────────────────────────────────────────────────────────────
+
+  it('GET /api/ledger/blocks/:id/verification includes network field', async () => {
+    getLedgerBlockVerificationServiceMock.mockResolvedValue({
+      canonicalPayload: { shipmentId: 'ship-1', event: 'DELIVERED' },
+      dataHash: 'c'.repeat(64),
+      txHash: 'stellar-tx-hash-123',
+      transactionHash: 'stellar-tx-hash-123',
+      ledger: 12345,
+      network: 'testnet',
+    });
+
+    const req = { params: { id: 'lb5' } } as any;
+    const res = {
+      status: jest.fn().mockReturnThis(),
+      json: jest.fn(),
+    } as any;
+
+    await getLedgerBlockVerification(req, res);
+
+    expect(getLedgerBlockVerificationServiceMock).toHaveBeenCalledWith('lb5');
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        success: true,
+        message: 'Ledger block verification retrieved',
+        data: expect.objectContaining({
+          network: 'testnet',
+          txHash: 'stellar-tx-hash-123',
+          dataHash: 'c'.repeat(64),
+          ledger: 12345,
+        }),
+      }),
+    );
   });
 });

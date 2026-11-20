@@ -1,16 +1,49 @@
 import { describe, expect, it, jest, beforeEach } from '@jest/globals';
 import fs from 'node:fs';
 import path from 'node:path';
+import {
+  createPaymentModelMock,
+  createSocketIoMock,
+  createTelemetryModelMock,
+} from './helpers/mocks.js';
 import type { ChainAdapter } from '../src/services/chain/types.js';
 import type { ChainEvent } from '../src/shared/types/chain.js';
 
 const ledgerUpdateOneMock = jest.fn();
+const paymentFindMock = jest.fn(() => ({ lean: async () => [] }));
+const paymentFindOneAndUpdateMock = jest.fn((): { lean: () => Promise<unknown> } => ({
+  lean: async () => null,
+}));
+const telemetryFindMock = jest.fn(() => ({ lean: async () => [] }));
+// The worker chains `.lean()` on findOneAndUpdate results (recordTelemetryConfirmation,
+// recordPaymentConfirmation), so the mocks must return a lean-able query object.
+const telemetryFindOneAndUpdateMock = jest.fn((): { lean: () => Promise<unknown> } => ({
+  lean: async () => null,
+}));
+const telemetryUpdateOneMock = jest.fn();
+const paymentModelMock = createPaymentModelMock({
+  PaymentModel: { find: paymentFindMock, findOneAndUpdate: paymentFindOneAndUpdateMock },
+});
+const telemetryModelMock = createTelemetryModelMock({
+  Telemetry: {
+    find: telemetryFindMock,
+    findOneAndUpdate: telemetryFindOneAndUpdateMock,
+    updateOne: telemetryUpdateOneMock,
+  },
+});
+const socketIoMock = createSocketIoMock();
 
 await jest.unstable_mockModule('../src/modules/ledger/ledger.model.js', () => ({
   LedgerBlock: {
     updateOne: ledgerUpdateOneMock,
   },
 }));
+await jest.unstable_mockModule('../src/modules/payments/payments.model.js', () => paymentModelMock);
+await jest.unstable_mockModule(
+  '../src/modules/telemetry/telemetry.model.js',
+  () => telemetryModelMock
+);
+await jest.unstable_mockModule('../src/infra/socket/io.js', () => socketIoMock);
 
 const { indexStellarTransactions } = await import('../src/workers/stellar-indexer.worker.js');
 
@@ -46,6 +79,9 @@ describe('Event-driven indexer golden fixtures replay', () => {
           yield ev;
         }
       },
+      async getConfirmationCount() {
+        return 3;
+      },
     };
 
     const summary = await indexStellarTransactions(mockAdapter);
@@ -67,6 +103,8 @@ describe('Event-driven indexer golden fixtures replay', () => {
         },
         $set: {
           milestoneEvent: 'IN_TRANSIT',
+          confirmations: 3,
+          verified: true,
           dataHash: events[0].data[0],
           metadata: {
             blockNumber: 512345,
@@ -94,6 +132,8 @@ describe('Event-driven indexer golden fixtures replay', () => {
         },
         $set: {
           milestoneEvent: 'SETTLEMENT_INITIATED',
+          confirmations: 3,
+          verified: true,
           metadata: {
             blockNumber: 512346,
             ledger: 512346,
@@ -124,6 +164,8 @@ describe('Event-driven indexer golden fixtures replay', () => {
         },
         $set: {
           milestoneEvent: 'SETTLEMENT_COMPLETED',
+          confirmations: 3,
+          verified: true,
           metadata: {
             blockNumber: 512400,
             ledger: 512400,
@@ -255,5 +297,17 @@ describe('Event-driven indexer golden fixtures replay', () => {
     expect(anchorBlock.dataHash).toBe(events[0].data[0]);
     expect(initBlock).not.toHaveProperty('dataHash');
     expect(releaseBlock).not.toHaveProperty('dataHash');
+
+    // Canonical field assertions (#970): milestoneEvent (never legacy eventType)
+    // in every $set/$setOnInsert, and the anchor's top-level dataHash equals the event hash.
+    for (const [, update] of ledgerUpdateOneMock.mock.calls as Array<
+      [unknown, { $set: Record<string, unknown>; $setOnInsert: Record<string, unknown> }]
+    >) {
+      expect(update.$setOnInsert).toHaveProperty('milestoneEvent');
+      expect(update.$setOnInsert).not.toHaveProperty('eventType');
+      expect(update.$set.milestoneEvent).toBe(update.$setOnInsert.milestoneEvent);
+      expect(update.$set).not.toHaveProperty('eventType');
+    }
+    expect(anchorBlock.dataHash).toBe((events[0].data as unknown[])[0]);
   });
 });

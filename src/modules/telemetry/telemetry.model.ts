@@ -23,6 +23,7 @@ const TelemetrySchema = new Schema(
 
     dataHash: { type: String, required: true },
     stellarTxHash: { type: String },
+    stellarTxLedger: { type: Number },
     anchorStatus: {
       type: String,
       enum: Object.values(TelemetryAnchorStatus),
