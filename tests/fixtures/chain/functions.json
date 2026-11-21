@@ -1,10 +1,11 @@
 {
-  "spec_version": "1.2.0-draft",
+  "spec_version": "2.0.0",
+  "source_commit": "<replace-with-contracts-repo-commit-sha>",
   "args": {
     "anchor": {
       "shipment_id": "65f1a2b3c4d5e6f708192a3b",
       "data_hash": "ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb",
-      "actor": "GAAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQDZ7H"
+      "actor": "GABAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEJXA"
     },
     "init_escrow": {
       "payment_id": "66a0b1c2d3e4f50617283940",

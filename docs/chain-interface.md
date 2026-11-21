@@ -1,10 +1,10 @@
 # Chain Adapter Interface Specification
 
-**Status:** v1 (`CHAIN_SPEC_VERSION = 1.2.0-draft`)
+**Status:** v2 (`CHAIN_SPEC_VERSION = 2.0.0`)
 
-This document is the normative v1 surface for Navin Backend's Stellar / Soroban integration (closes #649, supersedes DRAFT v0 / issue #360).
+This document is the normative v2 surface for Navin Backend's Stellar / Soroban integration (closes #649, supersedes DRAFT v0 / issue #360).
 
-Single source of truth for shapes: `src/shared/types/chain.ts`. Cross-repo golden vectors: `tests/fixtures/chain/{functions,events,errors}.json` (`spec_version = 1.0.0-draft`). Contracts repo: [Navin-xmr/navin-contracts](https://github.com/Navin-xmr/navin-contracts).
+Single source of truth for shapes: `src/shared/types/chain.ts`. Cross-repo golden vectors: `tests/fixtures/chain/{functions,events,errors}.json` (`spec_version = 2.0.0`, source commit recorded in each file header). Contracts repo: [Navin-xmr/navin-contracts](https://github.com/Navin-xmr/navin-contracts).
 
 > Drift rule (AGENTS.md §8): doc ↔ `chain.ts` + `CHAIN_SPEC_VERSION` ↔ fixtures `spec_version` must change in the same PR.
 

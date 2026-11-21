@@ -2,11 +2,13 @@
  * Chain interface — typed mirror of docs/chain-interface.md (TODO I2).
  *
  * ┌──────────────────────────────────────────────────────────────────────┐
- * │ SPEC VERSION: 1.0.0-draft  (see CHAIN_SPEC_VERSION below)            │
- * │ Mirrors the v1 surface defined by P6-01 (#649) / TODO I1:            │
- * │   functions  anchor · init_escrow · release_escrow (+ authz)         │
- * │   events     anchor · esc_init · esc_rel (topic + data tuples)       │
- * │   errors     contract error codes → ERR_CHAIN_* backend codes        │
+ * │ SPEC VERSION: 2.0.0  (see CHAIN_SPEC_VERSION below)                  │
+ * │ Mirrors the v2 surface defined by P11-07/P11-08:                   │
+ * │   functions  anchor · init_escrow · release_escrow · confirm_delivery│
+ * │   events     anchor · esc_init · esc_rel · esc_dispute · esc_resolve │
+ * │              · esc_freeze · esc_unfreeze · delivery_success ·       │
+ * │              escrow_released                                         │
+ * │   errors     8 contract error codes → ERR_CHAIN_* backend codes      │
  * └──────────────────────────────────────────────────────────────────────┘
  *
  * Rules:
@@ -25,7 +27,7 @@ import { z } from 'zod';
 import { AppError, ErrorCodes } from '../http/errors.js';
 import type { ErrorCode } from '../http/errors.js';
 
-export const CHAIN_SPEC_VERSION = '1.2.0-draft' as const;
+export const CHAIN_SPEC_VERSION = '2.0.0' as const;
 
 // ─── Soroban primitives ──────────────────────────────────────────────────────
 
