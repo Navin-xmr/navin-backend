@@ -57,6 +57,11 @@ export const config = {
   sorobanRpcUrl: stellarUrls.sorobanRpcUrl,
   escrowContractId: env.ESCROW_CONTRACT_ID,
   chainAdapter: env.SOROBAN_ADAPTER,
+  /** #1058 — ledgers required before an anchored event is marked verified. */
+  chainConfirmations: {
+    testnet: env.CHAIN_CONFIRMATIONS_TESTNET,
+    public: env.CHAIN_CONFIRMATIONS_PUBLIC,
+  },
   sentryDsn: env.SENTRY_DSN,
   totpEncryptionKey: env.TOTP_ENCRYPTION_KEY,
 } as const;

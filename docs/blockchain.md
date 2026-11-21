@@ -23,7 +23,7 @@ today (env placeholders exist; see below).
 | ----------------- | --------------------- | ----------------------------------------------------------------------------------- | ------------------------------------- |
 | Tokenize shipment | `tokenizeShipment`    | Horizon `Operation.manageData` for `tracking:{shipmentId}` and `route:{shipmentId}` | Shipment create                       |
 | Anchor telemetry  | `anchorTelemetryHash` | Horizon `manageData` + `Memo.hash`                                                  | Stellar worker after telemetry ingest |
-| Release escrow    | `releaseEscrow`       | Horizon `manageData` `release:{paymentId}` + memo `escrow-release:…`                | Shipment reaches `DELIVERED`          |
+| Release escrow    | `releaseEscrow`       | Horizon `manageData` `release:{shipmentId}` + memo `escrow-release:…`               | Shipment reaches `DELIVERED`          |
 
 Config / network:
 
@@ -38,7 +38,7 @@ In `src/services/stellar.service.ts:157–160`, `releaseEscrow` catches any subm
 
 ### Event Indexing & Confirmation Tracking
 
-A background BullMQ worker (`src/workers/stellar-indexer.worker.ts:112–132`) runs on a 30-second interval (`STELLAR_INDEXER_JOB`). It calls `indexStellarTransactions`, polling Horizon account operations to verify on-chain confirmations and update settlement records in MongoDB.
+A background BullMQ worker (`src/workers/stellar-indexer.worker.ts`) runs on a 30-second interval (`STELLAR_INDEXER_JOB`). It calls `indexStellarTransactions`, tracks transaction confirmation counts, and verifies anchored telemetry and released settlements after three ledgers; simulated-chain confirmations are immediate.
 
 ### Why this is a fallback
 
@@ -132,10 +132,10 @@ sequenceDiagram
 
   Client->>API: PATCH status DELIVERED
   alt Soroban configured
-    API->>Soroban: release(escrowId)
+    API->>Soroban: release_escrow(caller, shipment_id)
     Soroban-->>API: release txHash
   else Horizon fallback
-    API->>Horizon: manageData release:{paymentId}
+    API->>Horizon: manageData release:{shipmentId}
     Horizon-->>API: transactionHash
   end
   API->>DB: Mark settlement / payment released
@@ -296,7 +296,7 @@ Query the network named by `network` (`testnet` | `public`) for `txHash` and com
 committed digest against `dataHash`.
 
 **Horizon / `SOROBAN_ADAPTER=simulated`.** `SimulatedAdapter.submitManageData` writes a
-single `manageData` operation named `telemetry:{shipmentId}` (or `release:{paymentId}` for
+single `manageData` operation named `telemetry:{shipmentId}` (or `release:{shipmentId}` for
 escrow release) whose value is the `dataHash` hex string, **and** a `Memo.hash` carrying the
 same 32 bytes.
 
@@ -310,7 +310,7 @@ interface HorizonTransaction {
 
 interface HorizonOperation {
   type: string;
-  name?: string; // 'telemetry:<shipmentId>' | 'release:<paymentId>'
+  name?: string; // 'telemetry:<shipmentId>' | 'release:<shipmentId>'
   value?: string; // base64 of the ASCII hex digest
 }
 

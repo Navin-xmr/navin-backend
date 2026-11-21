@@ -8,6 +8,12 @@
  *   - Redis cache: second call served from cache
  */
 import { jest, describe, it, beforeEach, expect } from '@jest/globals';
+import { Types } from 'mongoose';
+
+const ORGANIZATION_ID = new Types.ObjectId().toString();
+const CACHED_ORGANIZATION_ID = new Types.ObjectId().toString();
+const SECOND_ORGANIZATION_ID = new Types.ObjectId().toString();
+const THIRD_ORGANIZATION_ID = new Types.ObjectId().toString();
 
 // ── Redis cache mock ─────────────────────────────────────────────────────────
 const cacheStore = new Map<string, string>();
@@ -79,7 +85,7 @@ describe('getSettlementSummaryService', () => {
     aggregateSettlementSummaryMock.mockResolvedValue(makeTotals());
     buildSettlementSparklineMock.mockResolvedValue(makeSparkline(7));
 
-    const result = await getSettlementSummaryService('org-1', 'week');
+    const result = await getSettlementSummaryService(ORGANIZATION_ID, 'week');
 
     expect(result.totalReleased).toBe(1000);
     expect(result.totalInEscrow).toBe(500);
@@ -92,7 +98,7 @@ describe('getSettlementSummaryService', () => {
     aggregateSettlementSummaryMock.mockResolvedValue(makeTotals());
     buildSettlementSparklineMock.mockResolvedValue(makeSparkline(30));
 
-    const result = await getSettlementSummaryService('org-1', 'month');
+    const result = await getSettlementSummaryService(ORGANIZATION_ID, 'month');
 
     expect(result.sparkline).toHaveLength(30);
     expect(result.period).toBe('month');
@@ -102,14 +108,14 @@ describe('getSettlementSummaryService', () => {
     aggregateSettlementSummaryMock.mockResolvedValue(makeTotals());
     buildSettlementSparklineMock.mockResolvedValue(makeSparkline(90));
 
-    const result = await getSettlementSummaryService('org-1', 'quarter');
+    const result = await getSettlementSummaryService(ORGANIZATION_ID, 'quarter');
 
     expect(result.sparkline).toHaveLength(90);
     expect(result.period).toBe('quarter');
   });
 
   it('400 — invalid period throws AppError with ERR_BAD_REQUEST', async () => {
-    await expect(getSettlementSummaryService('org-1', 'yearly')).rejects.toMatchObject({
+    await expect(getSettlementSummaryService(ORGANIZATION_ID, 'yearly')).rejects.toMatchObject({
       statusCode: 400,
       code: 'ERR_BAD_REQUEST',
     });
@@ -123,10 +129,10 @@ describe('getSettlementSummaryService', () => {
     buildSettlementSparklineMock.mockResolvedValue(makeSparkline(7));
 
     // First call — cold cache
-    const first = await getSettlementSummaryService('org-cached', 'week');
+    const first = await getSettlementSummaryService(CACHED_ORGANIZATION_ID, 'week');
 
     // Second call — should hit cache
-    const second = await getSettlementSummaryService('org-cached', 'week');
+    const second = await getSettlementSummaryService(CACHED_ORGANIZATION_ID, 'week');
 
     expect(first).toEqual(second);
     // Repo must only have been called once
@@ -139,7 +145,7 @@ describe('getSettlementSummaryService', () => {
     aggregateSettlementSummaryMock.mockResolvedValue(makeTotals());
     buildSettlementSparklineMock.mockResolvedValue(makeSparkline(7));
 
-    await getSettlementSummaryService('org-2', 'week');
+    await getSettlementSummaryService(SECOND_ORGANIZATION_ID, 'week');
 
     const [, sinceDateArg] = aggregateSettlementSummaryMock.mock.calls[0] as [string, Date];
     // since must be midnight UTC
@@ -152,7 +158,7 @@ describe('getSettlementSummaryService', () => {
     aggregateSettlementSummaryMock.mockResolvedValue(makeTotals());
     buildSettlementSparklineMock.mockResolvedValue(makeSparkline(30));
 
-    await getSettlementSummaryService('org-3', 'month');
+    await getSettlementSummaryService(THIRD_ORGANIZATION_ID, 'month');
 
     const [, , daysArg] = buildSettlementSparklineMock.mock.calls[0] as [string, Date, number];
     expect(daysArg).toBe(30);

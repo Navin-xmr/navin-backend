@@ -51,6 +51,7 @@ export async function getLedgerBlockVerificationService(id: string) {
     txHash: block.transactionHash ?? null,
     transactionHash: block.transactionHash ?? null,
     ledger: block.ledger,
+    network: config.stellarNetwork,
   };
 }
 
