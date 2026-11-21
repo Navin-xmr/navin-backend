@@ -24,6 +24,11 @@ import type {
   ConfirmDeliveryInput,
   ConfirmDeliveryResult,
   EscrowResult,
+  ReadContractVersionResult,
+  ReadEscrowBalanceInput,
+  ReadEscrowBalanceResult,
+  ReadShipmentStatusInput,
+  ReadShipmentStatusResult,
   ReleaseEscrowInput,
 } from './types.js';
 
@@ -141,6 +146,90 @@ export class SorobanAdapter implements ChainAdapter {
       receiver: input.receiver,
       shipmentId: input.shipment_id,
     };
+  }
+
+  /**
+   * Read the escrow balance for a payment using simulation only (no state change).
+   */
+  async readEscrowBalance(input: ReadEscrowBalanceInput): Promise<ReadEscrowBalanceResult> {
+    const contract = this.getContract();
+    const op = contract.call('get_balance', nativeToScVal(input.payment_id, { type: 'symbol' }));
+
+    const tx = new TransactionBuilder(await this.server.getAccount(this.signer().publicKey()), {
+      fee: BASE_FEE,
+      networkPassphrase: this.networkPassphrase,
+    })
+      .addOperation(op)
+      .setTimeout(30)
+      .build();
+
+    const simRes = await this.server.simulateTransaction(tx);
+    if (rpc.Api.isSimulationError(simRes)) {
+      throw new AppError(400, 'Soroban read simulation failed', ErrorCodes.CHAIN_UNKNOWN, {
+        function: 'get_balance',
+        paymentId: input.payment_id,
+      });
+    }
+
+    // Read-only simulation result — do not send the transaction.
+    const result = simRes.result as { returnValue?: unknown };
+    const balance = result.returnValue ? String(result.returnValue) : '0';
+    return { balance, simulated: false };
+  }
+
+  /**
+   * Read the on-chain shipment status using simulation only (no state change).
+   */
+  async readShipmentStatus(input: ReadShipmentStatusInput): Promise<ReadShipmentStatusResult> {
+    const contract = this.getContract();
+    const op = contract.call('get_status', nativeToScVal(input.shipment_id, { type: 'symbol' }));
+
+    const tx = new TransactionBuilder(await this.server.getAccount(this.signer().publicKey()), {
+      fee: BASE_FEE,
+      networkPassphrase: this.networkPassphrase,
+    })
+      .addOperation(op)
+      .setTimeout(30)
+      .build();
+
+    const simRes = await this.server.simulateTransaction(tx);
+    if (rpc.Api.isSimulationError(simRes)) {
+      throw new AppError(400, 'Soroban read simulation failed', ErrorCodes.CHAIN_UNKNOWN, {
+        function: 'get_status',
+        shipmentId: input.shipment_id,
+      });
+    }
+
+    const result = simRes.result as { returnValue?: unknown };
+    const status = result.returnValue ? String(result.returnValue) : 'UNKNOWN';
+    return { status, simulated: false };
+  }
+
+  /**
+   * Read the contract version using simulation only (no state change).
+   */
+  async readContractVersion(): Promise<ReadContractVersionResult> {
+    const contract = this.getContract();
+    const op = contract.call('get_version');
+
+    const tx = new TransactionBuilder(await this.server.getAccount(this.signer().publicKey()), {
+      fee: BASE_FEE,
+      networkPassphrase: this.networkPassphrase,
+    })
+      .addOperation(op)
+      .setTimeout(30)
+      .build();
+
+    const simRes = await this.server.simulateTransaction(tx);
+    if (rpc.Api.isSimulationError(simRes)) {
+      throw new AppError(400, 'Soroban read simulation failed', ErrorCodes.CHAIN_UNKNOWN, {
+        function: 'get_version',
+      });
+    }
+
+    const result = simRes.result as { returnValue?: unknown };
+    const version = result.returnValue ? String(result.returnValue) : 'unknown';
+    return { version, simulated: false };
   }
 
   async *streamEvents(cursor?: ChainEventCursor): AsyncIterable<ChainEvent> {

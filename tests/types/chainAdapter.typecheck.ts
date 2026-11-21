@@ -10,7 +10,14 @@ import type {
   ChainAdapter,
   ChainErrorCode,
   ChainEventCursor,
+  ConfirmDeliveryInput,
+  ConfirmDeliveryResult,
   EscrowResult,
+  ReadContractVersionResult,
+  ReadEscrowBalanceInput,
+  ReadEscrowBalanceResult,
+  ReadShipmentStatusInput,
+  ReadShipmentStatusResult,
   ReleaseEscrowInput,
 } from '../../src/services/chain/types.js';
 import type { AnchorArgs, ChainEvent, ReleaseEscrowArgs } from '../../src/shared/types/chain.js';
@@ -55,23 +62,49 @@ export class MockChainAdapter implements ChainAdapter {
     return { txHash: HASH, ledger: 2, simulated: true, paymentId: input.payment_id };
   }
 
+  async confirmDelivery(_input: ConfirmDeliveryInput): Promise<ConfirmDeliveryResult> {
+    return { txHash: HASH, ledger: 3, simulated: true, receiver: 'G', shipmentId: 's1' };
+  }
+
   async *streamEvents(cursor?: ChainEventCursor): AsyncIterable<ChainEvent> {
     const start = cursor ? this.events.findIndex(e => e.id === cursor) + 1 : 0;
     yield* this.events.slice(start);
   }
+
+  async readEscrowBalance(_input: ReadEscrowBalanceInput): Promise<ReadEscrowBalanceResult> {
+    return { balance: '0', simulated: true };
+  }
+
+  async readShipmentStatus(_input: ReadShipmentStatusInput): Promise<ReadShipmentStatusResult> {
+    return { status: 'UNKNOWN', simulated: true };
+  }
+
+  async readContractVersion(): Promise<ReadContractVersionResult> {
+    return { version: '1.0.0-mock', simulated: true };
+  }
 }
 
 export const literalAdapter = {
-  anchorEvent: async () => ({ txHash: HASH, ledger: 1, simulated: false }),
+  anchorEvent: async () => ({ txHash: HASH, ledger: 1, simulated: true }),
   releaseEscrow: async (i: ReleaseEscrowInput) => ({
     txHash: HASH,
     ledger: 1,
-    simulated: false,
+    simulated: true,
     paymentId: i.payment_id,
+  }),
+  confirmDelivery: async () => ({
+    txHash: HASH,
+    ledger: 1,
+    simulated: true,
+    receiver: 'G',
+    shipmentId: 's1',
   }),
   async *streamEvents() {
     yield* [] as ChainEvent[];
   },
+  readEscrowBalance: async () => ({ balance: '0', simulated: true }),
+  readShipmentStatus: async () => ({ status: 'UNKNOWN', simulated: true }),
+  readContractVersion: async () => ({ version: '1.0.0-mock', simulated: true }),
 } satisfies ChainAdapter;
 
 // ─── Contract violations are rejected ───────────────────────────────────────
@@ -85,6 +118,9 @@ export const silentFailure = {
 export const missingStream: ChainAdapter = {
   anchorEvent: literalAdapter.anchorEvent,
   releaseEscrow: literalAdapter.releaseEscrow,
+  readEscrowBalance: literalAdapter.readEscrowBalance,
+  readShipmentStatus: literalAdapter.readShipmentStatus,
+  readContractVersion: literalAdapter.readContractVersion,
 };
 
 export const untypedEvents = {

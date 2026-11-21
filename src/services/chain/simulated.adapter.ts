@@ -53,6 +53,11 @@ import type {
   ConfirmDeliveryInput,
   ConfirmDeliveryResult,
   EscrowResult,
+  ReadContractVersionResult,
+  ReadEscrowBalanceInput,
+  ReadEscrowBalanceResult,
+  ReadShipmentStatusInput,
+  ReadShipmentStatusResult,
   ReleaseEscrowInput,
 } from './types.js';
 
@@ -191,6 +196,21 @@ export class SimulatedAdapter implements ChainAdapter {
       receiver: input.receiver,
       shipmentId: input.shipment_id,
     };
+  }
+
+  async readEscrowBalance(_input: ReadEscrowBalanceInput): Promise<ReadEscrowBalanceResult> {
+    // Simulated mode does not track real balances: no contract holds funds.
+    return { balance: '0', simulated: true };
+  }
+
+  async readShipmentStatus(_input: ReadShipmentStatusInput): Promise<ReadShipmentStatusResult> {
+    // Simulated mode does not track real on-chain state: no contract holds
+    // escrow, so the status is UNKNOWN until a real adapter is configured.
+    return { status: 'UNKNOWN', simulated: true };
+  }
+
+  async readContractVersion(): Promise<ReadContractVersionResult> {
+    return { version: '1.2.0-draft-simulated', simulated: true };
   }
 
   async *streamEvents(cursor?: ChainEventCursor): AsyncIterable<ChainEvent> {

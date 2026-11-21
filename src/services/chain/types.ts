@@ -58,6 +58,42 @@ export interface ConfirmDeliveryResult extends ChainTxReceipt {
 /** Opaque resume position: the `id` of the last event processed. */
 export type ChainEventCursor = ChainEvent['id'];
 
+/** ─── Read-only chain state (simulation only, short-TTL cacheable) ─── */
+
+/** Input for reading an escrow balance. */
+export interface ReadEscrowBalanceInput {
+  payment_id: string;
+}
+
+/** Escrow balance read result. Balance is in stroops as a decimal string. */
+export interface ReadEscrowBalanceResult {
+  /** Balance in stroops (1 XLM = 10^7 stroops), as a decimal string. */
+  balance: string;
+  simulated: boolean;
+}
+
+/** Input for reading a shipment's on-chain status. */
+export interface ReadShipmentStatusInput {
+  shipment_id: string;
+}
+
+/** Shipment on-chain status read result. */
+export interface ReadShipmentStatusResult {
+  /** Derived on-chain milestone/status (e.g. ESCROWED, RELEASED, REFUNDED). */
+  status: string;
+  simulated: boolean;
+}
+
+/** Contract version read result. */
+export interface ReadContractVersionResult {
+  /** Contract / spec version string. */
+  version: string;
+  simulated: boolean;
+}
+
+/** Result shape shared by all read-only chain queries. */
+export type ChainReadResult<T> = T & { simulated: boolean };
+
 export interface ChainAdapter {
   /**
    * Anchor a payload hash for a shipment.
@@ -85,4 +121,22 @@ export interface ChainAdapter {
    * @throws {AppError} ERR_CHAIN_INVALID_EVENT when an emitted event violates the spec.
    */
   streamEvents(cursor?: ChainEventCursor): AsyncIterable<ChainEvent>;
+
+  /**
+   * Read the escrow balance for a payment (simulation only, no state change).
+   * @throws {AppError} `ChainErrorCode` on rejection.
+   */
+  readEscrowBalance(input: ReadEscrowBalanceInput): Promise<ReadEscrowBalanceResult>;
+
+  /**
+   * Read the on-chain shipment status for a shipment (simulation only).
+   * @throws {AppError} `ChainErrorCode` on rejection.
+   */
+  readShipmentStatus(input: ReadShipmentStatusInput): Promise<ReadShipmentStatusResult>;
+
+  /**
+   * Read the contract / spec version (simulation only).
+   * @throws {AppError} `ChainErrorCode` on rejection.
+   */
+  readContractVersion(): Promise<ReadContractVersionResult>;
 }
