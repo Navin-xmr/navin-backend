@@ -7,31 +7,18 @@ import { AppError, ErrorCodes } from '../src/shared/http/errors.js';
 import { ChainEventSchema } from '../src/shared/types/chain.js';
 import type { ChainEvent } from '../src/shared/types/chain.js';
 import { generateDataHash } from '../src/shared/utils/crypto.js';
+import type { HorizonTransactionRecordMock, SimulatedHorizonClientMock } from './helpers/mocks.js';
 
 const signer = Keypair.random();
 const PASSPHRASE = Networks.TESTNET;
 const SHIPMENT_ID = '65f1a2b3c4d5e6f708192a3b';
-const PAYMENT_ID = '66a0b1c2d3e4f50617283940';
 const HASH_A = generateDataHash({ reading: 'a' });
 const HASH_B = generateDataHash({ reading: 'b' });
-
-/** Sentinel contract id the adapter must emit — all-zero contract strkey (#814 keeps its constant module-private). */
-const SIMULATED_CONTRACT_ID = StrKey.encodeContract(Buffer.alloc(32));
-
-/** Horizon tx fields the adapter's streamEvents reads — its Horizon types are module-private (#814). */
-interface HorizonTxRecord {
-  paging_token: string;
-  hash: string;
-  ledger_attr: number;
-  created_at: string;
-  envelope_xdr: string;
-  successful: boolean;
-}
 
 /** In-memory Horizon: records every submitted tx so streamEvents can replay it. */
 function createFakeHorizon() {
   const submitted: Transaction[] = [];
-  const records: HorizonTxRecord[] = [];
+  const records: HorizonTransactionRecordMock[] = [];
   let ledger = 1000;
 
   const client = {
@@ -53,7 +40,7 @@ function createFakeHorizon() {
       const start = cursor ? records.findIndex(r => r.paging_token === cursor) + 1 : 0;
       return records.slice(start, start + limit);
     }),
-  };
+  } satisfies SimulatedHorizonClientMock;
 
   return { client, submitted, records };
 }
@@ -113,24 +100,61 @@ describe('SimulatedAdapter', () => {
     });
   });
 
-  describe('releaseEscrow (legacy releaseEscrow flow)', () => {
+  describe('tokenize → anchorEvent mapping', () => {
+    const shipment = {
+      shipmentId: SHIPMENT_ID,
+      trackingNumber: 'NVN-123456',
+      origin: 'Lagos',
+      destination: 'Accra',
+    };
+
+    it('anchors a deterministic hash of the tokenized fields', async () => {
+      const input = {
+        shipment_id: shipment.shipmentId,
+        data_hash: generateDataHash(shipment),
+        actor: signer.publicKey(),
+      };
+      expect(input).toEqual({
+        shipment_id: SHIPMENT_ID,
+        data_hash: generateDataHash(shipment),
+        actor: signer.publicKey(),
+      });
+
+      const result = await adapter.anchorEvent(input);
+      expect(result.simulated).toBe(true);
+      expect(manageDataOps(horizon.submitted[0]!)).toEqual([
+        { name: `telemetry:${SHIPMENT_ID}`, value: input.data_hash },
+      ]);
+    });
+  });
+
+  describe('releaseEscrow (v2 per-shipment flow)', () => {
     it('records the release via manage-data and returns a simulated receipt', async () => {
-      const result = await adapter.releaseEscrow({ payment_id: PAYMENT_ID, proof_hash: HASH_B });
+      const result = await adapter.releaseEscrow({
+        caller: signer.publicKey(),
+        shipment_id: SHIPMENT_ID,
+      });
 
       const [tx] = horizon.submitted;
-      expect(manageDataOps(tx!)).toEqual([{ name: `release:${PAYMENT_ID}`, value: HASH_B }]);
+      const ops = manageDataOps(tx!);
+      expect(ops).toHaveLength(1);
+      expect(ops[0]!.name).toBe(`release:${SHIPMENT_ID}`);
+      expect(ops[0]!.value).toMatch(/^[0-9a-f]{64}$/);
       expect(tx!.memo.type).toBe('hash');
       expect(result).toEqual({
         txHash: tx!.hash().toString('hex'),
         ledger: 1001,
         simulated: true,
-        paymentId: PAYMENT_ID,
+        shipmentId: SHIPMENT_ID,
       });
     });
 
     it('rejects with AppError(502, ERR_CHAIN_UNKNOWN) instead of resolving { success: false }', async () => {
       horizon.client.submitTransaction.mockRejectedValueOnce(new Error('tx_bad_seq'));
-      const promise = adapter.releaseEscrow({ payment_id: PAYMENT_ID, proof_hash: HASH_B });
+      const promise = adapter.releaseEscrow({
+        caller: signer.publicKey(),
+        shipment_id: SHIPMENT_ID,
+      });
       await expect(promise).rejects.toBeInstanceOf(AppError);
       await expect(promise).rejects.toMatchObject({
         statusCode: 502,
@@ -138,10 +162,10 @@ describe('SimulatedAdapter', () => {
       });
     });
 
-    it('rejects a malformed proof_hash with ERR_CHAIN_INVALID_PROOF', async () => {
+    it('rejects a malformed caller with ERR_CHAIN_UNAUTHORIZED', async () => {
       await expect(
-        adapter.releaseEscrow({ payment_id: PAYMENT_ID, proof_hash: HASH_B.toUpperCase() })
-      ).rejects.toMatchObject({ statusCode: 422, code: ErrorCodes.CHAIN_INVALID_PROOF });
+        adapter.releaseEscrow({ caller: 'not-an-address', shipment_id: SHIPMENT_ID })
+      ).rejects.toMatchObject({ statusCode: 422, code: ErrorCodes.CHAIN_UNAUTHORIZED });
     });
   });
 
@@ -160,7 +184,7 @@ describe('SimulatedAdapter', () => {
       })
     ).rejects.toMatchObject(expected);
     await expect(
-      unconfigured.releaseEscrow({ payment_id: PAYMENT_ID, proof_hash: HASH_B })
+      unconfigured.releaseEscrow({ caller: signer.publicKey(), shipment_id: SHIPMENT_ID })
     ).rejects.toMatchObject(expected);
     await expect(collect(unconfigured.streamEvents())).rejects.toMatchObject(expected);
   });
@@ -172,7 +196,7 @@ describe('SimulatedAdapter', () => {
         data_hash: HASH_A,
         actor: signer.publicKey(),
       });
-      await adapter.releaseEscrow({ payment_id: PAYMENT_ID, proof_hash: HASH_B });
+      await adapter.releaseEscrow({ caller: signer.publicKey(), shipment_id: SHIPMENT_ID });
       await adapter.anchorEvent({
         shipment_id: 'ship_2',
         data_hash: HASH_B,
@@ -190,11 +214,12 @@ describe('SimulatedAdapter', () => {
       for (const e of events) expect(ChainEventSchema.safeParse(e).success).toBe(true);
       expect(events[0]).toMatchObject({
         id: horizon.records[0]!.paging_token,
-        contract_id: SIMULATED_CONTRACT_ID,
         tx_hash: horizon.records[0]!.hash,
         ledger: 1001,
         data: [HASH_A, 1001],
       });
+      expect(StrKey.isValidContract(events[0]!.contract_id)).toBe(true);
+      expect(StrKey.decodeContract(events[0]!.contract_id).equals(Buffer.alloc(32))).toBe(true);
     });
 
     it('resumes strictly after the cursor', async () => {

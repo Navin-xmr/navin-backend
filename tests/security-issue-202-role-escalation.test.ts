@@ -1,19 +1,16 @@
 import { jest, describe, it, expect, beforeEach, beforeAll } from '@jest/globals';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const users: any[] = [];
+const users: Record<string, unknown>[] = [];
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 await jest.unstable_mockModule('../src/modules/users/users.model.js', () => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const UserModel: any = {
-    findOne: jest.fn().mockImplementation(async (query: any) =>
+  const UserModel = {
+    findOne: jest.fn().mockImplementation(async (query: Record<string, unknown>) =>
       Promise.resolve(users.find(u => u.email === query.email) ?? null)
     ),
-    findById: jest.fn().mockImplementation(async (id: any) =>
+    findById: jest.fn().mockImplementation(async (id: string) =>
       Promise.resolve(users.find(u => u._id === id) ?? null)
     ),
-    create: jest.fn().mockImplementation(async (data: any) => {
+    create: jest.fn().mockImplementation(async (data: Record<string, unknown>) => {
       const created = {
         _id: `user-${Date.now()}`,
         ...data,
@@ -23,8 +20,7 @@ await jest.unstable_mockModule('../src/modules/users/users.model.js', () => {
     }),
   };
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const OrganizationModel: any = {
+  const OrganizationModel = {
     findById: jest.fn().mockResolvedValue(null),
   };
 
@@ -40,18 +36,13 @@ await jest.unstable_mockModule('../src/modules/users/users.model.js', () => {
   return { UserModel, OrganizationModel, UserRole };
 });
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 await jest.unstable_mockModule('../src/infra/redis/tokenBlocklist.js', () => ({
   blockToken: jest.fn().mockResolvedValue(undefined),
   isTokenBlocked: jest.fn().mockResolvedValue(false),
 }));
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const { signup } = await import('../src/modules/auth/auth.service.js') as any;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const { SignupBodySchema } = await import('../src/modules/auth/auth.validation.js') as any;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const { AppError } = await import('../src/shared/http/errors.js') as any;
+const { signup } = await import('../src/modules/auth/auth.service.js');
+const { SignupBodySchema } = await import('../src/modules/auth/auth.validation.js');
 
 describe('Security #202 - Prevent Role Escalation via Signup', () => {
   const jwtSecret = process.env.JWT_SECRET ?? 'test-secret-key-at-least-32-chars-long';
@@ -83,8 +74,7 @@ describe('Security #202 - Prevent Role Escalation via Signup', () => {
       ];
 
       invalidPayloads.forEach(payload => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const result = SignupBodySchema.safeParse(payload as any);
+        const result = SignupBodySchema.safeParse(payload);
         
         // Should succeed but without the role field
         expect(result.success).toBe(true);
@@ -103,8 +93,7 @@ describe('Security #202 - Prevent Role Escalation via Signup', () => {
       ];
 
       missingFields.forEach(payload => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const result = SignupBodySchema.safeParse(payload as any);
+        const result = SignupBodySchema.safeParse(payload);
         expect(result.success).toBe(false);
       });
     });
@@ -116,8 +105,7 @@ describe('Security #202 - Prevent Role Escalation via Signup', () => {
         password: 'SecurePass123',
       };
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const result = SignupBodySchema.safeParse(validPayload as any);
+      const result = SignupBodySchema.safeParse(validPayload);
       expect(result.success).toBe(true);
     });
   });
@@ -174,9 +162,7 @@ describe('Security #202 - Prevent Role Escalation via Signup', () => {
         });
         throw new Error('Should reject duplicate email');
       } catch (err) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const error = err as any;
-        expect(error.statusCode).toBe(409);
+        expect(err).toMatchObject({ statusCode: 409 });
       }
     });
 
@@ -197,23 +183,21 @@ describe('Security #202 - Prevent Role Escalation via Signup', () => {
 
   describe('Edge Cases', () => {
     it('should handle empty string name', () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = SignupBodySchema.safeParse({
         email: 'user@test.com',
         name: '',
         password: 'SecurePass123',
-      } as any);
+      });
 
       expect(result.success).toBe(false);
     });
 
     it('should handle invalid email format', () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = SignupBodySchema.safeParse({
         email: 'not-an-email',
         name: 'User',
         password: 'SecurePass123',
-      } as any);
+      });
 
       expect(result.success).toBe(false);
     });
