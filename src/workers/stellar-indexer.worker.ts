@@ -89,9 +89,19 @@ export async function reverifyAnchoredBlocks(
   return reverified;
 }
 
+export interface IndexOptions {
+  /** #1063 — report what would change without writing anything. */
+  dryRun?: boolean;
+  /** #1063 — advance the live indexer cursor. Replays set this to false. Default true. */
+  persistCursor?: boolean;
+}
+
 export interface IndexerSummary {
   processed: number;
+  /** In dry-run mode: rows that would be inserted. */
   upserted: number;
+  /** #1063 — dry-run only: rows that already exist and would be refreshed. */
+  existing?: number;
   lastCursor?: string;
   /** #1058 — rows promoted to verified by the reconciliation pass. */
   reverified?: number;
@@ -228,11 +238,14 @@ async function updatePendingConfirmations(adapter: ChainAdapter): Promise<void> 
  */
 export async function indexStellarTransactions(
   adapter: ChainAdapter = getChainAdapter(),
-  initialCursor?: string
+  initialCursor?: string,
+  options: IndexOptions = {}
 ): Promise<IndexerSummary> {
+  const { dryRun = false, persistCursor = true } = options;
   let cursor = initialCursor ?? (await getStoredCursor());
   let processed = 0;
   let upserted = 0;
+  let existing = 0;
 
   for await (const event of adapter.streamEvents(cursor)) {
     processed += 1;
@@ -278,6 +291,13 @@ export async function indexStellarTransactions(
       continue;
     }
 
+    if (dryRun) {
+      const found = await LedgerBlock.exists({ transactionHash: event.tx_hash });
+      if (found) existing += 1;
+      else upserted += 1;
+      continue;
+    }
+
     const res = await LedgerBlock.updateOne(
       { transactionHash: event.tx_hash },
       {
@@ -310,9 +330,13 @@ export async function indexStellarTransactions(
       await recordPaymentConfirmation(adapter, event.tx_hash, event.ledger);
     }
 
-    if (cursor) {
+    if (cursor && persistCursor) {
       await saveStoredCursor(cursor);
     }
+  }
+
+  if (dryRun) {
+    return { processed, upserted, existing, lastCursor: cursor };
   }
 
   await updatePendingConfirmations(adapter);

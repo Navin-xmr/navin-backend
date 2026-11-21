@@ -1,0 +1,33 @@
+{
+  "spec_version": "2.0.0",
+  "contract": "navin-escrow",
+  "source": "https://github.com/Navin-xmr/navin-contracts",
+  "functions": {
+    "anchor": {
+      "auth": "actor",
+      "inputs": [
+        { "name": "shipment_id", "type": "Symbol" },
+        { "name": "data_hash", "type": "BytesN<32>" },
+        { "name": "actor", "type": "Address" }
+      ]
+    },
+    "init_escrow": {
+      "auth": "payer",
+      "inputs": [
+        { "name": "payment_id", "type": "Symbol" },
+        { "name": "shipment_id", "type": "Symbol" },
+        { "name": "payer", "type": "Address" },
+        { "name": "payee", "type": "Address" },
+        { "name": "token", "type": "Address" },
+        { "name": "amount", "type": "i128" }
+      ]
+    },
+    "release_escrow": {
+      "auth": "caller",
+      "inputs": [
+        { "name": "caller", "type": "Address" },
+        { "name": "shipment_id", "type": "Symbol" }
+      ]
+    }
+  }
+}

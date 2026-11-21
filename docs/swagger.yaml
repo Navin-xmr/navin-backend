@@ -3721,6 +3721,8 @@ paths:
         Provide `token` (preferred) or legacy `tokenType` (`XLMN` | `USDC` | `Other`).
       security:
         - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -3911,6 +3913,7 @@ paths:
       security:
         - bearerAuth: []
       parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
         - in: path
           name: id
           required: true
@@ -5220,6 +5223,8 @@ paths:
       summary: Create a shipment
       security:
         - bearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -5851,6 +5856,7 @@ paths:
       security:
         - bearerAuth: []
       parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
         - in: path
           name: id
           required: true
@@ -6576,6 +6582,21 @@ paths:
                 $ref: '#/components/schemas/ErrorResponse'
 
 components:
+  parameters:
+    IdempotencyKey:
+      in: header
+      name: Idempotency-Key
+      required: false
+      description: |
+        Optional client-generated key (8-128 chars of `A-Za-z0-9_-:.`) that makes a chain-mutating request safe to retry.
+        Keys are scoped per organization (or user) and per route and retained for 24 hours. A duplicate returns the
+        original status and body with `Idempotent-Replay: true` and never triggers a second chain submission.
+        Reusing a key with a different body returns 422 `ERR_IDEMPOTENCY_KEY_REUSED`; a duplicate while the original is
+        still running returns 409 `ERR_IDEMPOTENCY_IN_PROGRESS`.
+      schema:
+        type: string
+        minLength: 8
+        maxLength: 128
   schemas:
     Session:
       type: object
