@@ -26,6 +26,25 @@ Single source of truth for shapes: `src/shared/types/chain.ts`. Cross-repo golde
 
 Types: `Symbol` = `[A-Za-z0-9_]{1,32}`; `BytesN<32>` = lowercase hex64 (SHA-256); `Address` = strkey `G…`/`C…`; `token` must be contract `C…`; `amount` = positive `i128` decimal string; `payer ≠ payee`. All arg schemas `.strict()`. Result: `{ tx_hash: hex64, ledger: u32 }`.
 
+### Soroban primitive and struct representation
+
+| Primitive / struct  | JSON representation                  | Validation                                                                                   |
+| ------------------- | ------------------------------------ | -------------------------------------------------------------------------------------------- |
+| `u64`               | unsigned decimal string              | `0` through `18446744073709551615`, no leading zeroes                                        |
+| `i128`              | signed decimal string                | `-170141183460469231731687303715884105728` through `170141183460469231731687303715884105727` |
+| `Address`           | Stellar `G…` or `C…` strkey          | base-32 strkey shape, exactly 56 characters                                                  |
+| `BytesN<32>`        | lowercase 64-character hex           | exactly 32 bytes                                                                             |
+| `Symbol`            | ASCII string                         | 1–32 characters matching `[A-Za-z0-9_]`                                                      |
+| `Vec<(Symbol,u32)>` | JSON array of `[symbol, u32]` tuples | each tuple has exactly two elements                                                          |
+| `ShipmentStatus`    | uppercase string enum                | contract status constants                                                                    |
+| `Role`              | uppercase string enum                | contract role constants                                                                      |
+| `SettlementStatus`  | uppercase string enum                | contract settlement constants                                                                |
+
+`i128` amounts are stored as integer stroops/base units with 7 decimal places of precision.
+The JSON decimal string is the only accepted representation; JavaScript `number` values are
+rejected to avoid precision loss. Convert human-readable units with exactly 7 decimal places
+to/from stroops by shifting by `10^7`.
+
 ---
 
 ## 2. Events (topic + data tuples)
@@ -55,6 +74,9 @@ Validated at ingress by `parseChainEvent()`; mismatch → `AppError(502, ERR_CHA
 | `InvalidAmount`         | 7     | `ERR_CHAIN_INVALID_AMOUNT`          | 422  |
 | `InvalidProof`          | 8     | `ERR_CHAIN_INVALID_PROOF`           | 422  |
 | `InvalidStatus`         | 9     | `ERR_CHAIN_INVALID_STATUS`          | 409  |
+| `MissingAuth`           | 10    | `ERR_CHAIN_MISSING_AUTH`            | 403  |
+| `InsufficientBudget`    | 11    | `ERR_CHAIN_INSUFFICIENT_BUDGET`     | 402  |
+| `MissingTrustline`      | 12    | `ERR_CHAIN_MISSING_TRUSTLINE`       | 422  |
 | unknown                 | other | `ERR_CHAIN_UNKNOWN`                 | 502  |
 
 Decoded via `chainErrorToAppError()`.
@@ -93,3 +115,15 @@ Fixture tests exercise depths `0, 2, 3, 10`.
 plus `getConfirmationCount` (and optional ledger query helpers). `SimulatedAdapter` for local
 dev/tests; `SorobanAdapter` for deployed WASM escrow. Legacy `stellar.service.ts` manage-data
 ops are placeholders to be replaced.
+
+## 7. Local quickstart integration
+
+Run the Soroban quickstart harness with a navin-contracts WASM artifact:
+
+```bash
+NAVIN_CONTRACTS_WASM=/path/to/navin_escrow.wasm npm run quickstart:chain
+```
+
+The command starts `docker-compose.quickstart.yml`, waits for the local RPC, deploys the
+WASM, and tears down the isolated Compose project. It is intentionally outside required PR
+CI and runs in `.github/workflows/tests-nightly.yml` nightly.

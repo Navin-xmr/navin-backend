@@ -1,0 +1,41 @@
+name: Chain Quickstart Nightly
+
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+
+jobs:
+  quickstart:
+    name: Stellar quickstart adapter harness
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Checkout navin-contracts WASM
+        uses: actions/checkout@v4
+        with:
+          repository: Navin-xmr/navin-contracts
+          path: navin-contracts
+          ref: main
+
+      - name: Build contract
+        run: |
+          cd navin-contracts
+          if [ -f Makefile ]; then make build; else cargo build --target wasm32v1-none --release; fi
+
+      - name: Run quickstart harness
+        run: |
+          NAVIN_CONTRACTS_WASM="$(find navin-contracts -type f -name '*.wasm' | head -n 1)" \
+            npm run quickstart:chain
