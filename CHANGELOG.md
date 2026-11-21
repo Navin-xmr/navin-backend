@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Soroban preflight simulation error mapping for contract failures, missing authorization,
+  insufficient resource budget and missing trustlines; failed simulations retain raw RPC
+  details and never call `sendTransaction` (#1016).
+- Strict Soroban primitive schemas for `u64`, `i128`, `Address`, `BytesN<32>`, `Symbol`,
+  milestone vectors and contract enums, including 7-decimal amount documentation (#1015).
+- A Stellar quickstart Compose harness and nightly workflow for adapter contract deployment
+  smoke tests from navin-contracts WASM (#1013).
+- Soroban `getEvents` topic and contract filtering for the event-stream indexer (#1014).
 - Three-ledger Stellar confirmation tracking for released payments and telemetry anchors, with immediate confirmations in simulated mode (#838, #837).
 - Chain spec **v2.0.0**: `release_escrow(caller, shipment_id)` replaces the backend-invented `(payment_id, proof_hash)` input; release receipts now carry `shipmentId` and failures reject with coded `ERR_CHAIN_UNAUTHORIZED` / `ERR_CHAIN_INVALID_STATUS` instead of `{ success: false }` (#1056).
 - Confirmation depth (`confirmations` / `verified`) on every anchored ledger event class, per-network thresholds via `CHAIN_CONFIRMATIONS_TESTNET` / `CHAIN_CONFIRMATIONS_PUBLIC`, and idempotent re-verification (#1058).
