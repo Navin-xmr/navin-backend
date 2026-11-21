@@ -7,21 +7,23 @@ import type { NextFunction, Request, RequestHandler, Response } from 'express';
 import { UserRole } from '../src/shared/constants/index.js';
 
 // Mock user roles
-const adminUser = { userId: '1', role: UserRole.ADMIN, jti: 'mock-jti' };
-const managerUser = { userId: '2', role: UserRole.MANAGER, jti: 'mock-jti' };
-const driverUser = { userId: '4', role: UserRole.DRIVER, jti: 'mock-jti' };
-const viewerUser = { userId: '3', role: UserRole.VIEWER, jti: 'mock-jti' };
+type TestUser = { userId: string; role: string; jti: string };
+
+const adminUser: TestUser = { userId: '1', role: UserRole.ADMIN, jti: 'mock-jti' };
+const managerUser: TestUser = { userId: '2', role: UserRole.MANAGER, jti: 'mock-jti' };
+const driverUser: TestUser = { userId: '4', role: UserRole.DRIVER, jti: 'mock-jti' };
+const viewerUser: TestUser = { userId: '3', role: UserRole.VIEWER, jti: 'mock-jti' };
 
 // Mock requireAuth to inject user
-function mockRequireAuth(user: { userId: string; role: string } | undefined): RequestHandler {
+function mockRequireAuth(user: TestUser | undefined): RequestHandler {
   return (req, _res, next) => {
-    (req as any).user = user;
+    Object.assign(req, { user });
     next();
   };
 }
 
 describe('requireRole middleware', () => {
-  const makeApp = (user: any, allowedRoles: string[]) => {
+  const makeApp = (user: TestUser | undefined, allowedRoles: string[]) => {
     const app = express();
     app.get(
       '/test',

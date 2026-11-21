@@ -15,8 +15,8 @@ describe('POST /api/webhooks/iot', () => {
   };
 
   let app: Application;
-  const mockValidateApiKey = jest.fn<any>();
-  const mockPushStellarAnchorJob = jest.fn<any>();
+  const mockValidateApiKey = jest.fn();
+  const mockPushStellarAnchorJob = jest.fn();
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -45,7 +45,7 @@ describe('POST /api/webhooks/iot', () => {
 
     await jest.unstable_mockModule('../src/modules/telemetry/telemetry.service.js', () => ({
       findActiveShipmentBySensorId: jest.fn(),
-      createTelemetryRecord: jest.fn(async (input: any) => ({
+      createTelemetryRecord: jest.fn(async (input: Record<string, unknown>) => ({
         _id: 't1',
         shipmentId: input.shipmentId,
         sensorId: input.sensorId ?? input.shipmentId,
@@ -61,7 +61,7 @@ describe('POST /api/webhooks/iot', () => {
       updateTelemetryAnchor: jest.fn(),
       markTelemetryAnchorFailed: jest.fn(),
       getTelemetryService: jest.fn(),
-      bulkIngestTelemetry: jest.fn<any>().mockResolvedValue([]),
+      bulkIngestTelemetry: jest.fn().mockResolvedValue([]),
       getTelemetryThresholds: jest
         .fn()
         .mockReturnValue({ minBatteryLevel: 20, maxTemperature: 25, maxHumidity: 80 }),

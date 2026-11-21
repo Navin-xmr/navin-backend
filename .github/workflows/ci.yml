@@ -90,6 +90,53 @@ jobs:
       - name: Run ESLint
         run: npm run lint
 
+  # TODO H4.2 / Phase 2 gate: the full suite is a blocking PR check (promoted
+  # from the former tests-nightly.yml heartbeat). Backing services mirror the
+  # docker-compose stack so integration suites run against real mongo/redis.
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      mongo:
+        image: mongo:6.0
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.runCommand({ ping: 1 }).ok'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Clean install dependencies
+        run: npm ci
+
+      - name: Run test suite
+        run: npm test
+        env:
+          NODE_ENV: test
+          MONGO_URI: mongodb://localhost:27017/navin_test
+          REDIS_URL: redis://localhost:6379
+          JWT_SECRET: ci-test-secret-key-at-least-32-characters!!
+
   openapi-lint:
     name: OpenAPI Lint
     runs-on: ubuntu-latest

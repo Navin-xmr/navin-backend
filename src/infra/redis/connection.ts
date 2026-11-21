@@ -65,6 +65,9 @@ function createInMemoryRedis(): RedisCompatible {
     },
     async set(key: string, value: string, ...args: unknown[]): Promise<'OK'> {
       let expireAt: number | null = null;
+      if (args.some(a => a === 'NX' || a === 'nx') && memGetEntry(key)) {
+        return null as unknown as 'OK';
+      }
       for (let i = 0; i < args.length; i += 1) {
         if ((args[i] === 'EX' || args[i] === 'ex') && typeof args[i + 1] === 'number') {
           expireAt = Date.now() + (args[i + 1] as number) * 1000;
