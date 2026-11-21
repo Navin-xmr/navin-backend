@@ -16,6 +16,20 @@ interface AnchorTelemetryJob {
   dataHash: string;
 }
 
+/** Serializes an error to log-safe primitives only — never the raw object or stack,
+ *  which can carry secrets, SDK payloads, or internal paths. */
+function safeError(err: unknown): { message: string; code?: string } {
+  if (err instanceof Error) {
+    const out: { message: string; code?: string } = { message: err.message };
+    const typed = err as { code?: string };
+    if (typed.code) {
+      out.code = typed.code;
+    }
+    return out;
+  }
+  return { message: String(err) };
+}
+
 async function processStellarAnchor(job: Job<AnchorTelemetryJob>) {
   const { telemetryId, shipmentId, dataHash } = job.data;
 
@@ -70,11 +84,11 @@ async function startWorker() {
   });
 
   worker.on('failed', (job, err) => {
-    logger.error({ jobId: job?.id, err }, 'Stellar worker job failed');
+    logger.error({ jobId: job?.id, ...safeError(err) }, 'Stellar worker job failed');
   });
 
   worker.on('error', err => {
-    logger.error({ err }, 'Stellar worker error');
+    logger.error({ ...safeError(err) }, 'Stellar worker error');
   });
 
   logger.info('Stellar worker listening on transaction_queue');
@@ -94,6 +108,6 @@ async function startWorker() {
 }
 
 startWorker().catch(err => {
-  logger.error({ err }, 'Failed to start stellar worker');
+  logger.error({ ...safeError(err) }, 'Failed to start stellar worker');
   process.exit(1);
 });
