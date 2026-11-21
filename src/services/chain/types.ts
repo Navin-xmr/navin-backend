@@ -28,7 +28,7 @@ export type ChainErrorCode = Extract<ErrorCode, `ERR_CHAIN_${string}`>;
 /** Input for `anchor(shipment_id, data_hash, actor)` — spec-validated shape. */
 export type AnchorEventInput = AnchorArgs;
 
-/** Input for `release_escrow(payment_id, proof_hash)` — spec-validated shape. */
+/** Input for `release_escrow(caller, shipment_id)` — spec-validated shape (v2). */
 export type ReleaseEscrowInput = ReleaseEscrowArgs;
 
 /** Input for `confirm_delivery(receiver, shipment_id, proof_hash)` — spec-validated shape. */
@@ -47,7 +47,8 @@ export interface ChainTxReceipt {
 export type AnchorResult = ChainTxReceipt;
 
 export interface EscrowResult extends ChainTxReceipt {
-  paymentId: ReleaseEscrowInput['payment_id'];
+  /** Escrow is per-shipment (#1056) — this is the released shipment, not a payment id. */
+  shipmentId: ReleaseEscrowInput['shipment_id'];
 }
 
 export interface ConfirmDeliveryResult extends ChainTxReceipt {
@@ -102,8 +103,11 @@ export interface ChainAdapter {
   anchorEvent(input: AnchorEventInput): Promise<AnchorResult>;
 
   /**
-   * Release escrowed funds against a delivery proof hash.
-   * @throws {AppError} `ChainErrorCode` on rejection (e.g. ERR_CHAIN_ESCROW_NOT_FOUND).
+   * Release escrowed funds for a shipment, authorized by `caller`.
+   * Escrow is per-shipment (#1056); there is no payment id or proof hash here.
+   * @throws {AppError} `ChainErrorCode` on rejection (e.g. ERR_CHAIN_ESCROW_NOT_FOUND,
+   * ERR_CHAIN_INVALID_STATUS, ERR_CHAIN_UNAUTHORIZED). Never resolves with a
+   * `{ success: false }` failure flag.
    */
   releaseEscrow(input: ReleaseEscrowInput): Promise<EscrowResult>;
 
@@ -123,20 +127,16 @@ export interface ChainAdapter {
   streamEvents(cursor?: ChainEventCursor): AsyncIterable<ChainEvent>;
 
   /**
-   * Read the escrow balance for a payment (simulation only, no state change).
-   * @throws {AppError} `ChainErrorCode` on rejection.
+   * Optional read-only ledger queries used by confirmation tracking (#818).
+   * `getLatestLedger` returns the current ledger sequence. `getTransactionLedger`
+   * returns the ledger containing a successful transaction, or null when the
+   * transaction is not found or did not succeed.
    */
-  readEscrowBalance(input: ReadEscrowBalanceInput): Promise<ReadEscrowBalanceResult>;
-
+  getLatestLedger?(): Promise<number>;
+  getTransactionLedger?(txHash: string): Promise<number | null>;
   /**
-   * Read the on-chain shipment status for a shipment (simulation only).
-   * @throws {AppError} `ChainErrorCode` on rejection.
+   * Confirmation count for a transaction at `ledger`.
+   * Implementations return at least three immediately for simulated chains.
    */
-  readShipmentStatus(input: ReadShipmentStatusInput): Promise<ReadShipmentStatusResult>;
-
-  /**
-   * Read the contract / spec version (simulation only).
-   * @throws {AppError} `ChainErrorCode` on rejection.
-   */
-  readContractVersion(): Promise<ReadContractVersionResult>;
+  getConfirmationCount(ledger: number): Promise<number>;
 }

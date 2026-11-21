@@ -1,5 +1,5 @@
 {
-  "spec_version": "1.2.0-draft",
+  "spec_version": "2.0.0",
   "errors": [
     { "code": 1, "function": "anchor" },
     { "code": 2, "function": "anchor" },
@@ -8,6 +8,7 @@
     { "code": 5, "function": "release_escrow" },
     { "code": 6, "function": "release_escrow" },
     { "code": 7, "function": "init_escrow" },
-    { "code": 8, "function": "release_escrow" }
+    { "code": 8, "function": "release_escrow" },
+    { "code": 9, "function": "release_escrow" }
   ]
 }

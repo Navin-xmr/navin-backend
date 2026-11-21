@@ -3,19 +3,7 @@ import * as ledgerRepo from './ledger.repo.js';
 import type { LedgerBlockInput } from './ledger.repo.js';
 import { MilestoneEvent } from '../../shared/types/shipment.js';
 import { logger } from '../../shared/logger/logger.js';
-import { getChainAdapter } from '../../services/chain/factory.js';
-import type {
-  ReadContractVersionResult,
-  ReadEscrowBalanceResult,
-  ReadShipmentStatusResult,
-} from '../../services/chain/types.js';
-import {
-  chainReadCacheKey,
-  invalidateChainReadCache,
-  invalidateChainReadCachePrefix,
-  readChainReadCache,
-  writeChainReadCache,
-} from './ledger.cache.js';
+import { config } from '../../config/index.js';
 
 export async function createLedgerBlockService(input: LedgerBlockInput) {
   const block = await ledgerRepo.createLedgerBlock(input);
@@ -51,6 +39,7 @@ export async function getLedgerBlockVerificationService(id: string) {
     txHash: block.transactionHash ?? null,
     transactionHash: block.transactionHash ?? null,
     ledger: block.ledger,
+    network: config.stellarNetwork,
   };
 }
 

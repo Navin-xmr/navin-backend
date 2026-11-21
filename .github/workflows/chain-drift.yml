@@ -1,0 +1,23 @@
+name: Chain drift gate
+
+on:
+  pull_request:
+    paths:
+      - 'src/shared/types/chain.ts'
+      - 'docs/chain-interface.md'
+      - 'tests/fixtures/chain/**'
+      - 'contracts/abi/**'
+      - 'scripts/check-chain-drift.mjs'
+      - '.github/workflows/chain-drift.yml'
+
+jobs:
+  chain-drift:
+    name: ABI / spec version drift
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Check vendored ABI, spec version and fixtures
+        run: node scripts/check-chain-drift.mjs

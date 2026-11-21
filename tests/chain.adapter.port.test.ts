@@ -53,10 +53,10 @@ describe('ChainAdapter port — mock adapter behaviour', () => {
   it('releaseEscrow rejects with AppError(ERR_CHAIN_*) instead of { success: false }', async () => {
     const adapter = new MockChainAdapter();
     await expect(
-      adapter.releaseEscrow({ payment_id: 'missing', proof_hash: 'a'.repeat(64) })
+      adapter.releaseEscrow({ caller: `G${'A'.repeat(55)}`, shipment_id: 'missing' })
     ).rejects.toMatchObject({ statusCode: 404, code: ErrorCodes.CHAIN_ESCROW_NOT_FOUND });
     await expect(
-      adapter.releaseEscrow({ payment_id: 'missing', proof_hash: 'a'.repeat(64) })
+      adapter.releaseEscrow({ caller: `G${'A'.repeat(55)}`, shipment_id: 'missing' })
     ).rejects.toBeInstanceOf(AppError);
   });
 
