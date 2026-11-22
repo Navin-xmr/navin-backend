@@ -260,6 +260,26 @@ describe('stellar indexer worker - event driven', () => {
       lean: async () => payment,
     }));
     await indexStellarTransactions(makeAdapter([releaseEvent], 2));
+    // #797 — all three indexed event classes must insert the canonical
+    // `milestoneEvent` field, never the legacy split-brain `eventType`.
+    expect(ledgerUpdateOneMock).toHaveBeenCalledWith(
+      { transactionHash: releaseEvent.tx_hash },
+      expect.objectContaining({
+        $setOnInsert: expect.objectContaining({
+          milestoneEvent: 'SETTLEMENT_COMPLETED',
+        }),
+        $set: expect.objectContaining({
+          milestoneEvent: 'SETTLEMENT_COMPLETED',
+        }),
+      }),
+      { upsert: true }
+    );
+    const [, releaseUpdate] = ledgerUpdateOneMock.mock.calls[0] as [
+      unknown,
+      { $set: Record<string, unknown>; $setOnInsert: Record<string, unknown> },
+    ];
+    expect(releaseUpdate.$setOnInsert).not.toHaveProperty('eventType');
+    expect(releaseUpdate.$set).not.toHaveProperty('eventType');
     expect(emitPaymentStatusChangeMock).not.toHaveBeenCalled();
 
     await indexStellarTransactions(makeAdapter([releaseEvent], 3));
