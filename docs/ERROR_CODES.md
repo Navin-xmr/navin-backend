@@ -201,6 +201,18 @@ Mapped from Soroban contract errors by `chainErrorToAppError()` in `src/shared/t
 - `ERR_CHAIN_ESCROW_ALREADY_RELEASED` (409) — Contract `EscrowAlreadyReleased` (6)
 - `ERR_CHAIN_INVALID_AMOUNT` (422) — Contract `InvalidAmount` (7)
 - `ERR_CHAIN_INVALID_PROOF` (422) — Contract `InvalidProof` (8)
+- `ERR_CHAIN_INVALID_STATUS` (409) — Contract `InvalidStatus` (9): escrow action attempted in the wrong shipment state
+- `ERR_CHAIN_ROLE_DENIED` (403) — Contract `RoleDenied` (10): caller lacks the required company/carrier role or whitelist entry
+- `ERR_CHAIN_SHIPMENT_NOT_FOUND` (404) — Contract `ShipmentNotFound` (11): no shipment exists for the given on-chain id
+- `ERR_CHAIN_INVALID_TRANSITION` (409) — Contract `InvalidTransition` (12): dispute/shipment action attempted from the wrong state
+- `ERR_CHAIN_ESCROW_LOCKED` (409) — Contract `EscrowLocked` (13): escrow is frozen (e.g. by an open dispute)
+- `ERR_CHAIN_INSUFFICIENT_FUNDS` (422) — Contract `InsufficientFunds` (14): escrow balance cannot cover the requested action
+- `ERR_CHAIN_CONTRACT_PAUSED` (503) — Contract `ContractPaused` (15): contract paused by an emergency admin switch
+- `ERR_CHAIN_DUPLICATE_ACTION` (409) — Contract `DuplicateAction` (16): the action was already performed
+- `ERR_CHAIN_TOKEN_TRANSFER_FAILED` (502) — Contract `TokenTransferFailed` (17): underlying token transfer/mint failed
+- `ERR_CHAIN_RATE_LIMITED` (429) — Contract `RateLimited` (18): caller exceeded the contract's rate limit
+- `ERR_CHAIN_CIRCUIT_BREAKER_OPEN` (503) — Contract `CircuitBreakerOpen` (19): the contract's circuit breaker tripped
+- `ERR_CHAIN_SHIPMENT_FINALIZED` (409) — Contract `ShipmentFinalized` (20): shipment already reached a terminal state
 - `ERR_CHAIN_UNKNOWN` (502) — Contract error code not in the spec (spec drift)
 - `ERR_CHAIN_INVALID_EVENT` (502) — Indexed contract event failed spec validation
 
@@ -300,6 +312,11 @@ A: No. Always check the `code` field for precise error type identification, as m
 A: No. Error messages are currently English only. Frontend teams should map error codes to localized messages.
 
 ## Changelog
+
+### Version 1.4.0
+
+- Added `ERR_CHAIN_*` codes for the real failure classes behind the v2.1 chain surface (#1035): `ERR_CHAIN_ROLE_DENIED`, `ERR_CHAIN_SHIPMENT_NOT_FOUND`, `ERR_CHAIN_INVALID_TRANSITION`, `ERR_CHAIN_ESCROW_LOCKED`, `ERR_CHAIN_INSUFFICIENT_FUNDS`, `ERR_CHAIN_CONTRACT_PAUSED`, `ERR_CHAIN_DUPLICATE_ACTION`, `ERR_CHAIN_TOKEN_TRANSFER_FAILED`, `ERR_CHAIN_RATE_LIMITED`, `ERR_CHAIN_CIRCUIT_BREAKER_OPEN`, `ERR_CHAIN_SHIPMENT_FINALIZED`
+- Documented the previously-undocumented `ERR_CHAIN_INVALID_STATUS` (9)
 
 ### Version 1.3.0
 

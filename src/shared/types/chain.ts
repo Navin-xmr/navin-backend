@@ -29,7 +29,7 @@ import { z } from 'zod';
 import { AppError, ErrorCodes } from '../http/errors.js';
 import type { ErrorCode } from '../http/errors.js';
 
-export const CHAIN_SPEC_VERSION = '2.0.0' as const;
+export const CHAIN_SPEC_VERSION = '2.1.0' as const;
 
 // ─── Soroban primitives ──────────────────────────────────────────────────────
 
@@ -63,6 +63,12 @@ export const PositiveI128Schema = z
 
 /** `u32` — ledger sequence numbers. */
 export const U32Schema = z.number().int().min(0).max(U32_MAX);
+
+/** `u64` unix-seconds timestamp — contract deadlines. */
+export const TimestampSchema = z.number().int().min(0);
+
+/** `u64` on-chain shipment id, as returned by `create_shipment`. */
+export const OnChainShipmentIdSchema = z.number().int().min(0);
 
 export const TxHashSchema = z.string().regex(/^[0-9a-f]{64}$/, 'Invalid transaction hash');
 
@@ -108,6 +114,80 @@ export const ReleaseEscrowArgsSchema = z
   })
   .strict();
 
+/**
+ * `create_shipment(sender: Address, receiver: Address, carrier: Address,
+ *  data_hash: BytesN<32>, payment_milestones: Vec<i128>, deadline: u64) -> u64`
+ * — auth: `sender` (#1037).
+ */
+export const PaymentMilestonesSchema = z.array(PositiveI128Schema).min(1);
+
+export const CreateShipmentArgsSchema = z
+  .object({
+    sender: AddressSchema,
+    receiver: AddressSchema,
+    carrier: AddressSchema,
+    data_hash: Bytes32HexSchema,
+    payment_milestones: PaymentMilestonesSchema,
+    deadline: TimestampSchema,
+  })
+  .strict()
+  .refine(a => new Set([a.sender, a.receiver, a.carrier]).size === 3, {
+    message: 'sender, receiver and carrier must be distinct participants',
+    path: ['carrier'],
+  });
+
+/** `raise_dispute(caller: Address, shipment_id: Symbol, reason_hash: BytesN<32>)` — auth: `caller` (#1036). */
+export const RaiseDisputeArgsSchema = z
+  .object({
+    caller: AddressSchema,
+    shipment_id: SymbolSchema,
+    reason_hash: Bytes32HexSchema,
+  })
+  .strict();
+
+/** Dispute resolution outcome, set authoritatively by the contract (#1036). */
+export const DisputeOutcomeSchema = z.enum(['resolved', 'rejected']);
+export type DisputeOutcome = z.infer<typeof DisputeOutcomeSchema>;
+
+/** `resolve_dispute(admin: Address, shipment_id: Symbol, outcome: Symbol)` — auth: `admin` (#1036). */
+export const ResolveDisputeArgsSchema = z
+  .object({
+    admin: AddressSchema,
+    shipment_id: SymbolSchema,
+    outcome: DisputeOutcomeSchema,
+  })
+  .strict();
+
+/** `add_company(admin: Address, company: Address)` — auth: `admin` (#1042). */
+export const AddCompanyArgsSchema = z
+  .object({
+    admin: AddressSchema,
+    company: AddressSchema,
+  })
+  .strict();
+
+/** `add_carrier(admin: Address, company: Address, carrier: Address)` — auth: `admin` (#1042). */
+export const AddCarrierArgsSchema = z
+  .object({
+    admin: AddressSchema,
+    company: AddressSchema,
+    carrier: AddressSchema,
+  })
+  .strict();
+
+/**
+ * `add_carrier_to_whitelist(admin: Address, company: Address, carrier: Address)`
+ * — auth: `admin` (#1042). Distinct from `add_carrier`: this scopes an already-registered
+ * carrier to one company's per-company whitelist.
+ */
+export const AddCarrierToWhitelistArgsSchema = z
+  .object({
+    admin: AddressSchema,
+    company: AddressSchema,
+    carrier: AddressSchema,
+  })
+  .strict();
+
 /** Result of any confirmed state-changing invocation. */
 export const ChainTxResultSchema = z
   .object({
@@ -116,28 +196,62 @@ export const ChainTxResultSchema = z
   })
   .strict();
 
-export const CHAIN_FUNCTIONS = ['anchor', 'init_escrow', 'release_escrow'] as const;
+/** Result of `create_shipment` — the tx receipt plus the returned on-chain `u64` id. */
+export const CreateShipmentResultSchema = ChainTxResultSchema.extend({
+  shipment_id: OnChainShipmentIdSchema,
+}).strict();
+
+export const CHAIN_FUNCTIONS = [
+  'anchor',
+  'init_escrow',
+  'release_escrow',
+  'create_shipment',
+  'raise_dispute',
+  'resolve_dispute',
+  'add_company',
+  'add_carrier',
+  'add_carrier_to_whitelist',
+] as const;
 export type ChainFunctionName = (typeof CHAIN_FUNCTIONS)[number];
 
 /** Who must `require_auth()` for each function, per spec. */
 export const CHAIN_FUNCTION_AUTH: Readonly<
-  Record<ChainFunctionName, 'actor' | 'payer' | 'caller' | 'admin'>
+  Record<ChainFunctionName, 'actor' | 'payer' | 'caller' | 'admin' | 'sender'>
 > = {
   anchor: 'actor',
   init_escrow: 'payer',
   release_escrow: 'caller',
+  create_shipment: 'sender',
+  raise_dispute: 'caller',
+  resolve_dispute: 'admin',
+  add_company: 'admin',
+  add_carrier: 'admin',
+  add_carrier_to_whitelist: 'admin',
 };
 
 export const ChainFunctionArgsSchemas = {
   anchor: AnchorArgsSchema,
   init_escrow: InitEscrowArgsSchema,
   release_escrow: ReleaseEscrowArgsSchema,
+  create_shipment: CreateShipmentArgsSchema,
+  raise_dispute: RaiseDisputeArgsSchema,
+  resolve_dispute: ResolveDisputeArgsSchema,
+  add_company: AddCompanyArgsSchema,
+  add_carrier: AddCarrierArgsSchema,
+  add_carrier_to_whitelist: AddCarrierToWhitelistArgsSchema,
 } as const satisfies Record<ChainFunctionName, z.ZodTypeAny>;
 
 export type AnchorArgs = z.infer<typeof AnchorArgsSchema>;
 export type InitEscrowArgs = z.infer<typeof InitEscrowArgsSchema>;
 export type ReleaseEscrowArgs = z.infer<typeof ReleaseEscrowArgsSchema>;
+export type CreateShipmentArgs = z.infer<typeof CreateShipmentArgsSchema>;
+export type RaiseDisputeArgs = z.infer<typeof RaiseDisputeArgsSchema>;
+export type ResolveDisputeArgs = z.infer<typeof ResolveDisputeArgsSchema>;
+export type AddCompanyArgs = z.infer<typeof AddCompanyArgsSchema>;
+export type AddCarrierArgs = z.infer<typeof AddCarrierArgsSchema>;
+export type AddCarrierToWhitelistArgs = z.infer<typeof AddCarrierToWhitelistArgsSchema>;
 export type ChainTxResult = z.infer<typeof ChainTxResultSchema>;
+export type CreateShipmentResult = z.infer<typeof CreateShipmentResultSchema>;
 
 // ─── Events ──────────────────────────────────────────────────────────────────
 
@@ -145,6 +259,8 @@ export const CHAIN_EVENT_NAMES = {
   ANCHOR: 'anchor',
   ESCROW_INIT: 'esc_init',
   ESCROW_RELEASE: 'esc_rel',
+  DISPUTE_RAISED: 'dispute_raised',
+  DISPUTE_RESOLVED: 'dispute_resolved',
 } as const;
 export type ChainEventName = (typeof CHAIN_EVENT_NAMES)[keyof typeof CHAIN_EVENT_NAMES];
 
@@ -194,16 +310,40 @@ export const EscrowReleaseEventSchema = z
   })
   .strict();
 
+/** topic `["dispute_raised", shipment_id]` · data `(reason_hash, caller)` (#1036) */
+export const DisputeRaisedEventSchema = z
+  .object({
+    ...eventEnvelope,
+    name: z.literal(CHAIN_EVENT_NAMES.DISPUTE_RAISED),
+    topic: z.tuple([z.literal(CHAIN_EVENT_NAMES.DISPUTE_RAISED), SymbolSchema]),
+    data: z.tuple([Bytes32HexSchema, AddressSchema]),
+  })
+  .strict();
+
+/** topic `["dispute_resolved", shipment_id]` · data `(outcome, caller)` (#1036) */
+export const DisputeResolvedEventSchema = z
+  .object({
+    ...eventEnvelope,
+    name: z.literal(CHAIN_EVENT_NAMES.DISPUTE_RESOLVED),
+    topic: z.tuple([z.literal(CHAIN_EVENT_NAMES.DISPUTE_RESOLVED), SymbolSchema]),
+    data: z.tuple([DisputeOutcomeSchema, AddressSchema]),
+  })
+  .strict();
+
 /** Runtime validator for the indexer and golden fixtures. */
 export const ChainEventSchema = z.discriminatedUnion('name', [
   AnchorEventSchema,
   EscrowInitEventSchema,
   EscrowReleaseEventSchema,
+  DisputeRaisedEventSchema,
+  DisputeResolvedEventSchema,
 ]);
 
 export type AnchorEvent = z.infer<typeof AnchorEventSchema>;
 export type EscrowInitEvent = z.infer<typeof EscrowInitEventSchema>;
 export type EscrowReleaseEvent = z.infer<typeof EscrowReleaseEventSchema>;
+export type DisputeRaisedEvent = z.infer<typeof DisputeRaisedEventSchema>;
+export type DisputeResolvedEvent = z.infer<typeof DisputeResolvedEventSchema>;
 export type ChainEvent = z.infer<typeof ChainEventSchema>;
 
 // ─── Event verification / confirmation depth (v2, #1058) ────────────────────
@@ -255,6 +395,29 @@ export const CHAIN_CONTRACT_ERRORS = {
   InvalidProof: 8,
   /** v2 (#1056): escrow release attempted from a shipment in the wrong state. */
   InvalidStatus: 9,
+  // #1035 — real failure classes for the v2.1 surface (RBAC, shipments, disputes).
+  /** Caller lacks the required company/carrier role or whitelist entry. */
+  RoleDenied: 10,
+  /** No shipment exists for the given on-chain id. */
+  ShipmentNotFound: 11,
+  /** Dispute/shipment action attempted from the wrong state. */
+  InvalidTransition: 12,
+  /** Escrow is frozen (e.g. by an open dispute). */
+  EscrowLocked: 13,
+  /** Escrow balance cannot cover the requested action. */
+  InsufficientFunds: 14,
+  /** Contract is paused by an emergency admin switch. */
+  ContractPaused: 15,
+  /** Action was already performed (idempotent reject). */
+  DuplicateAction: 16,
+  /** Underlying token transfer/mint failed. */
+  TokenTransferFailed: 17,
+  /** Caller exceeded the contract's rate limit. */
+  RateLimited: 18,
+  /** Contract's circuit breaker tripped. */
+  CircuitBreakerOpen: 19,
+  /** Shipment already reached a terminal state. */
+  ShipmentFinalized: 20,
 } as const;
 export type ChainContractErrorName = keyof typeof CHAIN_CONTRACT_ERRORS;
 export type ChainContractErrorCode = (typeof CHAIN_CONTRACT_ERRORS)[ChainContractErrorName];
@@ -281,6 +444,17 @@ export const CHAIN_ERROR_MAP: Readonly<
   InvalidAmount: { code: ErrorCodes.CHAIN_INVALID_AMOUNT, status: 422 },
   InvalidProof: { code: ErrorCodes.CHAIN_INVALID_PROOF, status: 422 },
   InvalidStatus: { code: ErrorCodes.CHAIN_INVALID_STATUS, status: 409 },
+  RoleDenied: { code: ErrorCodes.CHAIN_ROLE_DENIED, status: 403 },
+  ShipmentNotFound: { code: ErrorCodes.CHAIN_SHIPMENT_NOT_FOUND, status: 404 },
+  InvalidTransition: { code: ErrorCodes.CHAIN_INVALID_TRANSITION, status: 409 },
+  EscrowLocked: { code: ErrorCodes.CHAIN_ESCROW_LOCKED, status: 409 },
+  InsufficientFunds: { code: ErrorCodes.CHAIN_INSUFFICIENT_FUNDS, status: 422 },
+  ContractPaused: { code: ErrorCodes.CHAIN_CONTRACT_PAUSED, status: 503 },
+  DuplicateAction: { code: ErrorCodes.CHAIN_DUPLICATE_ACTION, status: 409 },
+  TokenTransferFailed: { code: ErrorCodes.CHAIN_TOKEN_TRANSFER_FAILED, status: 502 },
+  RateLimited: { code: ErrorCodes.CHAIN_RATE_LIMITED, status: 429 },
+  CircuitBreakerOpen: { code: ErrorCodes.CHAIN_CIRCUIT_BREAKER_OPEN, status: 503 },
+  ShipmentFinalized: { code: ErrorCodes.CHAIN_SHIPMENT_FINALIZED, status: 409 },
 };
 
 const errorNameByCode = new Map<number, ChainContractErrorName>(

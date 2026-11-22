@@ -1,5 +1,5 @@
 {
-  "spec_version": "2.0.0",
+  "spec_version": "2.1.0",
   "events": {
     "anchor": {
       "id": "0002200479567253504-0000000001",
@@ -40,6 +40,29 @@
         "GABQGAYDAMBQGAYDAMBQGAYDAMBQGAYDAMBQGAYDAMBQGAYDAMBQHGPC",
         "1500000000"
       ]
+    },
+    "dispute_raised": {
+      "id": "0002200479567253507-0000000001",
+      "contract_id": "CACAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAINCW",
+      "tx_hash": "a338c2f57adb85d4aeea2b8bc3e0c12633c6ab9316677c76749ab984c758cf8e",
+      "ledger": 512410,
+      "ledger_closed_at": "2026-09-27T10:25:00Z",
+      "name": "dispute_raised",
+      "topic": ["dispute_raised", "65f1a2b3c4d5e6f708192a3b"],
+      "data": [
+        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "GABAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEJXA"
+      ]
+    },
+    "dispute_resolved": {
+      "id": "0002200479567253508-0000000001",
+      "contract_id": "CACAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAINCW",
+      "tx_hash": "72b5d03c4ea48231c24d97b892641f357e66564bf373f6745a55d7181d51e9fa",
+      "ledger": 512420,
+      "ledger_closed_at": "2026-09-27T10:30:00Z",
+      "name": "dispute_resolved",
+      "topic": ["dispute_resolved", "65f1a2b3c4d5e6f708192a3b"],
+      "data": ["resolved", "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"]
     }
   }
 }

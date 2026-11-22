@@ -153,7 +153,8 @@ describe('disputeSettlementService', () => {
     expect(disputePaymentMock).toHaveBeenCalledWith(
       SETTLEMENT_ID,
       'goods not delivered',
-      'see invoice #42'
+      'see invoice #42',
+      expect.objectContaining({ reasonHash: expect.any(String), txHash: expect.any(String) })
     );
     expect(result).toMatchObject({
       status: 'Disputed',
@@ -287,7 +288,11 @@ describe('requireRole VIEWER cannot dispute', () => {
     const middleware = requireRole('ADMIN', 'MANAGER');
 
     const req = {
-      user: { role: 'VIEWER', userId: new Types.ObjectId().toString(), organizationId: ORGANIZATION_ID },
+      user: {
+        role: 'VIEWER',
+        userId: new Types.ObjectId().toString(),
+        organizationId: ORGANIZATION_ID,
+      },
     } as unknown as Request;
     const { res } = makeRes();
     const next = jest.fn();

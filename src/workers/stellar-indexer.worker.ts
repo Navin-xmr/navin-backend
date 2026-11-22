@@ -203,6 +203,27 @@ async function recordPaymentConfirmation(
   }
 }
 
+/**
+ * #1036 — mirrors a `dispute_resolved` event's outcome into the Payment
+ * projection: `resolved` releases the frozen escrow, `rejected` unfreezes it
+ * back to Escrowed. The outcome always comes from here, never a service call.
+ */
+async function applyDisputeResolution(shipmentId: string, outcome: string): Promise<void> {
+  if (!mongoose.isValidObjectId(shipmentId)) return;
+
+  const nextStatus = outcome === 'resolved' ? PaymentStatus.RELEASED : PaymentStatus.ESCROWED;
+  await PaymentModel.updateOne(
+    { shipmentId: new mongoose.Types.ObjectId(shipmentId), status: PaymentStatus.DISPUTED },
+    {
+      $set: {
+        status: nextStatus,
+        escrowFrozen: false,
+        'escrowRelease.disputeOutcome': outcome,
+      },
+    }
+  );
+}
+
 async function updatePendingConfirmations(adapter: ChainAdapter): Promise<void> {
   const pendingPayments = await PaymentModel.find({
     status: PaymentStatus.RELEASED,
@@ -287,6 +308,16 @@ export async function indexStellarTransactions(
       metadata.proofHash = event.data[0];
       metadata.payee = event.data[1];
       metadata.amount = event.data[2];
+    } else if (event.name === CHAIN_EVENT_NAMES.DISPUTE_RAISED) {
+      milestoneEvent = MilestoneEvent.DISPUTE_RAISED;
+      shipmentId = event.topic[1];
+      metadata.reasonHash = event.data[0];
+      metadata.caller = event.data[1];
+    } else if (event.name === CHAIN_EVENT_NAMES.DISPUTE_RESOLVED) {
+      milestoneEvent = MilestoneEvent.DISPUTE_RESOLVED;
+      shipmentId = event.topic[1];
+      metadata.outcome = event.data[0];
+      metadata.caller = event.data[1];
     } else {
       continue;
     }
@@ -328,6 +359,10 @@ export async function indexStellarTransactions(
       await recordTelemetryConfirmation(adapter, event.tx_hash, event.ledger);
     } else if (event.name === CHAIN_EVENT_NAMES.ESCROW_RELEASE) {
       await recordPaymentConfirmation(adapter, event.tx_hash, event.ledger);
+    } else if (event.name === CHAIN_EVENT_NAMES.DISPUTE_RESOLVED) {
+      // #1036 — the DB mirrors the resolution outcome from the chain event;
+      // it is never decided locally by the service that submitted resolve_dispute.
+      await applyDisputeResolution(event.topic[1], event.data[0]);
     }
 
     if (cursor && persistCursor) {

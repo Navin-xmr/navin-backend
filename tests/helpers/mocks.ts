@@ -134,6 +134,8 @@ export function createStellarServiceMock(
 export type ChainAdapterMock = {
   anchorEvent: MockFn;
   releaseEscrow: MockFn;
+  raiseDispute: MockFn;
+  resolveDispute: MockFn;
   streamEvents: MockFn;
   getConfirmationCount: MockFn;
 };
@@ -155,6 +157,8 @@ const MOCK_TX_HASH = 'a'.repeat(64);
 export type ChainAdapterScript = {
   anchorResult?: Partial<AnchorResult>;
   releaseResult?: Partial<EscrowResult>;
+  raiseDisputeResult?: Partial<{ txHash: string; ledger: number }>;
+  resolveDisputeResult?: Partial<{ txHash: string; ledger: number }>;
   events?: ChainEvent[];
 };
 
@@ -179,6 +183,18 @@ export function createChainAdapterMock(
       simulated: true,
       shipmentId: (input as { shipment_id: string }).shipment_id,
       ...script.releaseResult,
+    })),
+    raiseDispute: jest.fn(async () => ({
+      txHash: MOCK_TX_HASH,
+      ledger: 1,
+      simulated: true,
+      ...script.raiseDisputeResult,
+    })),
+    resolveDispute: jest.fn(async () => ({
+      txHash: MOCK_TX_HASH,
+      ledger: 1,
+      simulated: true,
+      ...script.resolveDisputeResult,
     })),
     streamEvents: jest.fn(async function* () {
       yield* script.events ?? [];
