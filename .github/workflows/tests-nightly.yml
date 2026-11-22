@@ -1,0 +1,84 @@
+name: Nightly chain integration tests
+
+on:
+  schedule:
+    # 03:17 UTC nightly — outside the usual PR rush.
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: tests-nightly
+  cancel-in-progress: false
+
+jobs:
+  chain-integration:
+    name: Soroban / indexer integration (standalone quickstart)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      # TODO L2 / P6-19: a real local standalone Stellar network with Soroban
+      # RPC. No public testnet or internet dependency is required.
+      stellar:
+        image: stellar/quickstart:latest
+        env:
+          NETWORK: standalone
+          ENABLE_SOROBAN_RPC: 'true'
+          PROTOCOL_VERSION: '22'
+          ENABLE_CORE_ARTIFICIALLY_ADVANCE_LEDGERS: 'true'
+        ports:
+          - 8000:8000
+          - 11626:11626
+        options: >-
+          --health-cmd "curl -fsS -X POST -H 'Content-Type: application/json' -d '{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"getLatestLedger\"}' http://localhost:8000/"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 20
+      mongo:
+        image: mongo:6.0
+        ports:
+          - 27017:27017
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Clean install dependencies
+        run: npm ci
+
+      - name: Verify standalone RPC health before tests
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 30); do
+            if response=$(curl -fsS -X POST -H 'Content-Type: application/json' \
+              -d '{"jsonrpc":"2.0","id":1,"method":"getLatestLedger"}' \
+              http://localhost:8000/ 2>/dev/null); then
+              echo "$response"
+              echo "$response" | grep -q '"result"' || { echo "RPC error response: $response"; exit 1; }
+              echo "Standalone Soroban RPC is healthy"
+              exit 0
+            fi
+            echo "Waiting for standalone Soroban RPC (attempt ${attempt}/30)..."
+            sleep 5
+          done
+          echo "Standalone Soroban RPC never became healthy" >&2
+          exit 1
+
+      - name: Run chain contract and adapter suites
+        run: npm test -- chain.adapter.contract.test.ts chain.simulated-adapter.test.ts chain.types.test.ts
+        env:
+          NODE_ENV: test
+          SOROBAN_ADAPTER: simulated
+          SOROBAN_RPC_URL: http://localhost:8000/
+          HORIZON_URL: http://localhost:11626
+          MONGO_URI: mongodb://localhost:27017/navin_nightly
+          REDIS_URL: redis://localhost:6379
+          JWT_SECRET: ci-test-secret-key-at-least-32-characters!!
