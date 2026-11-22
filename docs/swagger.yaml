@@ -7486,6 +7486,35 @@ components:
             Stellar transaction hash for the shipment tokenization (or related
             on-chain) operation. Used for explorer links and ledger events.
           x-implemented: true
+        chainOutbox:
+          type: object
+          nullable: true
+          description: >
+            #997 — transactional outbox for create_shipment. Created atomically with
+            the shipment in `pending_chain`; the worker submits and resolves it to
+            `anchored` (or `failed` after retries).
+          properties:
+            status:
+              type: string
+              enum: [pending_chain, processing, anchored, failed]
+            idempotencyKey:
+              type: string
+              description: Stable dedupe key for the chain submission.
+            attempts:
+              type: integer
+            availableAt:
+              type: string
+              format: date-time
+            lastError:
+              type: string
+              nullable: true
+            txHash:
+              type: string
+              nullable: true
+            ledger:
+              type: integer
+              nullable: true
+          x-implemented: true
         deliveryProof:
           type: object
           nullable: true
