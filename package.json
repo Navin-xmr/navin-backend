@@ -9,6 +9,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "check:deps": "node scripts/check-undeclared-deps.js",
     "check:chain-drift": "node scripts/check-chain-drift.mjs",
+    "check:chain-interface": "node scripts/check-chain-interface.mjs",
     "lint": "eslint src --ext .ts",
     "lint:fix": "eslint src --ext .ts --fix",
     "lint:openapi": "npx @redocly/cli lint docs/swagger.yaml",
