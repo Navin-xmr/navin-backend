@@ -7861,6 +7861,13 @@ components:
         ledger:
           type: integer
           description: Stellar ledger sequence the transaction landed in.
+        network:
+          type: string
+          enum: [testnet, public]
+          example: testnet
+          description: >
+            Stellar network (`STELLAR_NETWORK`) the transaction was anchored on;
+            clients use it to select Horizon / RPC endpoints when verifying.
     Notification:
       type: object
       description: A notification entry for a user.
