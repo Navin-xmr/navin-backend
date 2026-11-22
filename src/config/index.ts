@@ -1,5 +1,14 @@
 import { env } from '../env.js';
+import { resolveContractRegistry } from './contractRegistry.js';
 import { resolveStellarUrls } from './stellarNetwork.js';
+
+// P15-01: deployed contract IDs come from the committed registry. Any
+// configured ID must match it (enforced outside tests, where fixtures are used).
+const contracts = resolveContractRegistry(
+  env.STELLAR_NETWORK,
+  { shipment: env.ESCROW_CONTRACT_ID },
+  { strict: env.NODE_ENV !== 'test' }
+);
 
 const allowedOrigins = env.ALLOWED_ORIGINS.split(',')
   .map(origin => origin.trim())
@@ -55,7 +64,8 @@ export const config = {
     apiSecret: process.env.CLOUDINARY_API_SECRET,
   },
   sorobanRpcUrl: stellarUrls.sorobanRpcUrl,
-  escrowContractId: env.ESCROW_CONTRACT_ID,
+  escrowContractId: env.ESCROW_CONTRACT_ID ?? contracts.contracts.shipment.id,
+  contractRegistry: contracts,
   chainAdapter: env.SOROBAN_ADAPTER,
   /** #1058 — ledgers required before an anchored event is marked verified. */
   chainConfirmations: {
