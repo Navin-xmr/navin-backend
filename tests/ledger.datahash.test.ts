@@ -34,6 +34,7 @@ const { createLedgerBlock } = await import('../src/modules/ledger/ledger.repo.js
 const { getLedgerBlockVerificationService } = await import(
   '../src/modules/ledger/ledger.service.js'
 );
+const { config } = await import('../src/config/index.js');
 
 // ─── Repo tests ───────────────────────────────────────────────────────────────
 
@@ -223,6 +224,33 @@ describe('getLedgerBlockVerificationService — canonicalPayload presence (issue
       expect(generateDataHash(verification.canonicalPayload)).toBe(verification.dataHash);
     },
   );
+
+  // #804 — the frontend needs the configured Stellar network to choose
+  // Horizon/RPC endpoints when verifying the bundle.
+  it('returns the configured network in the verification bundle', async () => {
+    findByIdMock.mockReturnValueOnce({
+      lean: async () => ({
+        _id: new Types.ObjectId().toHexString(),
+        milestoneEvent: 'IN_TRANSIT',
+        canonicalPayload: { shipmentId: 'ship-1', event: 'IN_TRANSIT' },
+        dataHash: 'd'.repeat(64),
+        transactionHash: 'stellar-tx-abc',
+        ledger: 5,
+      }),
+    });
+
+    const verification = await getLedgerBlockVerificationService(
+      new Types.ObjectId().toHexString(),
+    );
+
+    expect(verification).toEqual(
+      expect.objectContaining({
+        txHash: 'stellar-tx-abc',
+        ledger: 5,
+        network: config.stellarNetwork,
+      }),
+    );
+  });
 });
 
 // ─── canonicalPayload persistence (P8-05 / P8-06) ─────────────────────────────
