@@ -21,6 +21,16 @@ export interface LedgerBlockInput {
   dataHash?: string;
   /** Exact payload hashed into dataHash. Persisted alongside every dataHash. */
   canonicalPayload?: Record<string, unknown>;
+  /** #994 — defaults to 1 for legacy v1 events. */
+  schemaVersion?: number;
+  /** #994 — defaults to 0 for legacy v1 events. */
+  eventCounter?: number;
+  /** #994 — stable dedupe key for a replayed v2 event. */
+  idempotencyKey?: string;
+  /** #994 — emitting contract id. */
+  contractId?: string;
+  /** #994 — contract event topic name. */
+  eventTopic?: string;
   transactionHash?: string;
   ledger?: number;
   /** #1058 — confirmation depth; defaults to 0 until the head advances. */
@@ -46,6 +56,11 @@ export async function createLedgerBlock(input: LedgerBlockInput): Promise<ILedge
     ...(input.transactionHash && { transactionHash: input.transactionHash }),
     ...(input.dataHash && { dataHash: input.dataHash }),
     ...(input.canonicalPayload && { canonicalPayload: input.canonicalPayload }),
+    schemaVersion: input.schemaVersion ?? 1,
+    eventCounter: input.eventCounter ?? 0,
+    ...(input.idempotencyKey && { idempotencyKey: input.idempotencyKey }),
+    ...(input.contractId && { contractId: input.contractId }),
+    ...(input.eventTopic && { eventTopic: input.eventTopic }),
     ledger: input.ledger ?? input.blockNumber ?? 0,
     confirmations: input.confirmations ?? 0,
     verified: input.verified ?? false,

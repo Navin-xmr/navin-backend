@@ -7812,6 +7812,26 @@ components:
           description: >
             Canonical JSON payload that was hashed into dataHash and anchored on-chain.
             Stored alongside the block for independent verification.
+        schemaVersion:
+          type: integer
+          default: 1
+          description: v2 chain event schema version; legacy rows read as 1.
+        eventCounter:
+          type: integer
+          default: 0
+          description: Monotonic v2 event counter; legacy rows read as 0.
+        idempotencyKey:
+          type: string
+          nullable: true
+          description: Stable key used to deduplicate replayed v2 events.
+        contractId:
+          type: string
+          nullable: true
+          description: Emitting Soroban contract id.
+        eventTopic:
+          type: string
+          nullable: true
+          description: Contract event topic name (e.g. create_shipment).
         transactionHash:
           type: string
           nullable: true

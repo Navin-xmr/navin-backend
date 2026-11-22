@@ -20,6 +20,16 @@ export interface ILedgerBlock {
    * Persisted alongside every dataHash so verifiers never re-guess bytes.
    */
   canonicalPayload?: Record<string, unknown>;
+  /** #994 — v2 chain event spec version. Legacy rows default to 1. */
+  schemaVersion: number;
+  /** #994 — monotonically increasing event counter within the shipment/contract. */
+  eventCounter: number;
+  /** #994 — stable idempotency key; deduplicates replayed v2 events. */
+  idempotencyKey?: string;
+  /** #994 — emitting Soroban contract id (`C…`). */
+  contractId?: string;
+  /** #994 — contract event topic name (e.g. `create_shipment`). */
+  eventTopic?: string;
   transactionHash?: string;
   ledger: number;
   /** #1058 — ledgers closed strictly after `ledger`; recomputed idempotently. */
@@ -60,6 +70,11 @@ const LedgerBlockSchema = new Schema(
     transactionHash: { type: String },
     dataHash: { type: String },
     canonicalPayload: { type: Schema.Types.Mixed },
+    schemaVersion: { type: Number, required: true, default: 1 },
+    eventCounter: { type: Number, required: true, default: 0 },
+    idempotencyKey: { type: String },
+    contractId: { type: String },
+    eventTopic: { type: String },
     ledger: {
       type: Number,
       required: true,
@@ -93,6 +108,9 @@ LedgerBlockSchema.index({ milestoneEvent: 1, createdAt: -1 });
 
 // Allows fast lookup / deduplication by on-chain data hash.
 LedgerBlockSchema.index({ dataHash: 1 }, { sparse: true });
+
+// #994 — v2 replay dedupe; sparse so all legacy rows (no key) remain valid.
+LedgerBlockSchema.index({ idempotencyKey: 1 }, { sparse: true, unique: true });
 
 // #1058 — supports idempotent re-verification scans of not-yet-confirmed blocks.
 LedgerBlockSchema.index({ verified: 1, ledger: 1 });

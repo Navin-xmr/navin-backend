@@ -6,6 +6,7 @@
  */
 
 import { describe, it, expect } from '@jest/globals';
+import { Types } from 'mongoose';
 import { LedgerBlock } from '../src/modules/ledger/ledger.model.js';
 
 describe('LedgerBlockSchema — dataHash index (issue #660)', () => {
@@ -31,5 +32,32 @@ describe('LedgerBlockSchema — dataHash index (issue #660)', () => {
     expect(match).toBeDefined();
     const [, options] = match as [unknown, Record<string, unknown>];
     expect(options).toMatchObject({ sparse: true });
+  });
+});
+
+describe('LedgerBlockSchema — v2 event fields (issue #994)', () => {
+  it('declares v2 fields with legacy-compatible defaults', () => {
+    const paths = LedgerBlock.schema.paths;
+    expect(paths.schemaVersion.options.default).toBe(1);
+    expect(paths.eventCounter.options.default).toBe(0);
+    expect(paths.idempotencyKey).toBeDefined();
+    expect(paths.contractId).toBeDefined();
+    expect(paths.eventTopic).toBeDefined();
+
+    const doc = new LedgerBlock({
+      shipmentId: new Types.ObjectId(),
+      milestoneEvent: 'CREATED',
+    });
+    expect(doc.schemaVersion).toBe(1);
+    expect(doc.eventCounter).toBe(0);
+  });
+
+  it('deduplicates v2 events with a sparse unique idempotencyKey index', () => {
+    const match = LedgerBlock.schema
+      .indexes()
+      .find(([fields]: [Record<string, unknown>]) => fields.idempotencyKey === 1);
+    expect(match).toBeDefined();
+    const [, options] = match as [unknown, Record<string, unknown>];
+    expect(options).toMatchObject({ sparse: true, unique: true });
   });
 });
