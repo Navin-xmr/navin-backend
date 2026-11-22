@@ -79,6 +79,9 @@ const adapter: ChainAdapter = {
   async releaseEscrow() {
     throw new Error('not used');
   },
+  async updateStatus() {
+    throw new Error('not used');
+  },
   async *streamEvents(cursor?: string) {
     seenCursors.push(cursor);
     for (const ev of events) yield ev;

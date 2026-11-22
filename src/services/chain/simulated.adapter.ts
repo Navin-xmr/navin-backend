@@ -40,6 +40,7 @@ import {
   Bytes32HexSchema,
   CHAIN_EVENT_NAMES,
   SymbolSchema,
+  UpdateStatusArgsSchema,
   parseChainEvent,
 } from '../../shared/types/chain.js';
 import type { ChainEvent } from '../../shared/types/chain.js';
@@ -53,6 +54,8 @@ import type {
   ChainEventCursor,
   EscrowResult,
   ReleaseEscrowInput,
+  UpdateStatusInput,
+  UpdateStatusResult,
 } from './types.js';
 
 /** Sentinel contract id for simulated events (all-zero contract strkey) — no contract exists. */
@@ -60,6 +63,7 @@ const SIMULATED_CONTRACT_ID = StrKey.encodeContract(Buffer.alloc(32));
 
 const ANCHOR_KEY_PREFIX = 'telemetry:';
 const RELEASE_KEY_PREFIX = 'release:';
+const STATUS_KEY_PREFIX = 'status:';
 const PAGE_SIZE = 200;
 const MAX_BAD_SEQ_RETRIES = 2;
 
@@ -168,6 +172,33 @@ export class SimulatedAdapter implements ChainAdapter {
       releaseDigest
     );
     return { txHash: hash, ledger, simulated: true, shipmentId: input.shipment_id };
+  }
+
+  async updateStatus(input: UpdateStatusInput): Promise<UpdateStatusResult> {
+    const parsed = UpdateStatusArgsSchema.safeParse(input);
+    if (!parsed.success) {
+      const hashIssue = parsed.error.issues.some(i => i.path[0] === 'data_hash');
+      throw chainError(
+        422,
+        'update_status arguments do not match the contract ABI',
+        hashIssue ? ErrorCodes.CHAIN_INVALID_HASH : ErrorCodes.CHAIN_UNKNOWN,
+        parsed.error.issues
+      );
+    }
+    const { shipment_id, new_status, data_hash } = parsed.data;
+    // Manage-data holds the caller-supplied data_hash verbatim (never recomputed).
+    // The status name lives in the key so the latest status is discoverable per shipment.
+    const { hash, ledger } = await this.submitManageData(
+      `${STATUS_KEY_PREFIX}${shipment_id}:${new_status}`, // ≤ 45 bytes (u64 ≤ 20 digits)
+      data_hash
+    );
+    return {
+      txHash: hash,
+      ledger,
+      simulated: true,
+      shipmentId: shipment_id,
+      newStatus: new_status,
+    };
   }
 
   async *streamEvents(cursor?: ChainEventCursor): AsyncIterable<ChainEvent> {

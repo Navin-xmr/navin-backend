@@ -80,6 +80,10 @@ export const ErrorCodes = {
   CHAIN_INVALID_PROOF: 'ERR_CHAIN_INVALID_PROOF',
   /** Contract `InvalidStatus` — escrow action attempted in the wrong shipment state. */
   CHAIN_INVALID_STATUS: 'ERR_CHAIN_INVALID_STATUS',
+  /** Contract `DuplicateAction` — identical (shipment, status, data_hash) inside the idempotency window. */
+  CHAIN_DUPLICATE_ACTION: 'ERR_CHAIN_DUPLICATE_ACTION',
+  /** Contract `ShipmentNotFound` — no on-chain shipment with that id. */
+  CHAIN_SHIPMENT_NOT_FOUND: 'ERR_CHAIN_SHIPMENT_NOT_FOUND',
   CHAIN_UNKNOWN: 'ERR_CHAIN_UNKNOWN',
   CHAIN_INVALID_EVENT: 'ERR_CHAIN_INVALID_EVENT',
   RATE_LIMIT_EXCEEDED: 'ERR_RATE_LIMIT_EXCEEDED',

@@ -134,6 +134,7 @@ export function createStellarServiceMock(
 export type ChainAdapterMock = {
   anchorEvent: MockFn;
   releaseEscrow: MockFn;
+  updateStatus: MockFn;
   streamEvents: MockFn;
   getConfirmationCount: MockFn;
 };
@@ -179,6 +180,13 @@ export function createChainAdapterMock(
       simulated: true,
       shipmentId: (input as { shipment_id: string }).shipment_id,
       ...script.releaseResult,
+    })),
+    updateStatus: jest.fn(async (input: unknown) => ({
+      txHash: MOCK_TX_HASH,
+      ledger: 1,
+      simulated: true,
+      shipmentId: (input as { shipment_id: string }).shipment_id,
+      newStatus: (input as { new_status: string }).new_status,
     })),
     streamEvents: jest.fn(async function* () {
       yield* script.events ?? [];

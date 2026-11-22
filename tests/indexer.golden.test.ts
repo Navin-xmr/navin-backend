@@ -70,6 +70,9 @@ describe('Event-driven indexer golden fixtures replay', () => {
       async releaseEscrow() {
         throw new Error('Not implemented');
       },
+      async updateStatus() {
+        throw new Error('Not implemented');
+      },
       async *streamEvents() {
         for (const ev of events) {
           yield ev;
