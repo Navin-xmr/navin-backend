@@ -6461,11 +6461,12 @@ paths:
         Returns everything a client needs to independently verify a ledger block
         without trusting the API, in three steps:
 
-        1. Fetch `canonicalPayload`, `dataHash` and `txHash` from this endpoint.
+        1. Fetch `canonicalPayload`, `dataHash`, `txHash`, `ledger`, `network`,
+           `contractId`, `schemaVersion` and `idempotencyKey` from this endpoint.
         2. Recompute `sha256(canonicalPayload)` client-side (Web Crypto) and compare
            it with `dataHash`.
         3. Query Horizon (`memo_hash` / `manageData` value) or Soroban RPC
-           (`getTransaction` + `getEvents`) for `txHash` and confirm the on-chain
+           (`getTransaction` + `getEvents`) for `txHash` on `network` (and `contractId`) and confirm the on-chain
            digest equals `dataHash`.
 
         See `docs/blockchain.md` for the copy-pasteable browser implementation.
@@ -6500,6 +6501,14 @@ paths:
           description: Forbidden - insufficient role
         '404':
           description: Ledger block not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: >
+            `ERR_LEDGER_PAYLOAD_INVALID` - the stored canonical payload is not a versioned
+            object, so the block cannot be verified.
           content:
             application/json:
               schema:
@@ -7831,10 +7840,21 @@ components:
     LedgerVerificationBundle:
       type: object
       description: >
-        Off-chain / on-chain verification bundle for a ledger block, returned by
+        Verification bundle (v2) for a ledger block, returned by
         GET /api/ledger/blocks/{id}/verification. A verifier recomputes
         sha256(canonicalPayload) and compares it with dataHash, then confirms the
-        digest is committed on-chain via txHash.
+        digest is committed on-chain via txHash on the given network/contractId.
+        All values are those persisted when the block was written; none are rebuilt
+        from mutable shipment or payment state.
+      required:
+        - canonicalPayload
+        - dataHash
+        - txHash
+        - ledger
+        - network
+        - contractId
+        - schemaVersion
+        - idempotencyKey
       properties:
         canonicalPayload:
           type: object
@@ -7849,7 +7869,9 @@ components:
           nullable: true
           description: >
             Lowercase hex SHA-256 digest (64 chars) of the canonical payload,
-            committed on-chain by `txHash`.
+            committed on-chain by `txHash`. Computed over the payload serialized
+            with keys sorted recursively, `undefined` omitted, dates as ISO 8601 UTC,
+            and all whitespace stripped (see docs/blockchain.md).
         txHash:
           type: string
           nullable: true
@@ -7857,10 +7879,37 @@ components:
         transactionHash:
           type: string
           nullable: true
-          description: Alias of `txHash`.
+          description: Alias of `txHash` (backwards compatibility).
         ledger:
           type: integer
           description: Stellar ledger sequence the transaction landed in.
+        network:
+          type: string
+          enum: [testnet, public]
+          description: >
+            Stellar network the block was written under (`public` = mainnet). Recorded at
+            write time; legacy blocks without a recorded network report the server's
+            currently configured network.
+        contractId:
+          type: string
+          nullable: true
+          description: >
+            Soroban contract (C... strkey) the transaction targeted. Resolved from the value
+            persisted with the block, then indexed event metadata, then the configured
+            escrow contract. Null when none is known (e.g. simulated, un-configured deployments).
+        schemaVersion:
+          type: integer
+          minimum: 1
+          nullable: true
+          description: >
+            Version of the canonical payload layout, read from the payload's own `v` field
+            (which is covered by `dataHash`). Null when no payload was persisted.
+        idempotencyKey:
+          type: string
+          nullable: true
+          description: >
+            Client `Idempotency-Key` of the request that produced the block. Null when the
+            request carried none or the block predates persistence of this field.
     Notification:
       type: object
       description: A notification entry for a user.

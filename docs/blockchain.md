@@ -215,7 +215,11 @@ considered verified when all three agree.
     "dataHash": "0371fc34550ee7a73ef610692adaa49c5f50aa917e85b9cebb9d1a11fa397c8a",
     "txHash": "3b1f0c…",
     "transactionHash": "3b1f0c…",
-    "ledger": 41234567
+    "ledger": 41234567,
+    "network": "testnet",
+    "contractId": "CACAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAINCW",
+    "schemaVersion": 1,
+    "idempotencyKey": "status-2026-08-01-0001"
   }
 }
 ```
@@ -229,6 +233,19 @@ re-guess which bytes were committed. `txHash` and `transactionHash` are aliases 
 value. Both `canonicalPayload` and `dataHash` may be `null` for legacy blocks written before
 migration #661; those blocks cannot be client-verified and should be shown as
 "unverifiable" rather than "failed".
+
+**Bundle v2 fields (#1046).** All are persisted when the block is written — never rebuilt from
+mutable shipment/payment state:
+
+| Field            | Meaning                                                                                                                                 |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `network`        | `testnet` or `public` (mainnet) — which network to query for `txHash`. Legacy blocks without it report the server's configured network. |
+| `contractId`     | Soroban contract the tx targeted: persisted value → indexed event metadata → configured `ESCROW_CONTRACT_ID`; `null` if none is known.  |
+| `schemaVersion`  | Canonical payload layout version, read from the payload's own `v` (covered by `dataHash`). `null` with no payload.                      |
+| `idempotencyKey` | Client `Idempotency-Key` that produced the block (shipment status changes); `null` if none was sent.                                    |
+
+A stored `canonicalPayload` that is not an object with an integer `v >= 1` yields `422 ERR_LEDGER_PAYLOAD_INVALID`
+instead of being served. The server does **not** vouch for `dataHash` — always recompute it yourself.
 
 ### Step 2 — Recompute `sha256(canonicalPayload)` in the browser
 

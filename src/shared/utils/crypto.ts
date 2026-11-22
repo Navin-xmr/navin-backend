@@ -37,6 +37,13 @@ export function generateDataHash(payload: unknown): string {
 }
 
 /**
+ * Version of the canonical payload layout produced by `buildCanonicalShipmentPayload`.
+ * It is embedded in the payload itself as `v`, so it is covered by `dataHash` and a
+ * verifier can read the schema from the exact bytes that were hashed.
+ */
+export const CANONICAL_SCHEMA_VERSION = 1 as const;
+
+/**
  * Canonical payload builder for all shipment/ledger event domains (#654).
  * Defines exactly which bytes are hashed so telemetry, status changes,
  * milestones, proofs and settlements share one deterministic scheme.
@@ -57,6 +64,6 @@ export function buildCanonicalShipmentPayload(input: {
       input.timestamp instanceof Date
         ? input.timestamp.toISOString()
         : (input.timestamp ?? new Date(0).toISOString()),
-    v: 1,
+    v: CANONICAL_SCHEMA_VERSION,
   };
 }
