@@ -4,7 +4,7 @@ import { config } from '../../config/index.js';
 import { getRedisClient as getSharedRedisClient } from './connection.js';
 
 let redisClient: Redis | null = null;
-type TransactionQueueLike = Pick<Queue, 'add' | 'close'>;
+type TransactionQueueLike = Pick<Queue, 'add' | 'close' | 'getJobCounts'>;
 let transactionQueue: TransactionQueueLike | null = null;
 
 function isTestEnv(): boolean {
@@ -38,6 +38,7 @@ export function getTransactionQueue(): TransactionQueueLike {
       transactionQueue = {
         add: (async () => ({ id: 'test-job-id' })) as unknown as Queue['add'],
         close: (async () => undefined) as unknown as Queue['close'],
+        getJobCounts: (async () => ({})) as unknown as Queue['getJobCounts'],
       };
       return transactionQueue;
     }

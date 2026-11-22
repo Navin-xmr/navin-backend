@@ -34,6 +34,7 @@ import {
 import type { Account, Transaction } from '@stellar/stellar-sdk';
 
 import { config } from '../../config/index.js';
+import { instrumentSubmission } from '../../infra/metrics/chainMetrics.js';
 import { AppError, ErrorCodes } from '../../shared/http/errors.js';
 import {
   AddressSchema,
@@ -138,7 +139,11 @@ export class SimulatedAdapter implements ChainAdapter {
       (config.stellarNetwork === 'public' ? Networks.PUBLIC : Networks.TESTNET);
   }
 
-  async anchorEvent(input: AnchorEventInput): Promise<AnchorResult> {
+  anchorEvent(input: AnchorEventInput): Promise<AnchorResult> {
+    return instrumentSubmission('anchor_event', () => this.doAnchorEvent(input));
+  }
+
+  private async doAnchorEvent(input: AnchorEventInput): Promise<AnchorResult> {
     assertBytes32(input.data_hash, 'data_hash', ErrorCodes.CHAIN_INVALID_HASH);
     const { hash, ledger } = await this.submitManageData(
       `${ANCHOR_KEY_PREFIX}${input.shipment_id}`,
@@ -147,7 +152,11 @@ export class SimulatedAdapter implements ChainAdapter {
     return { txHash: hash, ledger, simulated: true };
   }
 
-  async releaseEscrow(input: ReleaseEscrowInput): Promise<EscrowResult> {
+  releaseEscrow(input: ReleaseEscrowInput): Promise<EscrowResult> {
+    return instrumentSubmission('release_escrow', () => this.doReleaseEscrow(input));
+  }
+
+  private async doReleaseEscrow(input: ReleaseEscrowInput): Promise<EscrowResult> {
     if (!AddressSchema.safeParse(input.caller).success) {
       throw chainError(
         422,

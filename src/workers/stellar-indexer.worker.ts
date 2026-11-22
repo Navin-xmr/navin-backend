@@ -14,6 +14,12 @@ import { CHAIN_EVENT_NAMES } from '../shared/types/chain.js';
 import type { ChainAdapter } from '../services/chain/types.js';
 import { getChainAdapter } from '../services/chain/factory.js';
 import { confirmAnchoredTelemetry } from '../modules/telemetry/telemetry.confirmation.js';
+import {
+  observeConfirmationLag,
+  recordIndexerCursorEvent,
+  recordIndexerPoll,
+} from '../infra/metrics/chainMetrics.js';
+import { startMetricsServer } from '../infra/metrics/metricsServer.js';
 import { logger } from '../shared/logger/logger.js';
 
 export const STELLAR_INDEXER_QUEUE = 'stellar_indexer_queue';
@@ -23,6 +29,8 @@ const IndexerStateSchema = new Schema(
   {
     key: { type: String, required: true, unique: true },
     cursor: { type: String, required: true },
+    /** #1044 — ledger close time of the event `cursor` points at; drives cursor-age metrics. */
+    cursorEventAt: { type: Date },
   },
   { timestamps: true }
 );
@@ -30,6 +38,7 @@ const IndexerStateSchema = new Schema(
 export interface IndexerStateDocument {
   key: string;
   cursor: string;
+  cursorEventAt?: Date;
 }
 
 export const IndexerStateModel =
@@ -45,11 +54,29 @@ export async function getStoredCursor(key = 'stellar_indexer'): Promise<string |
   }
 }
 
-export async function saveStoredCursor(cursor: string, key = 'stellar_indexer'): Promise<void> {
+export async function saveStoredCursor(
+  cursor: string,
+  key = 'stellar_indexer',
+  eventAt?: Date
+): Promise<void> {
   try {
-    await IndexerStateModel.updateOne({ key }, { $set: { cursor } }, { upsert: true });
+    await IndexerStateModel.updateOne(
+      { key },
+      { $set: { cursor, ...(eventAt && { cursorEventAt: eventAt }) } },
+      { upsert: true }
+    );
   } catch {
     // Graceful fallback for un-connected DB in isolated unit tests
+  }
+}
+
+/** #1044 — restores cursor-age after a restart from the persisted event time. */
+export async function seedCursorAgeMetric(key = 'stellar_indexer'): Promise<void> {
+  try {
+    const doc = await IndexerStateModel.findOne({ key }).lean<{ cursorEventAt?: Date }>();
+    recordIndexerCursorEvent(doc?.cursorEventAt);
+  } catch {
+    // Metrics only — never fail the indexer.
   }
 }
 
@@ -68,11 +95,15 @@ export async function reverifyAnchoredBlocks(
   threshold: number = confirmationThreshold()
 ): Promise<number> {
   let reverified = 0;
-  let pending: { _id: string; ledger: number; confirmations?: number }[];
+  type PendingBlock = {
+    _id: string;
+    ledger: number;
+    confirmations?: number;
+    metadata?: { eventName?: string; ledgerClosedAt?: string };
+  };
+  let pending: PendingBlock[];
   try {
-    pending = await LedgerBlock.find({ verified: { $ne: true } }).lean<
-      { _id: string; ledger: number; confirmations?: number }[]
-    >();
+    pending = await LedgerBlock.find({ verified: { $ne: true } }).lean<PendingBlock[]>();
   } catch {
     // Graceful fallback for un-connected DB in isolated unit tests
     return 0;
@@ -84,7 +115,11 @@ export async function reverifyAnchoredBlocks(
     if (confirmations < (block.confirmations ?? 0)) continue;
     if (!verified && confirmations === (block.confirmations ?? 0)) continue;
     await LedgerBlock.updateOne({ _id: block._id }, { $set: { confirmations, verified } });
-    if (verified) reverified += 1;
+    if (verified) {
+      reverified += 1;
+      // #1044 — lag from the chain event time to the moment verification succeeded.
+      observeConfirmationLag(block.metadata?.eventName ?? '', block.metadata?.ledgerClosedAt);
+    }
   }
   return reverified;
 }
@@ -264,6 +299,8 @@ export async function indexStellarTransactions(
       ledger: event.ledger,
       contractId: event.contract_id,
       eventId: event.id,
+      eventName: event.name,
+      ledgerClosedAt: event.ledger_closed_at,
       indexedAt: new Date().toISOString(),
     };
 
@@ -303,10 +340,10 @@ export async function indexStellarTransactions(
       {
         $setOnInsert: {
           shipmentId,
-          milestoneEvent,
           transactionHash: event.tx_hash,
           actor: 'stellar-indexer',
         },
+        // milestoneEvent is in $set only: Mongo rejects the same path in both operators.
         // dataHash lives in $set (not $setOnInsert) so re-indexing backfills rows
         // written before it was promoted; Mongo rejects a path in both operators.
         $set: {
@@ -320,8 +357,10 @@ export async function indexStellarTransactions(
       { upsert: true }
     );
 
-    if ((res as { upsertedCount?: number }).upsertedCount) {
+    if ((res as { upsertedCount?: number } | undefined)?.upsertedCount) {
       upserted += 1;
+      // #1044 — already-confirmed on first sight; otherwise reverifyAnchoredBlocks observes it later.
+      if (verified) observeConfirmationLag(event.name, event.ledger_closed_at);
     }
 
     if (event.name === CHAIN_EVENT_NAMES.ANCHOR) {
@@ -331,7 +370,8 @@ export async function indexStellarTransactions(
     }
 
     if (cursor && persistCursor) {
-      await saveStoredCursor(cursor);
+      await saveStoredCursor(cursor, undefined, new Date(event.ledger_closed_at));
+      recordIndexerCursorEvent(event.ledger_closed_at);
     }
   }
 
@@ -347,7 +387,9 @@ export async function indexStellarTransactions(
 
 async function processIndexerJob(_job: Job): Promise<IndexerSummary> {
   const adapter = getChainAdapter();
+  await seedCursorAgeMetric();
   const summary = await indexStellarTransactions(adapter);
+  recordIndexerPoll();
   logger.info(summary, 'Stellar indexer event stream cycle complete');
 
   // Confirmation tracking for anchored telemetry (#818). Runs after indexing and
@@ -371,6 +413,7 @@ async function processIndexerJob(_job: Job): Promise<IndexerSummary> {
 }
 
 export async function startStellarIndexerWorker(): Promise<Worker> {
+  startMetricsServer();
   await connectMongo(config.mongoUri);
 
   const queue = new Queue(STELLAR_INDEXER_QUEUE, { connection: getBullMQConnection() });

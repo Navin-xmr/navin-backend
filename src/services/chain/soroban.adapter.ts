@@ -8,6 +8,7 @@ import {
   BASE_FEE,
 } from '@stellar/stellar-sdk';
 import { config } from '../../config/index.js';
+import { instrumentSubmission } from '../../infra/metrics/chainMetrics.js';
 import { stellarNetworkPassphrase } from '../../config/stellarNetwork.js';
 import { AppError, ErrorCodes } from '../../shared/http/errors.js';
 import {
@@ -64,7 +65,11 @@ export class SorobanAdapter implements ChainAdapter {
     return new Contract(this.contractId);
   }
 
-  async anchorEvent(input: AnchorEventInput): Promise<AnchorResult> {
+  anchorEvent(input: AnchorEventInput): Promise<AnchorResult> {
+    return instrumentSubmission('anchor_event', () => this.doAnchorEvent(input));
+  }
+
+  private async doAnchorEvent(input: AnchorEventInput): Promise<AnchorResult> {
     if (!Bytes32HexSchema.safeParse(input.data_hash).success) {
       throw new AppError(
         422,
@@ -85,7 +90,11 @@ export class SorobanAdapter implements ChainAdapter {
     return { txHash, ledger, simulated: false };
   }
 
-  async releaseEscrow(input: ReleaseEscrowInput): Promise<EscrowResult> {
+  releaseEscrow(input: ReleaseEscrowInput): Promise<EscrowResult> {
+    return instrumentSubmission('release_escrow', () => this.doReleaseEscrow(input));
+  }
+
+  private async doReleaseEscrow(input: ReleaseEscrowInput): Promise<EscrowResult> {
     // v2 (#1056): real contract signature is (caller, shipment_id). Escrow is
     // per-shipment, so no payment_id/proof_hash are invented here.
     if (!AddressSchema.safeParse(input.caller).success) {
