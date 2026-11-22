@@ -15,7 +15,9 @@ import {
   Bytes32HexSchema,
   SymbolSchema,
   parseChainEvent,
+  UpdateStatusArgsSchema,
   chainErrorToAppError,
+  updateStatusErrorToAppError,
 } from '../../shared/types/chain.js';
 import type { ChainEvent } from '../../shared/types/chain.js';
 import type {
@@ -25,6 +27,8 @@ import type {
   ChainEventCursor,
   EscrowResult,
   ReleaseEscrowInput,
+  UpdateStatusInput,
+  UpdateStatusResult,
 } from './types.js';
 
 export interface SorobanAdapterOptions {
@@ -114,6 +118,42 @@ export class SorobanAdapter implements ChainAdapter {
     return { txHash, ledger, simulated: false, shipmentId: input.shipment_id };
   }
 
+  async updateStatus(input: UpdateStatusInput): Promise<UpdateStatusResult> {
+    // Validates against the real ABI: caller Address, shipment_id u64, ShipmentStatus
+    // variant name, data_hash BytesN<32>. Fails before any RPC call.
+    const parsed = UpdateStatusArgsSchema.safeParse(input);
+    if (!parsed.success) {
+      const hashIssue = parsed.error.issues.some(i => i.path[0] === 'data_hash');
+      throw new AppError(
+        422,
+        'update_status arguments do not match the contract ABI',
+        hashIssue ? ErrorCodes.CHAIN_INVALID_HASH : ErrorCodes.CHAIN_UNKNOWN,
+        parsed.error.issues
+      );
+    }
+    const args = parsed.data;
+
+    const contract = this.getContract();
+    const op = contract.call(
+      'update_status',
+      new Address(args.caller).toScVal(),
+      nativeToScVal(BigInt(args.shipment_id), { type: 'u64' }),
+      // #[contracttype] unit-variant enum == ScVal vec [Symbol(VariantName)]
+      nativeToScVal([args.new_status], { type: ['symbol'] }),
+      // data_hash is forwarded exactly as supplied — hex -> 32 raw bytes, no hashing.
+      nativeToScVal(Buffer.from(args.data_hash, 'hex'), { type: 'bytes' })
+    );
+
+    const { txHash, ledger } = await this.invokePipeline(op, updateStatusErrorToAppError);
+    return {
+      txHash,
+      ledger,
+      simulated: false,
+      shipmentId: args.shipment_id,
+      newStatus: args.new_status,
+    };
+  }
+
   async *streamEvents(cursor?: ChainEventCursor): AsyncIterable<ChainEvent> {
     if (!this.contractId) return;
 
@@ -171,7 +211,8 @@ export class SorobanAdapter implements ChainAdapter {
    * Invocation pipeline: simulate -> assemble -> sign -> send -> poll
    */
   private async invokePipeline(
-    op: ReturnType<Contract['call']>
+    op: ReturnType<Contract['call']>,
+    decodeContractError: (code: number) => AppError = chainErrorToAppError
   ): Promise<{ txHash: string; ledger: number }> {
     const keypair = this.signer();
     const sourceAccount = await this.server.getAccount(keypair.publicKey()).catch(() => {
@@ -191,7 +232,7 @@ export class SorobanAdapter implements ChainAdapter {
     if (rpc.Api.isSimulationError(simRes)) {
       const contractErrorMatch = String(simRes.error).match(/Error\(Contract, #(\d+)\)/);
       if (contractErrorMatch?.[1]) {
-        throw chainErrorToAppError(parseInt(contractErrorMatch[1], 10));
+        throw decodeContractError(parseInt(contractErrorMatch[1], 10));
       }
       throw new AppError(400, 'Soroban simulation failed', ErrorCodes.CHAIN_UNKNOWN);
     }

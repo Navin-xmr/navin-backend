@@ -1,10 +1,10 @@
 # Chain Adapter Interface Specification
 
-**Status:** v2 (`CHAIN_SPEC_VERSION = 2.0.0`)
+**Status:** v2.1 (`CHAIN_SPEC_VERSION = 2.1.0`)
 
 This document is the normative v2 surface for Navin Backend's Stellar / Soroban integration (v1 closed #649; v2 evolves the escrow signature and event verification per #1056 / #1058).
 
-Single source of truth for shapes: `src/shared/types/chain.ts`. Cross-repo golden vectors: `tests/fixtures/chain/{functions,events,errors}.json` (`spec_version = 2.0.0`). Contracts repo: [Navin-xmr/navin-contracts](https://github.com/Navin-xmr/navin-contracts).
+Single source of truth for shapes: `src/shared/types/chain.ts`. Cross-repo golden vectors: `tests/fixtures/chain/{functions,events,errors}.json` (`spec_version = 2.1.0`). Contracts repo: [Navin-xmr/navin-contracts](https://github.com/Navin-xmr/navin-contracts).
 
 > Drift rule (AGENTS.md §8): doc ↔ `chain.ts` + `CHAIN_SPEC_VERSION` ↔ fixtures `spec_version` must change in the same PR.
 
@@ -17,6 +17,7 @@ Single source of truth for shapes: `src/shared/types/chain.ts`. Cross-repo golde
 | `anchor`         | `anchor(shipment_id: Symbol, data_hash: BytesN<32>, actor: Address)`                                                 | `actor`               |
 | `init_escrow`    | `init_escrow(payment_id: Symbol, shipment_id: Symbol, payer: Address, payee: Address, token: Address, amount: i128)` | `payer`               |
 | `release_escrow` | `release_escrow(caller: Address, shipment_id: Symbol)`                                                               | `caller`              |
+| `update_status`  | `update_status(caller: Address, shipment_id: u64, new_status: ShipmentStatus, data_hash: BytesN<32>)`                | `caller`              |
 
 > **v2 escrow semantics (#1056):** escrow is **per-shipment**, not per-payment. The v1
 > `(payment_id, proof_hash)` pair was a backend invention — the deployed contract takes
@@ -25,6 +26,18 @@ Single source of truth for shapes: `src/shared/types/chain.ts`. Cross-repo golde
 > `AppError(ERR_CHAIN_*)` (`ERR_CHAIN_INVALID_STATUS`, `ERR_CHAIN_UNAUTHORIZED`, …).
 
 Types: `Symbol` = `[A-Za-z0-9_]{1,32}`; `BytesN<32>` = lowercase hex64 (SHA-256); `Address` = strkey `G…`/`C…`; `token` must be contract `C…`; `amount` = positive `i128` decimal string; `payer ≠ payee`. All arg schemas `.strict()`. Result: `{ tx_hash: hex64, ledger: u32 }`.
+
+### 1.1 `update_status` (v2.1, #1047)
+
+Sourced from the real contract (`Navin-xmr/navin-contracts`, `contracts/shipment/src/lib.rs`), not inferred.
+
+- `shipment_id` is a **`u64`** (decimal string in `UpdateStatusArgs`), unlike the legacy `Symbol` ids above.
+- `new_status: ShipmentStatus` is a unit-variant `#[contracttype]` enum, encoded as ScVal `vec[Symbol(<Variant>)]`.
+  Variants (declaration order, an ABI contract — renames/reorders are breaking):
+  `Created, InTransit, AtCheckpoint, PartiallyDelivered, Delivered, Disputed, Cancelled, PartiallyRefunded`.
+- `data_hash` is computed by the **backend** over the canonical status payload. The adapter encodes it as 32 raw bytes and
+  never hashes, normalizes or alters it.
+- Errors use the contract's real `NavinError` numbering (see §3.1), decoded per-function.
 
 ---
 
@@ -59,6 +72,23 @@ Validated at ingress by `parseChainEvent()`; mismatch → `AppError(502, ERR_CHA
 
 Decoded via `chainErrorToAppError()`.
 
+### 3.1 `update_status` errors (real `NavinError` numbering)
+
+The table above predates the deployed contract and numbers errors differently (its `InvalidStatus` is `9`; the contract's is `5`).
+`update_status` therefore decodes with its own function-scoped table via `updateStatusErrorToAppError()`:
+
+| Contract error      | `u32` | Backend code                                 | HTTP |
+| ------------------- | ----- | -------------------------------------------- | ---- |
+| `Unauthorized`      | 3     | `ERR_CHAIN_UNAUTHORIZED`                     | 403  |
+| `ShipmentNotFound`  | 4     | `ERR_CHAIN_SHIPMENT_NOT_FOUND`               | 404  |
+| `InvalidStatus`     | 5     | `ERR_CHAIN_INVALID_STATUS`                   | 409  |
+| `InvalidHash`       | 6     | `ERR_CHAIN_INVALID_HASH`                     | 422  |
+| `ShipmentFinalized` | 38    | `ERR_CHAIN_INVALID_STATUS`                   | 409  |
+| `DuplicateAction`   | 41    | `ERR_CHAIN_DUPLICATE_ACTION`                 | 409  |
+| other               | —     | `ERR_CHAIN_UNKNOWN` (code kept in `details`) | 502  |
+
+> **Follow-up:** reconcile the legacy anchor/escrow error table and `Symbol` shipment ids with the deployed contract ABI.
+
 ---
 
 ## 4. Version policy
@@ -89,7 +119,7 @@ Fixture tests exercise depths `0, 2, 3, 10`.
 
 ## 6. Adapter strategy
 
-`ChainAdapter` port (`src/services/chain/types.ts`): `anchorEvent`, `releaseEscrow`, `streamEvents`
+`ChainAdapter` port (`src/services/chain/types.ts`): `anchorEvent`, `releaseEscrow`, `updateStatus`, `streamEvents`
 plus `getConfirmationCount` (and optional ledger query helpers). `SimulatedAdapter` for local
 dev/tests; `SorobanAdapter` for deployed WASM escrow. Legacy `stellar.service.ts` manage-data
 ops are placeholders to be replaced.
