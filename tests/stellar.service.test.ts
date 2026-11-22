@@ -41,6 +41,7 @@ await jest.unstable_mockModule('@stellar/stellar-sdk', () => ({
   Address: jest.fn(),
   Contract: jest.fn(),
   nativeToScVal: jest.fn(),
+  scValToNative: jest.fn(),
   rpc: { Server: jest.fn(), Api: { isSimulationError: jest.fn() } },
 }));
 

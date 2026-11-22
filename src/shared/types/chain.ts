@@ -2,12 +2,13 @@
  * Chain interface — typed mirror of docs/chain-interface.md (TODO I2).
  *
  * ┌──────────────────────────────────────────────────────────────────────┐
- * │ SPEC VERSION: 2.0.0  (see CHAIN_SPEC_VERSION below)                  │
+ * │ SPEC VERSION: 2.2.0  (see CHAIN_SPEC_VERSION below)                  │
  * │ Mirrors the v2 surface (v1 from P6-01/#649, evolved by #1056/#1058):  │
  * │   functions  anchor · init_escrow · release_escrow (+ authz)         │
  * │              release_escrow = (caller, shipment_id), escrow is       │
  * │              per-shipment — there is no proof_hash argument.         │
  * │   events     anchor · esc_init · esc_rel (topic + data tuples)       │
+ * │              delivery_success · delivery_confirmed (v2.2, #1043)     │
  * │              every anchored event exposes confirmations + verified   │
  * │   errors     contract error codes → ERR_CHAIN_* backend codes        │
  * │              incl. InvalidStatus and Unauthorized/NotAuthorized      │
@@ -29,7 +30,7 @@ import { z } from 'zod';
 import { AppError, ErrorCodes } from '../http/errors.js';
 import type { ErrorCode } from '../http/errors.js';
 
-export const CHAIN_SPEC_VERSION = '2.0.0' as const;
+export const CHAIN_SPEC_VERSION = '2.2.0' as const;
 
 // ─── Soroban primitives ──────────────────────────────────────────────────────
 
@@ -145,6 +146,8 @@ export const CHAIN_EVENT_NAMES = {
   ANCHOR: 'anchor',
   ESCROW_INIT: 'esc_init',
   ESCROW_RELEASE: 'esc_rel',
+  DELIVERY_SUCCESS: 'delivery_success',
+  DELIVERY_CONFIRMED: 'delivery_confirmed',
 } as const;
 export type ChainEventName = (typeof CHAIN_EVENT_NAMES)[keyof typeof CHAIN_EVENT_NAMES];
 
@@ -194,16 +197,70 @@ export const EscrowReleaseEventSchema = z
   })
   .strict();
 
+/** `u64` on-chain value (shipment id, unix-seconds timestamp) as an unsigned decimal string. */
+const EventU64Schema = z
+  .string()
+  .regex(/^(0|[1-9][0-9]*)$/, 'Expected unsigned integer string')
+  .refine(
+    v => !/^(0|[1-9][0-9]*)$/.test(v) || BigInt(v) <= (BigInt(1) << BigInt(64)) - BigInt(1),
+    'Exceeds u64 range'
+  );
+
+/**
+ * Real contract payload (navin-contracts `events.rs`, pinned by its own
+ * `test_snapshot_delivery_success_payload_shape`): a 5-tuple
+ * `(shipment_id: u64, status: ShipmentStatus, data_hash: BytesN<32>,
+ *   delivery_time: u64, actor: Address)`.
+ * The status is always `Delivered`. `delivery_time` is the contract's ledger
+ * timestamp in unix SECONDS — the only time source the indexer may use.
+ * NOTE: the contract's docs/events.md still describes an older
+ * `(carrier, shipment_id, delivery_time)` layout; the emitter code is authoritative.
+ */
+const deliveryEventData = z.tuple([
+  EventU64Schema,
+  z.literal('Delivered'),
+  Bytes32HexSchema,
+  EventU64Schema,
+  AddressSchema,
+]);
+
+/** topic `["delivery_success"]` · data `(shipment_id, "Delivered", data_hash, delivery_time, carrier)` */
+export const DeliverySuccessEventSchema = z
+  .object({
+    ...eventEnvelope,
+    name: z.literal(CHAIN_EVENT_NAMES.DELIVERY_SUCCESS),
+    topic: z.tuple([z.literal(CHAIN_EVENT_NAMES.DELIVERY_SUCCESS)]),
+    data: deliveryEventData,
+  })
+  .strict();
+
+/**
+ * topic `["delivery_confirmed"]` · data `(shipment_id, "Delivered", data_hash, delivery_time, receiver)`
+ * — the trailing address is the RECEIVER who confirmed, not the carrier.
+ */
+export const DeliveryConfirmedEventSchema = z
+  .object({
+    ...eventEnvelope,
+    name: z.literal(CHAIN_EVENT_NAMES.DELIVERY_CONFIRMED),
+    topic: z.tuple([z.literal(CHAIN_EVENT_NAMES.DELIVERY_CONFIRMED)]),
+    data: deliveryEventData,
+  })
+  .strict();
+
 /** Runtime validator for the indexer and golden fixtures. */
 export const ChainEventSchema = z.discriminatedUnion('name', [
   AnchorEventSchema,
   EscrowInitEventSchema,
   EscrowReleaseEventSchema,
+  DeliverySuccessEventSchema,
+  DeliveryConfirmedEventSchema,
 ]);
 
 export type AnchorEvent = z.infer<typeof AnchorEventSchema>;
 export type EscrowInitEvent = z.infer<typeof EscrowInitEventSchema>;
 export type EscrowReleaseEvent = z.infer<typeof EscrowReleaseEventSchema>;
+export type DeliverySuccessEvent = z.infer<typeof DeliverySuccessEventSchema>;
+export type DeliveryConfirmedEvent = z.infer<typeof DeliveryConfirmedEventSchema>;
 export type ChainEvent = z.infer<typeof ChainEventSchema>;
 
 // ─── Event verification / confirmation depth (v2, #1058) ────────────────────

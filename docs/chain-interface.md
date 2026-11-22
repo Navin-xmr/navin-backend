@@ -1,10 +1,10 @@
 # Chain Adapter Interface Specification
 
-**Status:** v2 (`CHAIN_SPEC_VERSION = 2.0.0`)
+**Status:** v2.2 (`CHAIN_SPEC_VERSION = 2.2.0`)
 
 This document is the normative v2 surface for Navin Backend's Stellar / Soroban integration (v1 closed #649; v2 evolves the escrow signature and event verification per #1056 / #1058).
 
-Single source of truth for shapes: `src/shared/types/chain.ts`. Cross-repo golden vectors: `tests/fixtures/chain/{functions,events,errors}.json` (`spec_version = 2.0.0`). Contracts repo: [Navin-xmr/navin-contracts](https://github.com/Navin-xmr/navin-contracts).
+Single source of truth for shapes: `src/shared/types/chain.ts`. Cross-repo golden vectors: `tests/fixtures/chain/{functions,events,errors}.json` (`spec_version = 2.2.0`). Contracts repo: [Navin-xmr/navin-contracts](https://github.com/Navin-xmr/navin-contracts).
 
 > Drift rule (AGENTS.md §8): doc ↔ `chain.ts` + `CHAIN_SPEC_VERSION` ↔ fixtures `spec_version` must change in the same PR.
 
@@ -32,11 +32,31 @@ Types: `Symbol` = `[A-Za-z0-9_]{1,32}`; `BytesN<32>` = lowercase hex64 (SHA-256)
 
 Envelope: `{ id, contract_id: C…, tx_hash: hex64, ledger: u32, ledger_closed_at: datetime }` — `id` is the stable paging cursor for idempotent indexing.
 
-| Name       | Topic tuple                        | Data tuple                                                                              |
-| ---------- | ---------------------------------- | --------------------------------------------------------------------------------------- |
-| `anchor`   | `["anchor", shipment_id: Symbol]`  | `(data_hash: Bytes32Hex, ledger: u32)`                                                  |
-| `esc_init` | `["esc_init", payment_id: Symbol]` | `(shipment_id: Symbol, payer: Address, payee: Address, token: C…, amount: i128-string)` |
-| `esc_rel`  | `["esc_rel", payment_id: Symbol]`  | `(proof_hash: Bytes32Hex, payee: Address, amount: i128-string)`                         |
+| Name                 | Topic tuple                        | Data tuple                                                                                                            |
+| -------------------- | ---------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `anchor`             | `["anchor", shipment_id: Symbol]`  | `(data_hash: Bytes32Hex, ledger: u32)`                                                                                |
+| `esc_init`           | `["esc_init", payment_id: Symbol]` | `(shipment_id: Symbol, payer: Address, payee: Address, token: C…, amount: i128-string)`                               |
+| `esc_rel`            | `["esc_rel", payment_id: Symbol]`  | `(proof_hash: Bytes32Hex, payee: Address, amount: i128-string)`                                                       |
+| `delivery_success`   | `["delivery_success"]`             | `(shipment_id: u64-string, status: "Delivered", data_hash: Bytes32Hex, delivery_time: u64-string, carrier: Address)`  |
+| `delivery_confirmed` | `["delivery_confirmed"]`           | `(shipment_id: u64-string, status: "Delivered", data_hash: Bytes32Hex, delivery_time: u64-string, receiver: Address)` |
+
+### 2.1 Delivery events and indexing (v2.2, #1043)
+
+Layout taken from the contract's emitter code (`navin-contracts` `events.rs`; its own
+`test_snapshot_delivery_success_payload_shape` pins the 5-field tuple). The contract's `docs/events.md`
+still describes an older `(carrier, shipment_id, delivery_time)` layout — the code is authoritative.
+
+- Both events are emitted in the **same transaction** (`confirm_delivery`), so they share `tx_hash`. The indexer therefore does
+  **not** key them by transaction (as `LedgerBlock` is); it folds them into one `ShipmentDelivery` per on-chain shipment id.
+- The trailing address is the **carrier** for `delivery_success` but the **receiver** for `delivery_confirmed`.
+- `delivery_time` is the chain's ledger timestamp in unix **seconds**. It is the only time source: the server clock is never used.
+- Idempotency identity is the RPC event `id`; replays and re-emissions are no-ops. `delivery_success` is authoritative for
+  `deliveryTime`; `delivery_confirmed` supplies it only if it arrives first. Either arrival order is safe.
+- Classification against `Shipment.expectedDelivery` (resolved via `Shipment.chainShipmentId`): **`ON_TIME` iff `delivery_time <= deadline`**
+  (the boundary instant is on time; matches the contract's `now > deadline` ⇒ late). `LATE` otherwise. `UNKNOWN` when the shipment or
+  deadline is not resolvable; it is recomputed only while `UNKNOWN`, and frozen once `ON_TIME`/`LATE`.
+- Migration `20261122000000-shipment-delivery-indexes.js` adds the indexes. Nothing populates `Shipment.chainShipmentId` yet
+  (shipment creation still anchors by ObjectId symbol), so until it is set deliveries are recorded as `UNKNOWN`.
 
 Validated at ingress by `parseChainEvent()`; mismatch → `AppError(502, ERR_CHAIN_INVALID_EVENT)`.
 

@@ -34,8 +34,8 @@ describe('chain drift gate (#1080)', () => {
   it('fails when a fixture spec_version drifts', () => {
     const dir = copyRepoSubset();
     const f = path.join(dir, 'tests/fixtures/chain/errors.json');
-    fs.writeFileSync(f, fs.readFileSync(f, 'utf8').replace('"2.0.0"', '"2.1.0"'));
-    expect(checkChainDrift(dir).join('\n')).toMatch(/errors\.json spec_version 2\.1\.0/);
+    fs.writeFileSync(f, fs.readFileSync(f, 'utf8').replace('"2.2.0"', '"9.9.9"'));
+    expect(checkChainDrift(dir).join('\n')).toMatch(/errors\.json spec_version 9\.9\.9/);
   });
 
   it('fails when chain.ts names a function missing from the ABI', () => {

@@ -70,6 +70,8 @@ export interface IShipment {
   offChainMetadata?: Record<string, unknown>;
   stellarTokenId?: string;
   stellarTxHash?: string;
+  /** On-chain `u64` shipment id (decimal string); links indexed contract events to this shipment (#1043). */
+  chainShipmentId?: string;
   deliveryProof?: IDeliveryProof;
   documents: IShipmentDocument[];
   photos: IShipmentPhoto[];
