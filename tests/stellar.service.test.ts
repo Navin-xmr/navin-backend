@@ -46,7 +46,9 @@ await jest.unstable_mockModule('@stellar/stellar-sdk', () => ({
 
 await jest.unstable_mockModule('../src/config/index.js', () => ({
   config: {
-    get stellarSecretKey() { return mockStellarSecretKey; },
+    get stellarSecretKey() {
+      return mockStellarSecretKey;
+    },
     stellarNetwork: 'testnet',
     chainAdapter: 'simulated',
   },
@@ -134,7 +136,7 @@ describe('Stellar Service - tokenizeShipment', () => {
       expect.objectContaining({
         fee: '100',
         networkPassphrase: 'Test SDF Network ; September 2015',
-      }),
+      })
     );
   });
 
@@ -157,8 +159,7 @@ describe('Stellar Service - tokenizeShipment', () => {
   it('should propagate Horizon submission errors', async () => {
     mockSubmitTransaction.mockRejectedValue(new Error('Horizon: tx_failed'));
 
-    await expect(tokenizeShipment(shipmentData))
-      .rejects.toThrow('Horizon: tx_failed');
+    await expect(tokenizeShipment(shipmentData)).rejects.toThrow('Horizon: tx_failed');
   });
 });
 
@@ -236,8 +237,12 @@ describe('Stellar Service - anchorTelemetryHash', () => {
 describe('Stellar Service - network matrix & releaseEscrow', () => {
   it('resolves Horizon server dynamically from config URL', async () => {
     const { getHorizonServer } = await import('../src/services/stellar.service.js');
-    const serverTestnet = getHorizonServer('https://horizon-testnet.stellar.org') as unknown as { url: string };
-    const serverPublic = getHorizonServer('https://horizon.stellar.org') as unknown as { url: string };
+    const serverTestnet = getHorizonServer('https://horizon-testnet.stellar.org') as unknown as {
+      url: string;
+    };
+    const serverPublic = getHorizonServer('https://horizon.stellar.org') as unknown as {
+      url: string;
+    };
 
     expect(serverTestnet.url).toBe('https://horizon-testnet.stellar.org');
     expect(serverPublic.url).toBe('https://horizon.stellar.org');
@@ -248,9 +253,8 @@ describe('Stellar Service - network matrix & releaseEscrow', () => {
     mockStellarSecretKey = 'STEST_MOCK_SECRET_KEY_FOR_UNIT_TESTS';
     const { releaseEscrow } = await import('../src/services/stellar.service.js');
     const result = await releaseEscrow({
-      paymentId: 'pay-123',
-      shipmentId: 'ship-123',
-      proofHash: 'a'.repeat(64),
+      caller: `G${'A'.repeat(55)}`,
+      shipmentId: 'ship_123',
     });
 
     expect(result.success).toBe(true);

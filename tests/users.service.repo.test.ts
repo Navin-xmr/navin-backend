@@ -1,28 +1,37 @@
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
-import { AppError } from '../src/shared/http/errors.js';
 import { mockModule } from './helpers/mockFactory.js';
+
+// NOTE: mocks are registered ONCE at module scope (resetModules →
+// unstable_mockModule → dynamic import). Re-registering per test does not
+// re-isolate under --experimental-vm-modules: dynamic re-imports resolve from
+// the stale registry, so later tests silently run against earlier mocks.
+const createUser = jest.fn();
+const findUserByEmail = jest.fn();
+const findUsersByOrganizationId = jest.fn();
+
+jest.resetModules();
+
+await mockModule('../src/modules/users/users.repo.js', {
+  createUser,
+  findUserByEmail,
+  findUsersByOrganizationId,
+});
+
+const { registerUser } = await import('../src/modules/users/users.service.js');
 
 describe('users service and repo', () => {
   beforeEach(() => {
-    jest.resetModules();
     jest.clearAllMocks();
   });
 
   it('registerUser creates user when email is not taken', async () => {
-    const createUser = jest.fn(async (input: { email: string; name: string }) => ({
+    findUserByEmail.mockResolvedValue(null);
+    findUsersByOrganizationId.mockResolvedValue([]);
+    createUser.mockImplementation(async (input: { email: string; name: string }) => ({
       _id: 'u1',
       ...input,
     }));
-    const findUserByEmail = jest.fn(async () => null);
-    const findUsersByOrganizationId = jest.fn(async () => []);
 
-    await mockModule('../src/modules/users/users.repo.js', {
-      createUser,
-      findUserByEmail,
-      findUsersByOrganizationId,
-    });
-
-    const { registerUser } = await import('../src/modules/users/users.service.js');
     const result = await registerUser({ email: 'new@example.com', name: 'New User' });
 
     expect(findUserByEmail).toHaveBeenCalledTimes(1);
@@ -31,17 +40,8 @@ describe('users service and repo', () => {
   });
 
   it('registerUser throws when email is already in use', async () => {
-    const createUser = jest.fn();
-    const findUserByEmail = jest.fn(async () => ({ _id: 'u1', email: 'existing@example.com' }));
-    const findUsersByOrganizationId = jest.fn(async () => []);
-
-    await mockModule('../src/modules/users/users.repo.js', {
-      createUser,
-      findUserByEmail,
-      findUsersByOrganizationId,
-    });
-
-    const { registerUser } = await import('../src/modules/users/users.service.js');
+    findUserByEmail.mockResolvedValue({ _id: 'u1', email: 'existing@example.com' });
+    findUsersByOrganizationId.mockResolvedValue([]);
 
     await expect(
       registerUser({ email: 'existing@example.com', name: 'Existing' })

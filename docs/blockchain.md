@@ -23,7 +23,7 @@ today (env placeholders exist; see below).
 | ----------------- | --------------------- | ----------------------------------------------------------------------------------- | ------------------------------------- |
 | Tokenize shipment | `tokenizeShipment`    | Horizon `Operation.manageData` for `tracking:{shipmentId}` and `route:{shipmentId}` | Shipment create                       |
 | Anchor telemetry  | `anchorTelemetryHash` | Horizon `manageData` + `Memo.hash`                                                  | Stellar worker after telemetry ingest |
-| Release escrow    | `releaseEscrow`       | Horizon `manageData` `release:{paymentId}` + memo `escrow-release:…`                | Shipment reaches `DELIVERED`          |
+| Release escrow    | `releaseEscrow`       | Horizon `manageData` `release:{shipmentId}` + memo `escrow-release:…`               | Shipment reaches `DELIVERED`          |
 
 Config / network:
 
@@ -38,7 +38,7 @@ In `src/services/stellar.service.ts:157–160`, `releaseEscrow` catches any subm
 
 ### Event Indexing & Confirmation Tracking
 
-A background BullMQ worker (`src/workers/stellar-indexer.worker.ts:112–132`) runs on a 30-second interval (`STELLAR_INDEXER_JOB`). It calls `indexStellarTransactions`, polling Horizon account operations to verify on-chain confirmations and update settlement records in MongoDB.
+A background BullMQ worker (`src/workers/stellar-indexer.worker.ts`) runs on a 30-second interval (`STELLAR_INDEXER_JOB`). It calls `indexStellarTransactions`, tracks transaction confirmation counts, and verifies anchored telemetry and released settlements after three ledgers; simulated-chain confirmations are immediate.
 
 ### Why this is a fallback
 
@@ -132,10 +132,10 @@ sequenceDiagram
 
   Client->>API: PATCH status DELIVERED
   alt Soroban configured
-    API->>Soroban: release(escrowId)
+    API->>Soroban: release_escrow(caller, shipment_id)
     Soroban-->>API: release txHash
   else Horizon fallback
-    API->>Horizon: manageData release:{paymentId}
+    API->>Horizon: manageData release:{shipmentId}
     Horizon-->>API: transactionHash
   end
   API->>DB: Mark settlement / payment released
@@ -215,7 +215,11 @@ considered verified when all three agree.
     "dataHash": "0371fc34550ee7a73ef610692adaa49c5f50aa917e85b9cebb9d1a11fa397c8a",
     "txHash": "3b1f0c…",
     "transactionHash": "3b1f0c…",
-    "ledger": 41234567
+    "ledger": 41234567,
+    "network": "testnet",
+    "contractId": "CACAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAINCW",
+    "schemaVersion": 1,
+    "idempotencyKey": "status-2026-08-01-0001"
   }
 }
 ```
@@ -229,6 +233,19 @@ re-guess which bytes were committed. `txHash` and `transactionHash` are aliases 
 value. Both `canonicalPayload` and `dataHash` may be `null` for legacy blocks written before
 migration #661; those blocks cannot be client-verified and should be shown as
 "unverifiable" rather than "failed".
+
+**Bundle v2 fields (#1046).** All are persisted when the block is written — never rebuilt from
+mutable shipment/payment state:
+
+| Field            | Meaning                                                                                                                                 |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `network`        | `testnet` or `public` (mainnet) — which network to query for `txHash`. Legacy blocks without it report the server's configured network. |
+| `contractId`     | Soroban contract the tx targeted: persisted value → indexed event metadata → configured `ESCROW_CONTRACT_ID`; `null` if none is known.  |
+| `schemaVersion`  | Canonical payload layout version, read from the payload's own `v` (covered by `dataHash`). `null` with no payload.                      |
+| `idempotencyKey` | Client `Idempotency-Key` that produced the block (shipment status changes); `null` if none was sent.                                    |
+
+A stored `canonicalPayload` that is not an object with an integer `v >= 1` yields `422 ERR_LEDGER_PAYLOAD_INVALID`
+instead of being served. The server does **not** vouch for `dataHash` — always recompute it yourself.
 
 ### Step 2 — Recompute `sha256(canonicalPayload)` in the browser
 
@@ -296,7 +313,7 @@ Query the network named by `network` (`testnet` | `public`) for `txHash` and com
 committed digest against `dataHash`.
 
 **Horizon / `SOROBAN_ADAPTER=simulated`.** `SimulatedAdapter.submitManageData` writes a
-single `manageData` operation named `telemetry:{shipmentId}` (or `release:{paymentId}` for
+single `manageData` operation named `telemetry:{shipmentId}` (or `release:{shipmentId}` for
 escrow release) whose value is the `dataHash` hex string, **and** a `Memo.hash` carrying the
 same 32 bytes.
 
@@ -310,7 +327,7 @@ interface HorizonTransaction {
 
 interface HorizonOperation {
   type: string;
-  name?: string; // 'telemetry:<shipmentId>' | 'release:<paymentId>'
+  name?: string; // 'telemetry:<shipmentId>' | 'release:<shipmentId>'
   value?: string; // base64 of the ASCII hex digest
 }
 

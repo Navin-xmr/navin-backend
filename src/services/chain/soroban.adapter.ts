@@ -8,12 +8,17 @@ import {
   BASE_FEE,
 } from '@stellar/stellar-sdk';
 import { config } from '../../config/index.js';
+import { instrumentSubmission } from '../../infra/metrics/chainMetrics.js';
 import { stellarNetworkPassphrase } from '../../config/stellarNetwork.js';
 import { AppError, ErrorCodes } from '../../shared/http/errors.js';
 import {
+  AddressSchema,
   Bytes32HexSchema,
+  SymbolSchema,
   parseChainEvent,
+  UpdateStatusArgsSchema,
   chainErrorToAppError,
+  updateStatusErrorToAppError,
 } from '../../shared/types/chain.js';
 import type { ChainEvent } from '../../shared/types/chain.js';
 import type {
@@ -23,6 +28,8 @@ import type {
   ChainEventCursor,
   EscrowResult,
   ReleaseEscrowInput,
+  UpdateStatusInput,
+  UpdateStatusResult,
 } from './types.js';
 
 export interface SorobanAdapterOptions {
@@ -62,7 +69,11 @@ export class SorobanAdapter implements ChainAdapter {
     return new Contract(this.contractId);
   }
 
-  async anchorEvent(input: AnchorEventInput): Promise<AnchorResult> {
+  anchorEvent(input: AnchorEventInput): Promise<AnchorResult> {
+    return instrumentSubmission('anchor_event', () => this.doAnchorEvent(input));
+  }
+
+  private async doAnchorEvent(input: AnchorEventInput): Promise<AnchorResult> {
     if (!Bytes32HexSchema.safeParse(input.data_hash).success) {
       throw new AppError(
         422,
@@ -83,24 +94,73 @@ export class SorobanAdapter implements ChainAdapter {
     return { txHash, ledger, simulated: false };
   }
 
-  async releaseEscrow(input: ReleaseEscrowInput): Promise<EscrowResult> {
-    if (!Bytes32HexSchema.safeParse(input.proof_hash).success) {
+  releaseEscrow(input: ReleaseEscrowInput): Promise<EscrowResult> {
+    return instrumentSubmission('release_escrow', () => this.doReleaseEscrow(input));
+  }
+
+  private async doReleaseEscrow(input: ReleaseEscrowInput): Promise<EscrowResult> {
+    // v2 (#1056): real contract signature is (caller, shipment_id). Escrow is
+    // per-shipment, so no payment_id/proof_hash are invented here.
+    if (!AddressSchema.safeParse(input.caller).success) {
       throw new AppError(
         422,
-        'proof_hash must be 32 bytes of lowercase hex',
-        ErrorCodes.CHAIN_INVALID_PROOF
+        'caller must be a valid Stellar address',
+        ErrorCodes.CHAIN_UNAUTHORIZED
+      );
+    }
+    if (!SymbolSchema.safeParse(input.shipment_id).success) {
+      throw new AppError(
+        422,
+        'shipment_id must be a valid Soroban Symbol',
+        ErrorCodes.CHAIN_UNKNOWN
       );
     }
 
     const contract = this.getContract();
     const op = contract.call(
       'release_escrow',
-      nativeToScVal(input.payment_id, { type: 'symbol' }),
-      nativeToScVal(Buffer.from(input.proof_hash, 'hex'), { type: 'bytes' })
+      new Address(input.caller).toScVal(),
+      nativeToScVal(input.shipment_id, { type: 'symbol' })
     );
 
     const { txHash, ledger } = await this.invokePipeline(op);
-    return { txHash, ledger, simulated: false, paymentId: input.payment_id };
+    return { txHash, ledger, simulated: false, shipmentId: input.shipment_id };
+  }
+
+  async updateStatus(input: UpdateStatusInput): Promise<UpdateStatusResult> {
+    // Validates against the real ABI: caller Address, shipment_id u64, ShipmentStatus
+    // variant name, data_hash BytesN<32>. Fails before any RPC call.
+    const parsed = UpdateStatusArgsSchema.safeParse(input);
+    if (!parsed.success) {
+      const hashIssue = parsed.error.issues.some(i => i.path[0] === 'data_hash');
+      throw new AppError(
+        422,
+        'update_status arguments do not match the contract ABI',
+        hashIssue ? ErrorCodes.CHAIN_INVALID_HASH : ErrorCodes.CHAIN_UNKNOWN,
+        parsed.error.issues
+      );
+    }
+    const args = parsed.data;
+
+    const contract = this.getContract();
+    const op = contract.call(
+      'update_status',
+      new Address(args.caller).toScVal(),
+      nativeToScVal(BigInt(args.shipment_id), { type: 'u64' }),
+      // #[contracttype] unit-variant enum == ScVal vec [Symbol(VariantName)]
+      nativeToScVal([args.new_status], { type: ['symbol'] }),
+      // data_hash is forwarded exactly as supplied — hex -> 32 raw bytes, no hashing.
+      nativeToScVal(Buffer.from(args.data_hash, 'hex'), { type: 'bytes' })
+    );
+
+    const { txHash, ledger } = await this.invokePipeline(op, updateStatusErrorToAppError);
+    return {
+      txHash,
+      ledger,
+      simulated: false,
+      shipmentId: args.shipment_id,
+      newStatus: args.new_status,
+    };
   }
 
   async *streamEvents(cursor?: ChainEventCursor): AsyncIterable<ChainEvent> {
@@ -162,7 +222,8 @@ export class SorobanAdapter implements ChainAdapter {
    * Invocation pipeline: simulate -> assemble -> sign -> send -> poll
    */
   private async invokePipeline(
-    op: ReturnType<Contract['call']>
+    op: ReturnType<Contract['call']>,
+    decodeContractError: (code: number) => AppError = chainErrorToAppError
   ): Promise<{ txHash: string; ledger: number }> {
     const keypair = this.signer();
     const sourceAccount = await this.server.getAccount(keypair.publicKey()).catch(() => {
@@ -182,7 +243,7 @@ export class SorobanAdapter implements ChainAdapter {
     if (rpc.Api.isSimulationError(simRes)) {
       const contractErrorMatch = String(simRes.error).match(/Error\(Contract, #(\d+)\)/);
       if (contractErrorMatch?.[1]) {
-        throw chainErrorToAppError(parseInt(contractErrorMatch[1], 10));
+        throw decodeContractError(parseInt(contractErrorMatch[1], 10));
       }
       throw new AppError(400, 'Soroban simulation failed', ErrorCodes.CHAIN_UNKNOWN);
     }
@@ -222,5 +283,20 @@ export class SorobanAdapter implements ChainAdapter {
       }
       await new Promise(resolve => setTimeout(resolve, 1000));
     }
+  }
+
+  /** Latest ledger sequence reported by the RPC node (#818). */
+  async getLatestLedger(): Promise<number> {
+    const latest = await this.server.getLatestLedger();
+    return latest.sequence;
+  }
+
+  /** Ledger containing a successful transaction; null if not found or not successful (#818). */
+  async getTransactionLedger(txHash: string): Promise<number | null> {
+    const res = await this.server.getTransaction(txHash);
+    if (res.status === 'SUCCESS') {
+      return (res as { ledger: number }).ledger;
+    }
+    return null;
   }
 }

@@ -15,7 +15,12 @@
  * `releaseEscrow()`. A resolved promise means the transaction is confirmed.
  */
 import type { ErrorCode } from '../../shared/http/errors.js';
-import type { AnchorArgs, ChainEvent, ReleaseEscrowArgs } from '../../shared/types/chain.js';
+import type {
+  AnchorArgs,
+  ChainEvent,
+  ReleaseEscrowArgs,
+  UpdateStatusArgs,
+} from '../../shared/types/chain.js';
 
 /** Backend error codes an adapter may reject with (via `AppError.code`). */
 export type ChainErrorCode = Extract<ErrorCode, `ERR_CHAIN_${string}`>;
@@ -23,8 +28,15 @@ export type ChainErrorCode = Extract<ErrorCode, `ERR_CHAIN_${string}`>;
 /** Input for `anchor(shipment_id, data_hash, actor)` — spec-validated shape. */
 export type AnchorEventInput = AnchorArgs;
 
-/** Input for `release_escrow(payment_id, proof_hash)` — spec-validated shape. */
+/** Input for `release_escrow(caller, shipment_id)` — spec-validated shape (v2). */
 export type ReleaseEscrowInput = ReleaseEscrowArgs;
+
+/**
+ * Input for `update_status(caller, shipment_id, new_status, data_hash)`.
+ * `data_hash` is the backend-computed hash of the canonical status payload; the
+ * adapter encodes and submits it verbatim and never recomputes or alters it.
+ */
+export type UpdateStatusInput = UpdateStatusArgs;
 
 /** Confirmed on-chain transaction. */
 export interface ChainTxReceipt {
@@ -38,8 +50,15 @@ export interface ChainTxReceipt {
 
 export type AnchorResult = ChainTxReceipt;
 
+export interface UpdateStatusResult extends ChainTxReceipt {
+  /** On-chain (u64, decimal string) shipment id the status was applied to. */
+  shipmentId: UpdateStatusInput['shipment_id'];
+  newStatus: UpdateStatusInput['new_status'];
+}
+
 export interface EscrowResult extends ChainTxReceipt {
-  paymentId: ReleaseEscrowInput['payment_id'];
+  /** Escrow is per-shipment (#1056) — this is the released shipment, not a payment id. */
+  shipmentId: ReleaseEscrowInput['shipment_id'];
 }
 
 /** Opaque resume position: the `id` of the last event processed. */
@@ -53,10 +72,23 @@ export interface ChainAdapter {
   anchorEvent(input: AnchorEventInput): Promise<AnchorResult>;
 
   /**
-   * Release escrowed funds against a delivery proof hash.
-   * @throws {AppError} `ChainErrorCode` on rejection (e.g. ERR_CHAIN_ESCROW_NOT_FOUND).
+   * Release escrowed funds for a shipment, authorized by `caller`.
+   * Escrow is per-shipment (#1056); there is no payment id or proof hash here.
+   * @throws {AppError} `ChainErrorCode` on rejection (e.g. ERR_CHAIN_ESCROW_NOT_FOUND,
+   * ERR_CHAIN_INVALID_STATUS, ERR_CHAIN_UNAUTHORIZED). Never resolves with a
+   * `{ success: false }` failure flag.
    */
   releaseEscrow(input: ReleaseEscrowInput): Promise<EscrowResult>;
+
+  /**
+   * Record a shipment status transition on-chain, authorized by `caller`.
+   * The caller supplies the canonical-payload `data_hash`; it is passed through unchanged.
+   * @throws {AppError} ERR_CHAIN_INVALID_STATUS (illegal transition / finalized shipment),
+   * ERR_CHAIN_DUPLICATE_ACTION (idempotency window), ERR_CHAIN_UNAUTHORIZED,
+   * ERR_CHAIN_SHIPMENT_NOT_FOUND, ERR_CHAIN_INVALID_HASH; other contract errors surface as
+   * ERR_CHAIN_UNKNOWN with the raw code in `details`.
+   */
+  updateStatus(input: UpdateStatusInput): Promise<UpdateStatusResult>;
 
   /**
    * Spec-validated contract events in ledger order, resuming strictly after

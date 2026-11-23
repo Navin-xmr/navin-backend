@@ -1,12 +1,11 @@
 import { jest, describe, it, expect, beforeAll } from '@jest/globals';
-import type { sendEmail } from '../src/services/email.service.js';
 import { createEmailServiceMock } from './helpers/mocks.js';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mockBlockToken = jest.fn() as any;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const mockIsTokenBlocked = jest.fn() as any;
-const mockSendEmail = jest.fn<typeof sendEmail>().mockResolvedValue(undefined);
+const emailServiceMock = createEmailServiceMock();
 
 await jest.unstable_mockModule('../src/modules/users/users.model.js', () => {
   const users: Record<string, unknown>[] = [];
@@ -16,8 +15,7 @@ await jest.unstable_mockModule('../src/modules/users/users.model.js', () => {
     findById: (id: string) => {
       const found = users.find(u => u._id === id);
       if (!found) return Promise.resolve(null);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return Promise.resolve({ ...found, save: jest.fn<any>().mockResolvedValue(undefined) });
+      return Promise.resolve({ ...found, save: jest.fn().mockResolvedValue(undefined) });
     },
     _users: users,
   };
@@ -45,9 +43,7 @@ await jest.unstable_mockModule('../src/infra/redis/connection.js', () => ({
   connectRedis: jest.fn(),
 }));
 
-await jest.unstable_mockModule('../src/services/email.service.js', () =>
-  createEmailServiceMock({ sendEmail: mockSendEmail })
-);
+await jest.unstable_mockModule('../src/services/email.service.js', () => emailServiceMock);
 
 const jwt = await import('jsonwebtoken');
 const { forgotPassword, resetPassword } = await import('../src/modules/auth/auth.service.js');
@@ -66,8 +62,7 @@ describe('#285 - Password Reset Flow', () => {
 
     it('should return silently for existing email', async () => {
       const usersModule = await import('../src/modules/users/users.model.js');
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (usersModule.UserModel as any)._users.push({
+      (usersModule.UserModel as unknown as { _users: Record<string, unknown>[] })._users.push({
         _id: 'user1',
         email: 'existing@test.com',
         passwordHash: 'hash',
@@ -77,18 +72,18 @@ describe('#285 - Password Reset Flow', () => {
     });
 
     it('should trigger email send for existing user', async () => {
-      mockSendEmail.mockClear();
+      emailServiceMock.sendEmail.mockClear();
       await forgotPassword('existing@test.com');
-      expect(mockSendEmail).toHaveBeenCalledTimes(1);
-      expect(mockSendEmail).toHaveBeenCalledWith(
-        expect.objectContaining({ to: 'existing@test.com' }),
+      expect(emailServiceMock.sendEmail).toHaveBeenCalledTimes(1);
+      expect(emailServiceMock.sendEmail).toHaveBeenCalledWith(
+        expect.objectContaining({ to: 'existing@test.com' })
       );
     });
 
     it('should include a valid reset link in the email', async () => {
-      mockSendEmail.mockClear();
+      emailServiceMock.sendEmail.mockClear();
       await forgotPassword('existing@test.com');
-      const [params] = mockSendEmail.mock.calls[0];
+      const [params] = emailServiceMock.sendEmail.mock.calls[0];
       expect(params.html).toContain('/reset-password?token=');
     });
   });
@@ -139,14 +134,12 @@ describe('#285 - Password Reset Flow', () => {
 
     it('should successfully reset password for valid token', async () => {
       const usersModule = await import('../src/modules/users/users.model.js');
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (usersModule.UserModel as any)._users.push({
+      (usersModule.UserModel as unknown as { _users: Record<string, unknown>[] })._users.push({
         _id: 'user2',
         email: 'reset@test.com',
         passwordHash: 'oldhash',
         role: 'VIEWER',
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        save: jest.fn<any>().mockResolvedValue(undefined),
+        save: jest.fn().mockResolvedValue(undefined),
       });
 
       const token = jwt.sign(

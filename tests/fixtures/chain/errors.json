@@ -8,6 +8,7 @@
     { "code": 5, "function": "release_escrow" },
     { "code": 6, "function": "release_escrow" },
     { "code": 7, "function": "init_escrow" },
-    { "code": 8, "function": "release_escrow" }
+    { "code": 8, "function": "release_escrow" },
+    { "code": 9, "function": "release_escrow" }
   ]
 }

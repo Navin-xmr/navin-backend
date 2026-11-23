@@ -12,6 +12,8 @@ import type {
   ChainEventCursor,
   EscrowResult,
   ReleaseEscrowInput,
+  UpdateStatusInput,
+  UpdateStatusResult,
 } from '../../src/services/chain/types.js';
 import type { AnchorArgs, ChainEvent, ReleaseEscrowArgs } from '../../src/shared/types/chain.js';
 
@@ -26,6 +28,7 @@ assertType<Equals<ChainEventCursor, string>>();
 assertType<Equals<Awaited<ReturnType<ChainAdapter['anchorEvent']>>, AnchorResult>>();
 assertType<Equals<Awaited<ReturnType<ChainAdapter['releaseEscrow']>>, EscrowResult>>();
 assertType<Equals<ReturnType<ChainAdapter['streamEvents']>, AsyncIterable<ChainEvent>>>();
+assertType<Equals<Awaited<ReturnType<ChainAdapter['getConfirmationCount']>>, number>>();
 
 // ─── Error codes are restricted to ERR_CHAIN_* ──────────────────────────────
 const chainCode: ChainErrorCode = ErrorCodes.CHAIN_ESCROW_NOT_FOUND;
@@ -36,6 +39,7 @@ void nonChainCode;
 
 // ─── Mock adapter compiles against the port ─────────────────────────────────
 const HASH = 'a'.repeat(64);
+const ACTOR = `G${'A'.repeat(55)}`;
 
 export class MockChainAdapter implements ChainAdapter {
   constructor(
@@ -48,16 +52,30 @@ export class MockChainAdapter implements ChainAdapter {
   }
 
   async releaseEscrow(input: ReleaseEscrowInput): Promise<EscrowResult> {
-    if (!this.escrows.has(input.payment_id)) {
+    if (!this.escrows.has(input.shipment_id)) {
       const code: ChainErrorCode = ErrorCodes.CHAIN_ESCROW_NOT_FOUND;
       throw new AppError(404, 'Escrow not found', code);
     }
-    return { txHash: HASH, ledger: 2, simulated: true, paymentId: input.payment_id };
+    return { txHash: HASH, ledger: 2, simulated: true, shipmentId: input.shipment_id };
+  }
+
+  async updateStatus(input: UpdateStatusInput): Promise<UpdateStatusResult> {
+    return {
+      txHash: HASH,
+      ledger: 3,
+      simulated: true,
+      shipmentId: input.shipment_id,
+      newStatus: input.new_status,
+    };
   }
 
   async *streamEvents(cursor?: ChainEventCursor): AsyncIterable<ChainEvent> {
     const start = cursor ? this.events.findIndex(e => e.id === cursor) + 1 : 0;
     yield* this.events.slice(start);
+  }
+
+  async getConfirmationCount(_ledger: number): Promise<number> {
+    return 3;
   }
 }
 
@@ -67,11 +85,19 @@ export const literalAdapter = {
     txHash: HASH,
     ledger: 1,
     simulated: false,
-    paymentId: i.payment_id,
+    shipmentId: i.shipment_id,
+  }),
+  updateStatus: async (i: UpdateStatusInput) => ({
+    txHash: HASH,
+    ledger: 1,
+    simulated: false,
+    shipmentId: i.shipment_id,
+    newStatus: i.new_status,
   }),
   async *streamEvents() {
     yield* [] as ChainEvent[];
   },
+  getConfirmationCount: async () => 3,
 } satisfies ChainAdapter;
 
 // ─── Contract violations are rejected ───────────────────────────────────────
@@ -96,8 +122,8 @@ export const untypedEvents = {
 } satisfies ChainAdapter;
 
 export async function misuse(adapter: ChainAdapter): Promise<void> {
-  // @ts-expect-error — input must be the snake_case spec args (proof_hash required)
-  await adapter.releaseEscrow({ payment_id: 'p1' });
+  // @ts-expect-error — v2 spec args require both caller and shipment_id
+  await adapter.releaseEscrow({ caller: ACTOR });
   // @ts-expect-error — camelCase is not the spec shape
   await adapter.anchorEvent({ shipmentId: 's1', dataHash: HASH, actor: 'G' });
 }
@@ -112,7 +138,7 @@ export async function consume(adapter: ChainAdapter, cursor?: ChainEventCursor):
       hashes.push(dataHash);
     }
   }
-  const released = await adapter.releaseEscrow({ payment_id: 'p1', proof_hash: HASH });
+  const released = await adapter.releaseEscrow({ caller: ACTOR, shipment_id: 'p1' });
   hashes.push(released.txHash);
   return hashes;
 }

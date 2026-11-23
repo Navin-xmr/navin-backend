@@ -6,6 +6,7 @@ import { createServer, Server } from 'http';
 import { signToken } from './fixtures/factories.js';
 import { randomUUID } from 'crypto';
 import { generateDataHash } from '../src/shared/utils/crypto.js';
+import { SOCKET_EVENTS } from '../src/shared/types/socketEvents.js';
 import type { Application } from 'express';
 import {
   flushUntilIdle,
@@ -202,6 +203,7 @@ describe('Socket.io Client Integration Tests', () => {
         () => reject(new Error('Socket client did not connect within 10 s')),
         10_000
       );
+      timer.unref();
       socketClient.on('connect', () => {
         clearTimeout(timer);
         resolve();
@@ -215,6 +217,12 @@ describe('Socket.io Client Integration Tests', () => {
 
   afterAll(async () => {
     await teardownSocketSuite({ socketClient, httpServer });
+    try {
+      const { disconnectRedis } = await import('../src/infra/redis/connection.js');
+      await disconnectRedis();
+    } catch {
+      // Ignore
+    }
   });
 
   describe('HTTP-to-WebSocket Pipeline', () => {

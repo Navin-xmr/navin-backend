@@ -95,6 +95,62 @@ describe('ChainAdapter factory — SOROBAN_ADAPTER env matrix', () => {
   });
 });
 
+// Runs before the mocked-SorobanAdapter suite below: unstable_mockModule
+// registrations leak across tests in this file, so real-instantiation
+// assertions must execute before any test registers the SorobanAdapter mock.
+describe('ChainAdapter factory — SorobanAdapter positive instantiation (#969)', () => {
+  afterEach(() => {
+    process.env = { ...ORIGINAL_ENV };
+    jest.restoreAllMocks();
+  });
+
+  it("createChainAdapter('soroban') returns a SorobanAdapter with RPC URL, contract and network from config", async () => {
+    const { factory } = await loadFactory({
+      ...SOROBAN_ENV,
+      STELLAR_NETWORK: undefined,
+      STELLAR_SECRET_KEY: undefined,
+    });
+    const { SorobanAdapter } = await import('../src/services/chain/soroban.adapter.js');
+
+    const adapter = factory.createChainAdapter('soroban');
+
+    expect(adapter).toBeInstanceOf(SorobanAdapter);
+    const internals = adapter as unknown as {
+      contractId: string;
+      networkPassphrase: string;
+      secretKey: string | undefined;
+    };
+    expect(internals.contractId).toBe(CONTRACT_ID);
+    expect(internals.networkPassphrase).toBe(Networks.TESTNET);
+    expect(internals.secretKey).toBeUndefined();
+  });
+
+  it('forwards custom RPC URL, contract id, signer and public network to SorobanAdapter', async () => {
+    const signer = Keypair.random();
+    const customContractId = 'CBQHNAXSI55GX2GN6D67GK7BHVPSLJUGZQEU7WJ5LKR5PNUCGLIMAO4K';
+    const { factory } = await loadFactory({
+      ...SOROBAN_ENV,
+      STELLAR_NETWORK: 'public',
+      SOROBAN_RPC_URL: 'https://mainnet-rpc.example.test',
+      ESCROW_CONTRACT_ID: customContractId,
+      STELLAR_SECRET_KEY: signer.secret(),
+    });
+    const { SorobanAdapter } = await import('../src/services/chain/soroban.adapter.js');
+
+    const adapter = factory.createChainAdapter('soroban');
+
+    expect(adapter).toBeInstanceOf(SorobanAdapter);
+    const internals = adapter as unknown as {
+      contractId: string;
+      networkPassphrase: string;
+      secretKey: string | undefined;
+    };
+    expect(internals.contractId).toBe(customContractId);
+    expect(internals.networkPassphrase).toBe(Networks.PUBLIC);
+    expect(internals.secretKey).toBe(signer.secret());
+  });
+});
+
 describe('ChainAdapter factory — SorobanAdapter configuration', () => {
   /** Factory graph with SorobanAdapter swapped for a recorder of its constructor options. */
   async function loadWithSorobanSpy(overrides: Record<string, string | undefined>) {

@@ -21,7 +21,18 @@ export interface ILedgerBlock {
    */
   canonicalPayload?: Record<string, unknown>;
   transactionHash?: string;
+  /**
+   * #1046 — deployment the block was written under (`testnet` | `public`). Persisted at write
+   * time so verification never depends on the server's *current* config. Absent on legacy rows.
+   */
+  network?: 'testnet' | 'public';
+  /** #1046 — Soroban contract the transaction targeted, when known at write time. */
+  contractId?: string;
+  /** #1046 — client `Idempotency-Key` of the request that produced this block, when supplied. */
+  idempotencyKey?: string;
   ledger: number;
+  /** #1058 — ledgers closed strictly after `ledger`; recomputed idempotently. */
+  confirmations: number;
   verified: boolean;
   actor?: string;
   metadata?: Record<string, unknown>;
@@ -56,9 +67,17 @@ const LedgerBlockSchema = new Schema(
       required: true,
     },
     transactionHash: { type: String },
+    network: { type: String, enum: ['testnet', 'public'] },
+    contractId: { type: String },
+    idempotencyKey: { type: String },
     dataHash: { type: String },
     canonicalPayload: { type: Schema.Types.Mixed },
     ledger: {
+      type: Number,
+      required: true,
+      default: 0,
+    },
+    confirmations: {
       type: Number,
       required: true,
       default: 0,
@@ -80,8 +99,15 @@ LedgerBlockSchema.plugin(isoDatePlugin);
 // Optimizes querying ledger blocks for a specific shipment, newest first.
 LedgerBlockSchema.index({ shipmentId: 1, milestoneEvent: 1, createdAt: -1 });
 
+// Allows cross-shipment queries by milestone event type, newest first.
+// Replaces the stale { eventType: 1, createdAt: -1 } index (issue #799).
+LedgerBlockSchema.index({ milestoneEvent: 1, createdAt: -1 });
+
 // Allows fast lookup / deduplication by on-chain data hash.
 LedgerBlockSchema.index({ dataHash: 1 }, { sparse: true });
+
+// #1058 — supports idempotent re-verification scans of not-yet-confirmed blocks.
+LedgerBlockSchema.index({ verified: 1, ledger: 1 });
 
 // Soft delete middleware
 LedgerBlockSchema.pre(['find', 'findOne', 'findOneAndUpdate', 'countDocuments'], function () {
