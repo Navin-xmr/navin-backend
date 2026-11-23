@@ -33,6 +33,9 @@ export const IndexerStateModel =
   mongoose.model<IndexerStateDocument>('IndexerState', IndexerStateSchema);
 
 export async function getStoredCursor(key = 'stellar_indexer'): Promise<string | undefined> {
+  if (mongoose.connection.readyState !== 1) {
+    return undefined;
+  }
   try {
     const doc = await IndexerStateModel.findOne({ key }).lean<{ key: string; cursor: string }>();
     return doc?.cursor;
@@ -42,6 +45,9 @@ export async function getStoredCursor(key = 'stellar_indexer'): Promise<string |
 }
 
 export async function saveStoredCursor(cursor: string, key = 'stellar_indexer'): Promise<void> {
+  if (mongoose.connection.readyState !== 1) {
+    return;
+  }
   try {
     await IndexerStateModel.updateOne({ key }, { $set: { cursor } }, { upsert: true });
   } catch {
@@ -68,6 +74,11 @@ export async function indexStellarTransactions(
   let upserted = 0;
 
   for await (const event of adapter.streamEvents(cursor)) {
+    // Skip transactions that haven't reached minimum confirmation depth
+    // to avoid indexing transactions that could still be reorged out.
+    const confirmations = await adapter.getConfirmationCount(event.tx_hash);
+    if (confirmations < 1) continue;
+
     processed += 1;
     cursor = event.id;
 

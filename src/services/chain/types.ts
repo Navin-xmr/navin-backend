@@ -65,4 +65,12 @@ export interface ChainAdapter {
    * @throws {AppError} ERR_CHAIN_INVALID_EVENT when an emitted event violates the spec.
    */
   streamEvents(cursor?: ChainEventCursor): AsyncIterable<ChainEvent>;
+
+  /**
+   * Return the number of on-chain confirmations for `txHash` (ledger depth since
+   * the transaction was included). Used by the indexer to avoid indexing
+   * transactions that could still be reorged out.
+   * @throws {AppError} `ChainErrorCode` on rejection.
+   */
+  getConfirmationCount(txHash: string): Promise<number>;
 }

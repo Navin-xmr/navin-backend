@@ -27,6 +27,9 @@ function adapterStreaming(events: ChainEvent[]): ChainAdapter {
     async releaseEscrow() {
       throw new Error('Not implemented');
     },
+    async getConfirmationCount(_txHash: string) {
+      return 100;
+    },
     async *streamEvents() {
       yield* events;
     },

@@ -145,6 +145,19 @@ export class SorobanAdapter implements ChainAdapter {
     }
   }
 
+  async getConfirmationCount(txHash: string): Promise<number> {
+    const tx = await this.server.getTransaction(txHash).catch(() => {
+      throw new AppError(404, `Transaction ${txHash} not found`, ErrorCodes.CHAIN_UNKNOWN);
+    });
+    if (tx.status !== 'SUCCESS') {
+      throw new AppError(400, `Transaction ${txHash} not yet successful`, ErrorCodes.CHAIN_UNKNOWN);
+    }
+    const latest = await this.server.getLatestLedger().catch(() => {
+      throw new AppError(502, 'Failed to fetch latest ledger', ErrorCodes.CHAIN_UNKNOWN);
+    });
+    return latest.sequence - tx.ledger;
+  }
+
   /**
    * Invocation pipeline: simulate -> assemble -> sign -> send -> poll
    */

@@ -180,6 +180,11 @@ export class SimulatedAdapter implements ChainAdapter {
     }
   }
 
+  async getConfirmationCount(_txHash: string): Promise<number> {
+    // Simulated mode: treat every transaction as deeply confirmed.
+    return 100;
+  }
+
   private signer(): Keypair {
     if (!this.secretKey) {
       throw chainError(500, 'STELLAR_SECRET_KEY is not configured', ErrorCodes.CHAIN_UNKNOWN);
