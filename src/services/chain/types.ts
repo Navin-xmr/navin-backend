@@ -46,6 +46,12 @@ export interface ChainTxReceipt {
 
 export type AnchorResult = ChainTxReceipt;
 
+export interface UpdateStatusResult extends ChainTxReceipt {
+  /** On-chain (u64, decimal string) shipment id the status was applied to. */
+  shipmentId: UpdateStatusInput['shipment_id'];
+  newStatus: UpdateStatusInput['new_status'];
+}
+
 export interface EscrowResult extends ChainTxReceipt {
   /** Escrow is per-shipment (#1056) — this is the released shipment, not a payment id. */
   shipmentId: ReleaseEscrowInput['shipment_id'];

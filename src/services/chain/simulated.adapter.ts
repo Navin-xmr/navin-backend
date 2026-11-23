@@ -34,12 +34,14 @@ import {
 import type { Account, Transaction } from '@stellar/stellar-sdk';
 
 import { config } from '../../config/index.js';
+import { instrumentSubmission } from '../../infra/metrics/chainMetrics.js';
 import { AppError, ErrorCodes } from '../../shared/http/errors.js';
 import {
   AddressSchema,
   Bytes32HexSchema,
   CHAIN_EVENT_NAMES,
   SymbolSchema,
+  UpdateStatusArgsSchema,
   parseChainEvent,
 } from '../../shared/types/chain.js';
 import type { ChainEvent } from '../../shared/types/chain.js';
@@ -55,6 +57,8 @@ import type {
   ConfirmDeliveryResult,
   EscrowResult,
   ReleaseEscrowInput,
+  UpdateStatusInput,
+  UpdateStatusResult,
 } from './types.js';
 
 /** Sentinel contract id for simulated events (all-zero contract strkey) — no contract exists. */
@@ -62,6 +66,7 @@ const SIMULATED_CONTRACT_ID = StrKey.encodeContract(Buffer.alloc(32));
 
 const ANCHOR_KEY_PREFIX = 'telemetry:';
 const RELEASE_KEY_PREFIX = 'release:';
+const STATUS_KEY_PREFIX = 'status:';
 const PAGE_SIZE = 200;
 const MAX_BAD_SEQ_RETRIES = 2;
 
@@ -140,7 +145,11 @@ export class SimulatedAdapter implements ChainAdapter {
       (config.stellarNetwork === 'public' ? Networks.PUBLIC : Networks.TESTNET);
   }
 
-  async anchorEvent(input: AnchorEventInput): Promise<AnchorResult> {
+  anchorEvent(input: AnchorEventInput): Promise<AnchorResult> {
+    return instrumentSubmission('anchor_event', () => this.doAnchorEvent(input));
+  }
+
+  private async doAnchorEvent(input: AnchorEventInput): Promise<AnchorResult> {
     assertBytes32(input.data_hash, 'data_hash', ErrorCodes.CHAIN_INVALID_HASH);
     const { hash, ledger } = await this.submitManageData(
       `${ANCHOR_KEY_PREFIX}${input.shipment_id}`,
@@ -149,7 +158,11 @@ export class SimulatedAdapter implements ChainAdapter {
     return { txHash: hash, ledger, simulated: true };
   }
 
-  async releaseEscrow(input: ReleaseEscrowInput): Promise<EscrowResult> {
+  releaseEscrow(input: ReleaseEscrowInput): Promise<EscrowResult> {
+    return instrumentSubmission('release_escrow', () => this.doReleaseEscrow(input));
+  }
+
+  private async doReleaseEscrow(input: ReleaseEscrowInput): Promise<EscrowResult> {
     if (!AddressSchema.safeParse(input.caller).success) {
       throw chainError(
         422,

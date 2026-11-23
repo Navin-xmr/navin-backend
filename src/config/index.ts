@@ -63,5 +63,7 @@ export const config = {
     public: env.CHAIN_CONFIRMATIONS_PUBLIC,
   },
   sentryDsn: env.SENTRY_DSN,
+  metricsToken: env.METRICS_TOKEN,
+  metricsPort: env.METRICS_PORT,
   totpEncryptionKey: env.TOTP_ENCRYPTION_KEY,
 } as const;

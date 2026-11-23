@@ -66,6 +66,8 @@ async function startWorker() {
   // Fail fast on a misconfigured SOROBAN_ADAPTER instead of failing every job
   getChainAdapter();
 
+  startMetricsServer();
+
   // Connect to MongoDB
   await connectMongo(config.mongoUri);
   logger.info('Stellar worker connected to MongoDB');

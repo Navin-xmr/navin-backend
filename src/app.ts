@@ -18,6 +18,7 @@ import { corsMiddleware, corsPreflight } from './config/cors.js';
 import { buildHelmetMiddleware } from './config/helmet.js';
 
 import { healthRouter } from './modules/health/health.routes.js';
+import { metricsHandler } from './infra/metrics/metricsServer.js';
 import { usersRouter } from './modules/users/users.routes.js';
 import { authRouter } from './modules/auth/auth.routes.js';
 import { organizationsRouter } from './modules/organizations/organizations.routes.js';
@@ -77,6 +78,7 @@ export function buildApp() {
   // the mount — each carries the same reason again at the individual route inside
   // the router. Every other mount below applies `requireAuth` at the router level.
   app.use('/api/health', healthRouter); // PUBLIC: liveness/readiness probe for orchestrators
+  app.get('/api/metrics', metricsHandler); // PUBLIC: Prometheus scrape; 404 unless METRICS_TOKEN set, then bearer-token guarded
   app.use('/api/auth', authRouter); // PUBLIC: login/signup/refresh need no token; guarded per-route
   app.use('/api/users', usersRouter);
   app.use('/api/organizations', organizationsRouter);
