@@ -1,10 +1,10 @@
 # Chain Adapter Interface Specification
 
-**Status:** v1 (`CHAIN_SPEC_VERSION = 1.1.0-draft`)
+**Status:** v2.2 (`CHAIN_SPEC_VERSION = 2.2.0`)
 
-This document is the normative v2 surface for Navin Backend's Stellar / Soroban integration (v1 closed #649; v2 evolves the escrow signature and event verification per #1056 / #1058).
+This document is the normative v2 surface for Navin Backend's Stellar / Soroban integration (v1 closed #649; v2 evolves the escrow signature and event verification per #1056 / #1058, and adds the dispute lifecycle per #1053).
 
-Single source of truth for shapes: `src/shared/types/chain.ts`. Cross-repo golden vectors: `tests/fixtures/chain/{functions,events,errors}.json` (`spec_version = 2.1.0`). Contracts repo: [Navin-xmr/navin-contracts](https://github.com/Navin-xmr/navin-contracts).
+Single source of truth for shapes: `src/shared/types/chain.ts`. Cross-repo golden vectors: `tests/fixtures/chain/{functions,events,errors}.json` (`spec_version = 2.2.0`). Contracts repo: [Navin-xmr/navin-contracts](https://github.com/Navin-xmr/navin-contracts).
 
 > Drift rule (AGENTS.md §8): doc ↔ `chain.ts` + `CHAIN_SPEC_VERSION` ↔ fixtures `spec_version` must change in the same PR.
 
@@ -16,7 +16,14 @@ Single source of truth for shapes: `src/shared/types/chain.ts`. Cross-repo golde
 | ---------------- | -------------------------------------------------------------------------------------------------------------------- | --------------------- |
 | `anchor`         | `anchor(shipment_id: Symbol, data_hash: BytesN<32>, actor: Address)`                                                 | `actor`               |
 | `init_escrow`    | `init_escrow(payment_id: Symbol, shipment_id: Symbol, payer: Address, payee: Address, token: Address, amount: i128)` | `payer`               |
-| `release_escrow` | `release_escrow(payment_id: Symbol, proof_hash: BytesN<32>)`                                                         | contract admin        |
+| `release_escrow` | `release_escrow(caller: Address, shipment_id: Symbol)`                                                               | `caller`              |
+| `update_status`  | `update_status(caller: Address, shipment_id: u64, new_status: ShipmentStatus, data_hash: BytesN<32>)`                | `caller`              |
+
+> **v2 escrow semantics (#1056):** escrow is **per-shipment**, not per-payment. The v1
+> `(payment_id, proof_hash)` pair was a backend invention — the deployed contract takes
+> `(caller, shipment_id)` and requires the caller's authorization. There is no
+> `proof_hash` argument and no legacy `{ success: false }` result: adapters reject with
+> `AppError(ERR_CHAIN_*)` (`ERR_CHAIN_INVALID_STATUS`, `ERR_CHAIN_UNAUTHORIZED`, …).
 
 Types: `Symbol` = `[A-Za-z0-9_]{1,32}`; `BytesN<32>` = lowercase hex64 (SHA-256); `Address` = strkey `G…`/`C…`; `token` must be contract `C…`; `amount` = positive `i128` decimal string; `payer ≠ payee`. All arg schemas `.strict()`. Result: `{ tx_hash: hex64, ledger: u32 }`.
 
@@ -38,17 +45,54 @@ Sourced from the real contract (`Navin-xmr/navin-contracts`, `contracts/shipment
 
 Envelope: `{ id, contract_id: C…, tx_hash: hex64, ledger: u32, ledger_closed_at: datetime }` — `id` is the stable paging cursor for idempotent indexing.
 
-| Name           | Topic tuple                            | Data tuple                                                                              |
-| -------------- | -------------------------------------- | --------------------------------------------------------------------------------------- |
-| `anchor`       | `["anchor", shipment_id: Symbol]`      | `(data_hash: Bytes32Hex, ledger: u32)`                                                  |
-| `esc_init`     | `["esc_init", payment_id: Symbol]`     | `(shipment_id: Symbol, payer: Address, payee: Address, token: C…, amount: i128-string)` |
-| `esc_rel`      | `["esc_rel", payment_id: Symbol]`      | `(proof_hash: Bytes32Hex, payee: Address, amount: i128-string)`                         |
-| `esc_dispute`  | `["esc_dispute", payment_id: Symbol]`  | `(reason_hash: Bytes32Hex)`                                                             |
-| `esc_resolve`  | `["esc_resolve", payment_id: Symbol]`  | `(outcome: Symbol)`                                                                     |
-| `esc_freeze`   | `["esc_freeze", payment_id: Symbol]`   | `()`                                                                                    |
-| `esc_unfreeze` | `["esc_unfreeze", payment_id: Symbol]` | `()`                                                                                    |
+| Name               | Topic tuple                        | Data tuple                                                                                      |
+| ------------------ | ---------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `anchor`           | `["anchor", shipment_id: Symbol]`  | `(data_hash: Bytes32Hex, ledger: u32)`                                                          |
+| `esc_init`         | `["esc_init", payment_id: Symbol]` | `(shipment_id: Symbol, payer: Address, payee: Address, token: C…, amount: i128-string)`         |
+| `esc_rel`          | `["esc_rel", payment_id: Symbol]`  | `(proof_hash: Bytes32Hex, payee: Address, amount: i128-string)`                                 |
+| `dispute_raised`   | `["dispute_raised"]`               | `(shipment_id: Symbol, raised_by: Address, reason_hash: Bytes32Hex)`                            |
+| `escrow_frozen`    | `["escrow_frozen"]`                | `(shipment_id: Symbol, reason: EscrowFreezeReason, caller: Address, timestamp: u64-string)`     |
+| `dispute_resolved` | `["dispute_resolved"]`             | `(shipment_id: Symbol, resolution: DisputeResolution, reason_hash: Bytes32Hex, admin: Address)` |
 
 Validated at ingress by `parseChainEvent()`; mismatch → `AppError(502, ERR_CHAIN_INVALID_EVENT)`.
+
+### 2.1 Dispute lifecycle (#1053)
+
+Sourced from the deployed contract (`raise_dispute` / `resolve_dispute` in
+`Navin-xmr/navin-contracts`, `contracts/shipment/src/lib.rs`), not inferred.
+
+1. `raise_dispute(caller, shipment_id, reason_hash)` sets the shipment to `Disputed`,
+   records `EscrowFreezeReason::DisputeRaised`, then emits **`dispute_raised`** and
+   **`escrow_frozen`** in the same transaction. Both events share one `tx_hash`; the
+   indexer merges the freeze into the dispute's ledger row instead of replacing it.
+2. `resolve_dispute(admin, shipment_id, resolution, reason_hash)` requires `Disputed`,
+   settles escrow, clears the freeze, and emits **`dispute_resolved`** with the
+   `DisputeResolution` variant it applied.
+
+Projection rules:
+
+| Chain event        | Ledger milestone | Projection metadata                                                                       |
+| ------------------ | ---------------- | ----------------------------------------------------------------------------------------- |
+| `dispute_raised`   | `DISPUTED`       | `disputeState: 'OPEN'`, `reasonHash`, `raisedBy`                                          |
+| `escrow_frozen`    | `ESCROW_FROZEN`* | `escrowFrozen: true`, `escrowFreezeReason`, `frozenBy`, `frozenAt`                        |
+| `dispute_resolved` | `RESOLVED`       | `disputeState: 'CLOSED'`, `resolution`, `reasonHash`, `resolvedBy`, `escrowFrozen: false` |
+
+\* merged into the existing `DISPUTED` row when emitted in the same transaction.
+
+- **Reason hashes only.** The off-chain evidence (text, photos) is never on-chain;
+  its SHA-256 digest is stored verbatim and never parsed as free text.
+- **Resolution is reflected.** `resolution` is the contract's enum variant
+  (`ReleaseToCarrier` | `RefundToCompany` | `PartialRefund`) — the projection never
+  derives an outcome from the resulting shipment status.
+- **Unfreeze is explicit.** There is no `escrow_unfrozen` event; the contract clears
+  the freeze while resolving, so `dispute_resolved` carries `escrowFrozen: false`.
+- `EscrowFreezeReason` variants: `DisputeRaised`, `CarrierSuspended`,
+  `CompanySuspended`, `ContractPaused`, `CircuitBreakerOpen`.
+
+> **Known gap:** the deployed contract types `shipment_id` as `u64`, while the backend
+> carries its shipment ObjectId string as a Soroban `Symbol` (same legacy convention as
+> `anchor`/`esc_*` above). That is what lets the indexer resolve `LedgerBlock.shipmentId`;
+> reconciling numeric contract ids is the same follow-up tracked in §1.1.
 
 ---
 
@@ -64,6 +108,7 @@ Validated at ingress by `parseChainEvent()`; mismatch → `AppError(502, ERR_CHA
 | `EscrowAlreadyReleased` | 6     | `ERR_CHAIN_ESCROW_ALREADY_RELEASED` | 409  |
 | `InvalidAmount`         | 7     | `ERR_CHAIN_INVALID_AMOUNT`          | 422  |
 | `InvalidProof`          | 8     | `ERR_CHAIN_INVALID_PROOF`           | 422  |
+| `InvalidStatus`         | 9     | `ERR_CHAIN_INVALID_STATUS`          | 409  |
 | unknown                 | other | `ERR_CHAIN_UNKNOWN`                 | 502  |
 
 Decoded via `chainErrorToAppError()`.

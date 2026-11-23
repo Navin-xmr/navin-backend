@@ -99,10 +99,16 @@ export interface ChainAdapter {
   streamEvents(cursor?: ChainEventCursor): AsyncIterable<ChainEvent>;
 
   /**
-   * Return the number of on-chain confirmations for `txHash` (ledger depth since
-   * the transaction was included). Used by the indexer to avoid indexing
-   * transactions that could still be reorged out.
-   * @throws {AppError} `ChainErrorCode` on rejection.
+   * Optional read-only ledger queries used by confirmation tracking (#818).
+   * `getLatestLedger` returns the current ledger sequence. `getTransactionLedger`
+   * returns the ledger containing a successful transaction, or null when the
+   * transaction is not found or did not succeed.
    */
-  getConfirmationCount(txHash: string): Promise<number>;
+  getLatestLedger?(): Promise<number>;
+  getTransactionLedger?(txHash: string): Promise<number | null>;
+  /**
+   * Confirmation count for a transaction at `ledger`.
+   * Implementations return at least three immediately for simulated chains.
+   */
+  getConfirmationCount(ledger: number): Promise<number>;
 }

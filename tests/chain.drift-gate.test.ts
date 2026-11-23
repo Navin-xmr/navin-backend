@@ -34,7 +34,7 @@ describe('chain drift gate (#1080)', () => {
   it('fails when a fixture spec_version drifts', () => {
     const dir = copyRepoSubset();
     const f = path.join(dir, 'tests/fixtures/chain/errors.json');
-    fs.writeFileSync(f, fs.readFileSync(f, 'utf8').replace('"2.1.0"', '"9.9.9"'));
+    fs.writeFileSync(f, fs.readFileSync(f, 'utf8').replace('"2.2.0"', '"9.9.9"'));
     expect(checkChainDrift(dir).join('\n')).toMatch(/errors\.json spec_version 9\.9\.9/);
   });
 
@@ -45,7 +45,7 @@ describe('chain drift gate (#1080)', () => {
       f,
       fs
         .readFileSync(f, 'utf8')
-        .replace("'update_status',\n] as const", "'update_status', 'refund'] as const")
+        .replace(/'update_status',\s*\n\s*\] as const/, "'update_status', 'refund'] as const")
     );
     expect(checkChainDrift(dir).join('\n')).toMatch(/"refund" is missing/);
   });

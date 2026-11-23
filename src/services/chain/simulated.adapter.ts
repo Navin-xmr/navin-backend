@@ -227,9 +227,8 @@ export class SimulatedAdapter implements ChainAdapter {
     }
   }
 
-  async getConfirmationCount(_txHash: string): Promise<number> {
-    // Simulated mode: treat every transaction as deeply confirmed.
-    return 100;
+  async getConfirmationCount(_ledger: number): Promise<number> {
+    return 3;
   }
 
   private signer(): Keypair {

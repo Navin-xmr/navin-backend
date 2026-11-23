@@ -2,13 +2,15 @@
  * Chain interface — typed mirror of docs/chain-interface.md (TODO I2).
  *
  * ┌──────────────────────────────────────────────────────────────────────┐
- * │ SPEC VERSION: 2.1.0  (see CHAIN_SPEC_VERSION below)                  │
+ * │ SPEC VERSION: 2.2.0  (see CHAIN_SPEC_VERSION below)                  │
  * │ Mirrors the v2 surface (v1 from P6-01/#649, evolved by #1056/#1058):  │
  * │   functions  anchor · init_escrow · release_escrow (+ authz)         │
  * │              update_status (v2.1, #1047 — real contract ABI)         │
  * │              release_escrow = (caller, shipment_id), escrow is       │
  * │              per-shipment — there is no proof_hash argument.         │
  * │   events     anchor · esc_init · esc_rel (topic + data tuples)       │
+ * │              dispute_raised · dispute_resolved · escrow_frozen       │
+ * │              (v2.2, #1053 — real contract dispute surface)           │
  * │              every anchored event exposes confirmations + verified   │
  * │   errors     contract error codes → ERR_CHAIN_* backend codes        │
  * │              incl. InvalidStatus and Unauthorized/NotAuthorized      │
@@ -30,7 +32,7 @@ import { z } from 'zod';
 import { AppError, ErrorCodes } from '../http/errors.js';
 import type { ErrorCode } from '../http/errors.js';
 
-export const CHAIN_SPEC_VERSION = '1.1.0-draft' as const;
+export const CHAIN_SPEC_VERSION = '2.2.0' as const;
 
 // ─── Soroban primitives ──────────────────────────────────────────────────────
 
@@ -197,10 +199,12 @@ export const CHAIN_EVENT_NAMES = {
   ANCHOR: 'anchor',
   ESCROW_INIT: 'esc_init',
   ESCROW_RELEASE: 'esc_rel',
-  ESCROW_DISPUTE: 'esc_dispute',
-  ESCROW_RESOLVE: 'esc_resolve',
-  ESCROW_FREEZE: 'esc_freeze',
-  ESCROW_UNFREEZE: 'esc_unfreeze',
+  /** v2.2 (#1053) — `raise_dispute` emitted this before `escrow_frozen`. */
+  DISPUTE_RAISED: 'dispute_raised',
+  /** v2.2 (#1053) — `resolve_dispute`; carries the contract's resolution. */
+  DISPUTE_RESOLVED: 'dispute_resolved',
+  /** v2.2 (#1053) — escrow blocked by a dispute/safety control (freeze). */
+  ESCROW_FROZEN: 'escrow_frozen',
 } as const;
 export type ChainEventName = (typeof CHAIN_EVENT_NAMES)[keyof typeof CHAIN_EVENT_NAMES];
 
@@ -250,43 +254,96 @@ export const EscrowReleaseEventSchema = z
   })
   .strict();
 
-/** topic `["esc_dispute", payment_id]` · data `(reason_hash: Bytes32Hex)` — opens a dispute record */
-export const EscrowDisputeEventSchema = z
+/**
+ * Shipment identifier carried by the dispute/escrow-freeze events.
+ *
+ * The deployed contract types `shipment_id` as `u64`; this backend identifies
+ * shipments by their Mongo ObjectId string and that is the identifier adapters
+ * put on-chain (same legacy convention as `anchor`/`esc_*` above). Modelling it
+ * as a Soroban `Symbol` is what lets the indexer resolve `LedgerBlock.shipmentId`
+ * without an id-mapping table; reconciling the numeric contract id is tracked in
+ * docs/chain-interface.md §1.1.
+ */
+const ShipmentEventIdSchema = SymbolSchema;
+
+/** `DisputeResolution` contract enum — variant names are the on-chain identity. */
+export const DISPUTE_RESOLUTIONS = [
+  'ReleaseToCarrier',
+  'RefundToCompany',
+  'PartialRefund',
+] as const;
+export type DisputeResolutionName = (typeof DISPUTE_RESOLUTIONS)[number];
+export const DisputeResolutionSchema = z.enum(DISPUTE_RESOLUTIONS);
+
+/** `EscrowFreezeReason` contract enum — variant names are the on-chain identity. */
+export const ESCROW_FREEZE_REASONS = [
+  'DisputeRaised',
+  'CarrierSuspended',
+  'CompanySuspended',
+  'ContractPaused',
+  'CircuitBreakerOpen',
+] as const;
+export type EscrowFreezeReasonName = (typeof ESCROW_FREEZE_REASONS)[number];
+export const EscrowFreezeReasonSchema = z.enum(ESCROW_FREEZE_REASONS);
+
+/**
+ * topic `["dispute_raised"]` · data `(shipment_id, raised_by, reason_hash)`
+ *
+ * Emitted by `raise_dispute` when a party opens a dispute. The full evidence
+ * (text, photos) stays off-chain; only its SHA-256 digest is published, so the
+ * indexer stores `reason_hash` verbatim and never treats it as free text.
+ * `raise_dispute` also emits `escrow_frozen` immediately after this event.
+ */
+export const DisputeRaisedEventSchema = z
   .object({
     ...eventEnvelope,
-    name: z.literal(CHAIN_EVENT_NAMES.ESCROW_DISPUTE),
-    topic: z.tuple([z.literal(CHAIN_EVENT_NAMES.ESCROW_DISPUTE), SymbolSchema]),
-    data: z.tuple([Bytes32HexSchema]),
+    name: z.literal(CHAIN_EVENT_NAMES.DISPUTE_RAISED),
+    topic: z.tuple([z.literal(CHAIN_EVENT_NAMES.DISPUTE_RAISED)]),
+    data: z.tuple([ShipmentEventIdSchema, AddressSchema, Bytes32HexSchema]),
   })
   .strict();
 
-/** topic `["esc_resolve", payment_id]` · data `(outcome: Symbol)` — resolves a dispute with a reflected outcome */
-export const EscrowResolveEventSchema = z
+/**
+ * topic `["dispute_resolved"]` · data `(shipment_id, resolution, reason_hash, admin)`
+ *
+ * Emitted by `resolve_dispute` when an admin closes the dispute. `resolution` is
+ * the contract's `DisputeResolution` variant and is reflected verbatim — the
+ * projection must never re-derive it from the resulting shipment status. The
+ * contract refunds/releases escrow before this event, which clears the freeze.
+ */
+export const DisputeResolvedEventSchema = z
   .object({
     ...eventEnvelope,
-    name: z.literal(CHAIN_EVENT_NAMES.ESCROW_RESOLVE),
-    topic: z.tuple([z.literal(CHAIN_EVENT_NAMES.ESCROW_RESOLVE), SymbolSchema]),
-    data: z.tuple([SymbolSchema]),
+    name: z.literal(CHAIN_EVENT_NAMES.DISPUTE_RESOLVED),
+    topic: z.tuple([z.literal(CHAIN_EVENT_NAMES.DISPUTE_RESOLVED)]),
+    data: z.tuple([
+      ShipmentEventIdSchema,
+      DisputeResolutionSchema,
+      Bytes32HexSchema,
+      AddressSchema,
+    ]),
   })
   .strict();
 
-/** topic `["esc_freeze", payment_id]` · data `()` — freezes escrow state */
-export const EscrowFreezeEventSchema = z
+/**
+ * topic `["escrow_frozen"]` · data `(shipment_id, reason, caller, timestamp)`
+ *
+ * Emitted whenever escrow is blocked (dispute, suspension, pause, circuit
+ * breaker). Freeze is explicit on-chain state; the projection must not infer it.
+ * The matching unfreeze is the `dispute_resolved` event — the contract clears
+ * the freeze as part of resolution.
+ */
+export const EscrowFrozenEventSchema = z
   .object({
     ...eventEnvelope,
-    name: z.literal(CHAIN_EVENT_NAMES.ESCROW_FREEZE),
-    topic: z.tuple([z.literal(CHAIN_EVENT_NAMES.ESCROW_FREEZE), SymbolSchema]),
-    data: z.tuple([]),
-  })
-  .strict();
-
-/** topic `["esc_unfreeze", payment_id]` · data `()` — unfreezes escrow state */
-export const EscrowUnfreezeEventSchema = z
-  .object({
-    ...eventEnvelope,
-    name: z.literal(CHAIN_EVENT_NAMES.ESCROW_UNFREEZE),
-    topic: z.tuple([z.literal(CHAIN_EVENT_NAMES.ESCROW_UNFREEZE), SymbolSchema]),
-    data: z.tuple([]),
+    name: z.literal(CHAIN_EVENT_NAMES.ESCROW_FROZEN),
+    topic: z.tuple([z.literal(CHAIN_EVENT_NAMES.ESCROW_FROZEN)]),
+    data: z.tuple([
+      ShipmentEventIdSchema,
+      EscrowFreezeReasonSchema,
+      AddressSchema,
+      U64StringSchema,
+    ]),
   })
   .strict();
 
@@ -295,19 +352,17 @@ export const ChainEventSchema = z.discriminatedUnion('name', [
   AnchorEventSchema,
   EscrowInitEventSchema,
   EscrowReleaseEventSchema,
-  EscrowDisputeEventSchema,
-  EscrowResolveEventSchema,
-  EscrowFreezeEventSchema,
-  EscrowUnfreezeEventSchema,
+  DisputeRaisedEventSchema,
+  DisputeResolvedEventSchema,
+  EscrowFrozenEventSchema,
 ]);
 
 export type AnchorEvent = z.infer<typeof AnchorEventSchema>;
 export type EscrowInitEvent = z.infer<typeof EscrowInitEventSchema>;
 export type EscrowReleaseEvent = z.infer<typeof EscrowReleaseEventSchema>;
-export type EscrowDisputeEvent = z.infer<typeof EscrowDisputeEventSchema>;
-export type EscrowResolveEvent = z.infer<typeof EscrowResolveEventSchema>;
-export type EscrowFreezeEvent = z.infer<typeof EscrowFreezeEventSchema>;
-export type EscrowUnfreezeEvent = z.infer<typeof EscrowUnfreezeEventSchema>;
+export type DisputeRaisedEvent = z.infer<typeof DisputeRaisedEventSchema>;
+export type DisputeResolvedEvent = z.infer<typeof DisputeResolvedEventSchema>;
+export type EscrowFrozenEvent = z.infer<typeof EscrowFrozenEventSchema>;
 export type ChainEvent = z.infer<typeof ChainEventSchema>;
 
 // ─── Event verification / confirmation depth (v2, #1058) ────────────────────
