@@ -8,13 +8,18 @@ import {
   BASE_FEE,
 } from '@stellar/stellar-sdk';
 import { config } from '../../config/index.js';
+import { instrumentSubmission } from '../../infra/metrics/chainMetrics.js';
 import { stellarNetworkPassphrase } from '../../config/stellarNetwork.js';
 import { AppError, ErrorCodes } from '../../shared/http/errors.js';
 import { logger } from '../../shared/logger/logger.js';
 import {
+  AddressSchema,
   Bytes32HexSchema,
+  SymbolSchema,
   parseChainEvent,
+  UpdateStatusArgsSchema,
   chainErrorToAppError,
+  updateStatusErrorToAppError,
 } from '../../shared/types/chain.js';
 import type { ChainEvent } from '../../shared/types/chain.js';
 import { buildIdempotencyKey, ReceiptCache } from './idempotency.js';
@@ -32,6 +37,8 @@ import type {
   ChainTxReceipt,
   EscrowResult,
   ReleaseEscrowInput,
+  UpdateStatusInput,
+  UpdateStatusResult,
 } from './types.js';
 
 /** Contract rejections that mean "this exact thing was already done". */
@@ -112,7 +119,14 @@ export class SorobanAdapter implements ChainAdapter {
     return new Contract(this.contractId);
   }
 
-  async anchorEvent(input: AnchorEventInput, options?: ChainSubmitOptions): Promise<AnchorResult> {
+  anchorEvent(input: AnchorEventInput, options?: ChainSubmitOptions): Promise<AnchorResult> {
+    return instrumentSubmission('anchor_event', () => this.doAnchorEvent(input, options));
+  }
+
+  private async doAnchorEvent(
+    input: AnchorEventInput,
+    options?: ChainSubmitOptions
+  ): Promise<AnchorResult> {
     if (!Bytes32HexSchema.safeParse(input.data_hash).success) {
       throw new AppError(
         422,
@@ -139,32 +153,49 @@ export class SorobanAdapter implements ChainAdapter {
     });
   }
 
-  async releaseEscrow(
+  releaseEscrow(input: ReleaseEscrowInput, options?: ChainSubmitOptions): Promise<EscrowResult> {
+    return instrumentSubmission('release_escrow', () => this.doReleaseEscrow(input, options));
+  }
+
+  private async doReleaseEscrow(
     input: ReleaseEscrowInput,
     options?: ChainSubmitOptions
   ): Promise<EscrowResult> {
-    if (!Bytes32HexSchema.safeParse(input.proof_hash).success) {
+    // v2 (#1056): real contract signature is (caller, shipment_id). Escrow is
+    // per-shipment, so no payment_id/proof_hash are invented here.
+    if (!AddressSchema.safeParse(input.caller).success) {
       throw new AppError(
         422,
-        'proof_hash must be 32 bytes of lowercase hex',
-        ErrorCodes.CHAIN_INVALID_PROOF
+        'caller must be a valid Stellar address',
+        ErrorCodes.CHAIN_UNAUTHORIZED
+      );
+    }
+    if (!SymbolSchema.safeParse(input.shipment_id).success) {
+      throw new AppError(
+        422,
+        'shipment_id must be a valid Soroban Symbol',
+        ErrorCodes.CHAIN_UNKNOWN
       );
     }
 
     const contract = this.getContract();
-    const key = this.idempotencyKey('release_escrow', options, options?.shipmentId ?? '');
+    const key = this.idempotencyKey(
+      'release_escrow',
+      options,
+      options?.shipmentId ?? input.shipment_id
+    );
 
     return this.submitOnce(key, async () => {
       await this.preflight({});
 
       const op = contract.call(
         'release_escrow',
-        nativeToScVal(input.payment_id, { type: 'symbol' }),
-        nativeToScVal(Buffer.from(input.proof_hash, 'hex'), { type: 'bytes' })
+        new Address(input.caller).toScVal(),
+        nativeToScVal(input.shipment_id, { type: 'symbol' })
       );
 
       const { txHash, ledger } = await this.submitWithRetry(op);
-      return { txHash, ledger, simulated: false, paymentId: input.payment_id };
+      return { txHash, ledger, simulated: false, shipmentId: input.shipment_id };
     });
   }
 
@@ -289,6 +320,46 @@ export class SorobanAdapter implements ChainAdapter {
     return undefined;
   }
 
+  async updateStatus(input: UpdateStatusInput): Promise<UpdateStatusResult> {
+    // Validates against the real ABI: caller Address, shipment_id u64, ShipmentStatus
+    // variant name, data_hash BytesN<32>. Fails before any RPC call.
+    const parsed = UpdateStatusArgsSchema.safeParse(input);
+    if (!parsed.success) {
+      const hashIssue = parsed.error.issues.some(i => i.path[0] === 'data_hash');
+      throw new AppError(
+        422,
+        'update_status arguments do not match the contract ABI',
+        hashIssue ? ErrorCodes.CHAIN_INVALID_HASH : ErrorCodes.CHAIN_UNKNOWN,
+        parsed.error.issues
+      );
+    }
+    const args = parsed.data;
+
+    const contract = this.getContract();
+    const op = contract.call(
+      'update_status',
+      new Address(args.caller).toScVal(),
+      nativeToScVal(BigInt(args.shipment_id), { type: 'u64' }),
+      // #[contracttype] unit-variant enum == ScVal vec [Symbol(VariantName)]
+      nativeToScVal([args.new_status], { type: ['symbol'] }),
+      // data_hash is forwarded exactly as supplied — hex -> 32 raw bytes, no hashing.
+      nativeToScVal(Buffer.from(args.data_hash, 'hex'), { type: 'bytes' })
+    );
+
+    const { txHash, ledger } = await this.invokePipeline(
+      op,
+      undefined,
+      updateStatusErrorToAppError
+    );
+    return {
+      txHash,
+      ledger,
+      simulated: false,
+      shipmentId: args.shipment_id,
+      newStatus: args.new_status,
+    };
+  }
+
   async *streamEvents(cursor?: ChainEventCursor): AsyncIterable<ChainEvent> {
     if (!this.contractId) return;
 
@@ -347,7 +418,8 @@ export class SorobanAdapter implements ChainAdapter {
    */
   private async invokePipeline(
     op: ReturnType<Contract['call']>,
-    onSent?: (txHash: string) => void
+    onSent?: (txHash: string) => void,
+    decodeContractError: (code: number) => AppError = chainErrorToAppError
   ): Promise<{ txHash: string; ledger: number }> {
     const keypair = this.signer();
     const sourceAccount = await this.server.getAccount(keypair.publicKey()).catch(() => {
@@ -367,13 +439,9 @@ export class SorobanAdapter implements ChainAdapter {
     if (rpc.Api.isSimulationError(simRes)) {
       const contractErrorMatch = String(simRes.error).match(/Error\(Contract, #(\d+)\)/);
       if (contractErrorMatch?.[1]) {
-        throw chainErrorToAppError(parseInt(contractErrorMatch[1], 10));
+        throw decodeContractError(parseInt(contractErrorMatch[1], 10));
       }
-      throw new AppError(
-        400,
-        `Soroban simulation failed: ${simRes.error}`,
-        ErrorCodes.CHAIN_UNKNOWN
-      );
+      throw new AppError(400, 'Soroban simulation failed', ErrorCodes.CHAIN_UNKNOWN);
     }
 
     // 2. Assemble
@@ -385,7 +453,7 @@ export class SorobanAdapter implements ChainAdapter {
     // 4. Send
     const sendRes = await this.server.sendTransaction(assembled);
     if (sendRes.status === 'ERROR') {
-      throw new AppError(400, `Soroban sendTransaction failed`, ErrorCodes.CHAIN_UNKNOWN, sendRes);
+      throw new AppError(400, 'Soroban sendTransaction failed', ErrorCodes.CHAIN_UNKNOWN);
     }
     if (sendRes.status === 'TRY_AGAIN_LATER') {
       // Not queued, so there is nothing to look up later; the retry can resend.
@@ -412,8 +480,7 @@ export class SorobanAdapter implements ChainAdapter {
         throw new AppError(
           400,
           'Soroban transaction execution failed on-chain',
-          ErrorCodes.CHAIN_UNKNOWN,
-          statusRes
+          ErrorCodes.CHAIN_UNKNOWN
         );
       }
       if (Date.now() - startTime > timeoutMs) {

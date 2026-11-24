@@ -79,6 +79,9 @@ const EnvShape = z.object({
   SOROBAN_ADAPTER: z.enum(['simulated', 'soroban']).default('simulated'),
   SOROBAN_RPC_URL: z.string().url('SOROBAN_RPC_URL must be a valid URL').optional(),
   ESCROW_CONTRACT_ID: z.string().min(1).optional(),
+  // #1058 — ledger confirmation threshold per network for anchored events.
+  CHAIN_CONFIRMATIONS_TESTNET: z.coerce.number().int().min(0).max(1000).default(3),
+  CHAIN_CONFIRMATIONS_PUBLIC: z.coerce.number().int().min(0).max(1000).default(3),
 
   // Chain preflight (#1081): read-only checks run before a submission is signed.
   // Off by default because they call contract view functions the deployed contract may
@@ -111,6 +114,15 @@ const EnvShape = z.object({
 
   // Observability
   SENTRY_DSN: z.string().url('SENTRY_DSN must be a valid URL').optional(),
+
+  // Prometheus metrics (#1044). The endpoint is disabled unless METRICS_TOKEN is set.
+  METRICS_TOKEN: z
+    .string()
+    .trim()
+    .min(16, 'METRICS_TOKEN must be at least 16 characters')
+    .optional(),
+  /** Scrape port for worker processes (stellar worker, indexer). Requires METRICS_TOKEN. */
+  METRICS_PORT: z.coerce.number().int().min(1).max(65535).optional(),
 
   // Frontend
   FRONTEND_URL: z.string().url('FRONTEND_URL must be a valid URL').default('http://localhost:3000'),

@@ -8,7 +8,7 @@ import {
 import type { ChainAdapter } from '../src/services/chain/types.js';
 import { CHAIN_EVENT_NAMES } from '../src/shared/types/chain.js';
 import type { ChainEvent } from '../src/shared/types/chain.js';
-import { createMockPayment, createMockShipment } from './fixtures/factories.js';
+import { createMockShipment } from './fixtures/factories.js';
 
 const ledgerUpdateOneMock = jest.fn();
 const paymentFindOneAndUpdateMock = jest.fn((): { lean: () => Promise<unknown> } => ({
@@ -58,29 +58,6 @@ const { indexStellarTransactions } = await import('../src/workers/stellar-indexe
 
 const CONTRACT_ID = 'CACAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAINCW';
 const PAYEE = 'GAAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQDZ7H';
-
-function adapterStreaming(events: ChainEvent[]): ChainAdapter {
-  return {
-    async anchorEvent() {
-      throw new Error('Not implemented');
-    },
-    async releaseEscrow() {
-      throw new Error('Not implemented');
-    },
-    async *streamEvents() {
-      yield* events;
-    },
-  };
-}
-
-/** The `$set` stage of the n-th (0-based) LedgerBlock upsert. */
-function nthSet(n: number): Record<string, unknown> {
-  const [, update] = ledgerUpdateOneMock.mock.calls[n] as [
-    unknown,
-    { $set: Record<string, unknown> },
-  ];
-  return update.$set;
-}
 
 describe('stellar indexer worker - event driven', () => {
   beforeEach(() => {
@@ -148,9 +125,8 @@ describe('stellar indexer worker - event driven', () => {
       { upsert: true }
     );
 
-    // Tightened field assertions (#970): milestoneEvent (never legacy eventType) in $set
-    // only (a path in both $set and $setOnInsert is a MongoDB update conflict), and
-    // top-level dataHash matching the event hash.
+    // Tightened field assertions (#970): milestoneEvent (never legacy eventType)
+    // in $set only (Mongo rejects both operators), and top-level dataHash matching the event hash.
     const [, anchorUpdate] = ledgerUpdateOneMock.mock.calls[0] as [
       unknown,
       { $set: Record<string, unknown>; $setOnInsert: Record<string, unknown> },

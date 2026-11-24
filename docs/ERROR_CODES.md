@@ -28,6 +28,7 @@ All error codes follow the naming convention: `ERR_<DOMAIN>_<DESCRIPTION>` or `E
 | **500**     | `ERR_STELLAR_CONFIG`              | Stellar server-side configuration missing                                | Anchor / webhook / signing endpoints                             | `STELLAR_SECRET_KEY` or webhook secret not configured                        |
 | **400**     | `ERR_STELLAR_INVALID_HASH`        | Invalid Stellar data hash                                                | Anchor / memo verification endpoints                             | Empty or malformed hash payload                                              |
 | **404**     | `ERR_LEDGER_BLOCK_NOT_FOUND`      | Ledger block not found                                                   | `GET /api/ledger/blocks/:id`                                     | Block height/hash does not exist                                             |
+| **422**     | `ERR_LEDGER_PAYLOAD_INVALID`      | Stored canonical payload is malformed (not a versioned object)           | `GET /api/ledger/blocks/:id/verification`                        | Block cannot be independently verified                                       |
 | **409**     | `ERR_DUPLICATE_KEY`               | Unique constraint violation                                              | `POST /api/auth/signup`, `POST /api/users`                       | Email already registered, duplicate field value                              |
 | **429**     | `ERR_RATE_LIMIT_EXCEEDED`         | Too many requests (rate limit exceeded)                                  | OTP / SMS endpoints (e.g. resend), throttled routes              | Retry only after the delay indicated by the `Retry-After` response header    |
 | **500**     | `ERR_INTERNAL_SERVER_ERROR`       | Unhandled server error                                                   | All endpoints                                                    | Unexpected error in backend processing                                       |
@@ -113,6 +114,8 @@ Content-Type: application/json
 - `ERR_FILE_DELETE_FAILED` (502) — Provider rejected the delete (#701)
 - `ERR_FILE_TOO_LARGE` (413) — Upload exceeds the configured size cap
 - `ERR_INVALID_MIME_TYPE` (415) — Upload MIME type is not accepted
+- `ERR_IDEMPOTENCY_IN_PROGRESS` (409) — A request with the same `Idempotency-Key` is still being processed; retry shortly
+- `ERR_IDEMPOTENCY_KEY_REUSED` (422) — `Idempotency-Key` was already used with a different request body
 - `ERR_INVALID_DOCUMENT_TYPE` (415) — Uploaded document type is not accepted
 - `ERR_PHOTO_LIMIT_EXCEEDED` (400) — Photo count limit reached for this resource
 

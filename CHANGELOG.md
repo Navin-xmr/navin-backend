@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `SorobanAdapter` submission reliability: bounded retry with exponential backoff for timeouts (`ERR_CHAIN_SUBMISSION_TIMEOUT`), a chain-state duplicate check before each retry, and deterministic idempotency keys from `(shipment_id, event_type, event_counter)` via the optional `ChainSubmitOptions` argument. New env vars `CHAIN_SUBMIT_MAX_ATTEMPTS`, `CHAIN_SUBMIT_BACKOFF_MS`, `CHAIN_SUBMIT_BACKOFF_MAX_MS` (#1078).
 - Configurable on-chain preflight checks before submission (initialized, Company/Carrier roles, carrier whitelist, suspension, 7-decimal token) with `ERR_CHAIN_NOT_INITIALIZED`, `ERR_CHAIN_ROLE_REQUIRED`, `ERR_CHAIN_CARRIER_NOT_WHITELISTED`, `ERR_CHAIN_ACTOR_SUSPENDED` and `ERR_CHAIN_INVALID_TOKEN_DECIMALS`. Off by default (`CHAIN_PREFLIGHT_ENABLED`); the contract view functions it calls are assumed and documented (#1081).
 - Three-ledger Stellar confirmation tracking for released payments and telemetry anchors, with immediate confirmations in simulated mode (#838, #837).
+- Chain spec **v2.0.0**: `release_escrow(caller, shipment_id)` replaces the backend-invented `(payment_id, proof_hash)` input; release receipts now carry `shipmentId` and failures reject with coded `ERR_CHAIN_UNAUTHORIZED` / `ERR_CHAIN_INVALID_STATUS` instead of `{ success: false }` (#1056).
+- Confirmation depth (`confirmations` / `verified`) on every anchored ledger event class, per-network thresholds via `CHAIN_CONFIRMATIONS_TESTNET` / `CHAIN_CONFIRMATIONS_PUBLIC`, and idempotent re-verification (#1058).
+- V2 schema round-trip/mutation suite (`tests/chain.v2.schemas.test.ts`, `reports/chain-schema-coverage.md`) and chain threat model with negative tests (`docs/chain-threat-model.md`) (#1057, #1059).
 
 **Phase 6 — Hash-and-Emit chain architecture**
 
