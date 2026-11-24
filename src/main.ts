@@ -13,7 +13,9 @@ import { startMaintenanceWorker, scheduleMaintenanceJobs } from './workers/maint
 import { logger } from './shared/logger/logger.js';
 
 async function main() {
-  validateChainAdapterForEnvironment();
+  validateChainAdapterForEnvironment({
+    strict: process.env.CHAIN_ADAPTER_STRICT === 'true',
+  });
   await connectMongo(config.mongoUri);
 
   const app = buildApp();

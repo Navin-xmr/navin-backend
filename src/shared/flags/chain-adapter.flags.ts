@@ -34,14 +34,17 @@ import { logger } from '../logger/logger.js';
  *
  * @throws {Error} if production is misconfigured with simulated adapter
  */
-export function validateChainAdapterForEnvironment(): void {
+export function validateChainAdapterForEnvironment(options: { strict?: boolean } = {}): void {
+  const strict = options.strict ?? true;
   const adapter = config.chainAdapter;
   const env: string = config.nodeEnv;
 
   if (env === 'production' && adapter === 'simulated') {
     const message = `FATAL: SOROBAN_ADAPTER=simulated in production. Escrow operations must use live Soroban contracts (SOROBAN_ADAPTER=soroban).`;
     logger.error(message);
-    throw new Error(message);
+    if (strict) {
+      throw new Error(message);
+    }
   }
 
   if (env !== 'production' && adapter === 'soroban') {
