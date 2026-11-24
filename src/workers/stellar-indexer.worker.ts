@@ -10,7 +10,7 @@ import { PaymentModel, PaymentStatus } from '../modules/payments/payments.model.
 import { Telemetry, TelemetryAnchorStatus } from '../modules/telemetry/telemetry.model.js';
 import { emitPaymentStatusChange } from '../infra/socket/io.js';
 import { MilestoneEvent } from '../shared/types/shipment.js';
-import { CHAIN_EVENT_NAMES } from '../shared/types/chain.js';
+import { CHAIN_EVENT_NAMES, CHAIN_SPEC_VERSION } from '../shared/types/chain.js';
 import type { ChainAdapter } from '../services/chain/types.js';
 import { getChainAdapter } from '../services/chain/factory.js';
 import { isChainEventDecodeFailure, parseChainEvent } from '../shared/types/chain.js';
@@ -20,6 +20,7 @@ import {
   observeConfirmationLag,
   recordIndexerCursorEvent,
   recordIndexerPoll,
+  recordContractVersion,
 } from '../infra/metrics/chainMetrics.js';
 import { startMetricsServer } from '../infra/metrics/metricsServer.js';
 import { logger } from '../shared/logger/logger.js';
@@ -87,6 +88,25 @@ export async function seedCursorAgeMetric(key = 'stellar_indexer'): Promise<void
 /** #1058 — ledger confirmation threshold for the configured network. */
 export function confirmationThreshold(): number {
   return config.chainConfirmations[config.stellarNetwork];
+}
+
+/**
+ * #P15-02 — validates observed contract version against backend CHAIN_SPEC_VERSION.
+ * When a mismatch is observed, logs an alert and triggers metrics alerting.
+ */
+export function checkAndAlertContractVersion(
+  observedVersion: string,
+  context: Record<string, unknown> = {}
+): boolean {
+  const isMatch = observedVersion === CHAIN_SPEC_VERSION;
+  recordContractVersion(observedVersion, CHAIN_SPEC_VERSION);
+  if (!isMatch) {
+    logger.error(
+      { observedVersion, expectedVersion: CHAIN_SPEC_VERSION, ...context },
+      'ALERT: Contract version mismatch detected on chain'
+    );
+  }
+  return isMatch;
 }
 
 /**
@@ -412,6 +432,23 @@ export async function indexStellarTransactions(
       ledgerClosedAt: event.ledger_closed_at,
       indexedAt: new Date().toISOString(),
     };
+
+    const rawEvent = event as { name?: string; data?: unknown[]; tx_hash?: string };
+    if (
+      rawEvent.name === 'contract_upgraded' ||
+      rawEvent.name === 'upgrade' ||
+      rawEvent.name === 'migrated'
+    ) {
+      const version =
+        typeof rawEvent.data?.[0] === 'string'
+          ? rawEvent.data[0]
+          : String(rawEvent.data?.[0] ?? '');
+      checkAndAlertContractVersion(version, {
+        eventName: rawEvent.name,
+        txHash: rawEvent.tx_hash,
+      });
+      continue;
+    }
 
     if (event.name === CHAIN_EVENT_NAMES.ANCHOR) {
       milestoneEvent = MilestoneEvent.IN_TRANSIT;

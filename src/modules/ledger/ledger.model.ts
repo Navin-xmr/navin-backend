@@ -109,6 +109,13 @@ LedgerBlockSchema.index({ dataHash: 1 }, { sparse: true });
 // #1058 — supports idempotent re-verification scans of not-yet-confirmed blocks.
 LedgerBlockSchema.index({ verified: 1, ledger: 1 });
 
+// P13-02 — DB-enforced deduplication on idempotencyKey.
+// Partial index excludes legacy rows without a key so they remain unaffected.
+LedgerBlockSchema.index(
+  { idempotencyKey: 1 },
+  { unique: true, partialFilterExpression: { idempotencyKey: { $type: 'string' } } }
+);
+
 // Soft delete middleware
 LedgerBlockSchema.pre(['find', 'findOne', 'findOneAndUpdate', 'countDocuments'], function () {
   this.where({ deletedAt: null });
