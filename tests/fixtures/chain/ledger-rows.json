@@ -1,5 +1,5 @@
 {
-  "spec_version": "1.0.0-draft",
+  "spec_version": "2.1.0",
   "description": "Exact LedgerBlock rows the indexer must persist for tests/fixtures/chain/events.json, in ledger order. metadata.indexedAt is wall-clock and is asserted separately. Regenerate deliberately: any change here is a change to the indexed ledger contract.",
   "rows": [
     {
