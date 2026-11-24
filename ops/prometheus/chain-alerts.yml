@@ -48,3 +48,12 @@ groups:
         labels: { severity: info }
         annotations:
           { summary: 'No new chain events processed for 30 minutes (indexer is polling)' }
+
+      - alert: NavinContractVersionMismatch
+        # #P15-02 — fires immediately when on-chain version differs from backend spec version
+        expr: navin_chain_contract_version_mismatch > 0
+        for: 1m
+        labels: { severity: page }
+        annotations:
+          summary: 'Contract version mismatch detected on chain'
+          description: 'On-chain contract reported a version differing from backend CHAIN_SPEC_VERSION. Follow docs/runbooks/contract-upgrade.md to reconcile projections.'

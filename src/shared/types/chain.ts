@@ -365,6 +365,22 @@ export type DisputeResolvedEvent = z.infer<typeof DisputeResolvedEventSchema>;
 export type EscrowFrozenEvent = z.infer<typeof EscrowFrozenEventSchema>;
 export type ChainEvent = z.infer<typeof ChainEventSchema>;
 
+/** An RPC event that could not be decoded, retained for indexing and replay. */
+export interface ChainEventDecodeFailure {
+  kind: 'decode_error';
+  cursor: string;
+  contract_id: string;
+  raw_payload: unknown;
+  candidate_payload: unknown;
+  error: string;
+}
+
+export function isChainEventDecodeFailure(
+  event: ChainEvent | ChainEventDecodeFailure
+): event is ChainEventDecodeFailure {
+  return 'kind' in event && event.kind === 'decode_error';
+}
+
 // ─── Event verification / confirmation depth (v2, #1058) ────────────────────
 
 /** Default ledgers required before an anchored record is treated as `verified`. */

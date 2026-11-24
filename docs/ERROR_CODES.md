@@ -204,6 +204,26 @@ Mapped from Soroban contract errors by `chainErrorToAppError()` in `src/shared/t
 - `ERR_CHAIN_INVALID_PROOF` (422) — Contract `InvalidProof` (8)
 - `ERR_CHAIN_UNKNOWN` (502) — Contract error code not in the spec (spec drift)
 - `ERR_CHAIN_INVALID_EVENT` (502) — Indexed contract event failed spec validation
+- `ERR_CHAIN_FEE_BUDGET_EXCEEDED` (503) — Soroban simulation exceeded the configured fee or resource ceilings; retry only after reviewing congestion/resource usage
+- `ERR_CHAIN_SUBMISSION_TIMEOUT` (504, or 503 when the RPC asks to retry later) — A sent transaction was not confirmed within the polling window. Retried automatically (see Submission reliability); if all attempts time out this is what the caller receives. `details.txHash` is the unconfirmed transaction when one was sent.
+- `ERR_CHAIN_INVALID_IDEMPOTENCY_KEY` (422) — `ChainSubmitOptions` had an empty `shipment_id` / `event_type` or an `event_counter` that is not a non-negative integer.
+
+#### Preflight failures (`CHAIN_PREFLIGHT_ENABLED=true`)
+
+Returned before anything is signed. Each message says what to fix on the contract.
+
+- `ERR_CHAIN_NOT_INITIALIZED` (503) — The escrow contract has not been initialized. Call `initialize()` on the contract.
+- `ERR_CHAIN_ROLE_REQUIRED` (403) — The acting address holds neither the Company nor the Carrier role. `details`: `{ actor, requiredRoles }`.
+- `ERR_CHAIN_CARRIER_NOT_WHITELISTED` (403) — The actor is a Carrier (and not a Company) that has not been whitelisted. `details`: `{ actor }`.
+- `ERR_CHAIN_ACTOR_SUSPENDED` (403) — The acting address is suspended on the contract. `details`: `{ actor }`.
+- `ERR_CHAIN_INVALID_TOKEN_DECIMALS` (422) — The escrow token does not have 7 decimals. `details`: `{ token, decimals, expected }`.
+
+### Webhook Errors
+
+- `ERR_WEBHOOKS_ENCRYPTION_KEY_MISSING` (503) — Chain webhook encryption key is required to create a subscription
+- `ERR_WEBHOOKS_INVALID_SECRET` (500) — Stored chain webhook signing secret is malformed or cannot be decrypted
+- `ERR_WEBHOOKS_DELIVERY_FAILED` (502) — External chain webhook delivery failed and will be retried
+- `ERR_WEBHOOKS_ENDPOINT_NOT_PUBLIC` (400) — Subscriber endpoint resolved to a private or reserved address
 
 ### Server Errors
 
@@ -301,6 +321,11 @@ A: No. Always check the `code` field for precise error type identification, as m
 A: No. Error messages are currently English only. Frontend teams should map error codes to localized messages.
 
 ## Changelog
+
+### Version 1.4.0
+
+- Added `ERR_CHAIN_SUBMISSION_TIMEOUT` and `ERR_CHAIN_INVALID_IDEMPOTENCY_KEY` (#1078)
+- Added preflight codes `ERR_CHAIN_NOT_INITIALIZED`, `ERR_CHAIN_ROLE_REQUIRED`, `ERR_CHAIN_CARRIER_NOT_WHITELISTED`, `ERR_CHAIN_ACTOR_SUSPENDED`, `ERR_CHAIN_INVALID_TOKEN_DECIMALS` (#1081)
 
 ### Version 1.3.0
 
