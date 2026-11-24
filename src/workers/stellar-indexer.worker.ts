@@ -13,9 +13,15 @@ import { MilestoneEvent } from '../shared/types/shipment.js';
 import { CHAIN_EVENT_NAMES } from '../shared/types/chain.js';
 import type { ChainAdapter } from '../services/chain/types.js';
 import { getChainAdapter } from '../services/chain/factory.js';
-import { parseChainEvent } from '../shared/types/chain.js';
+import { isChainEventDecodeFailure, parseChainEvent } from '../shared/types/chain.js';
 import type { ChainEvent, ChainEventDecodeFailure } from '../shared/types/chain.js';
 import { confirmAnchoredTelemetry } from '../modules/telemetry/telemetry.confirmation.js';
+import {
+  observeConfirmationLag,
+  recordIndexerCursorEvent,
+  recordIndexerPoll,
+} from '../infra/metrics/chainMetrics.js';
+import { startMetricsServer } from '../infra/metrics/metricsServer.js';
 import { logger } from '../shared/logger/logger.js';
 import { dispatchAlert } from '../services/queue.service.js';
 import { IndexerDeadLetterModel } from './indexer-dead-letter.model.js';
@@ -27,6 +33,8 @@ const IndexerStateSchema = new Schema(
   {
     key: { type: String, required: true, unique: true },
     cursor: { type: String, required: true },
+    /** #1044 — ledger close time of the event `cursor` points at; drives cursor-age metrics. */
+    cursorEventAt: { type: Date },
   },
   { timestamps: true }
 );
@@ -34,6 +42,7 @@ const IndexerStateSchema = new Schema(
 export interface IndexerStateDocument {
   key: string;
   cursor: string;
+  cursorEventAt?: Date;
 }
 
 export const IndexerStateModel =
@@ -49,18 +58,92 @@ export async function getStoredCursor(key = 'stellar_indexer'): Promise<string |
   }
 }
 
-export async function saveStoredCursor(cursor: string, key = 'stellar_indexer'): Promise<void> {
+export async function saveStoredCursor(
+  cursor: string,
+  key = 'stellar_indexer',
+  eventAt?: Date
+): Promise<void> {
   try {
-    await IndexerStateModel.updateOne({ key }, { $set: { cursor } }, { upsert: true });
+    await IndexerStateModel.updateOne(
+      { key },
+      { $set: { cursor, ...(eventAt && { cursorEventAt: eventAt }) } },
+      { upsert: true }
+    );
   } catch {
     // Graceful fallback for un-connected DB in isolated unit tests
   }
 }
 
+/** #1044 — restores cursor-age after a restart from the persisted event time. */
+export async function seedCursorAgeMetric(key = 'stellar_indexer'): Promise<void> {
+  try {
+    const doc = await IndexerStateModel.findOne({ key }).lean<{ cursorEventAt?: Date }>();
+    recordIndexerCursorEvent(doc?.cursorEventAt);
+  } catch {
+    // Metrics only — never fail the indexer.
+  }
+}
+
+/** #1058 — ledger confirmation threshold for the configured network. */
+export function confirmationThreshold(): number {
+  return config.chainConfirmations[config.stellarNetwork];
+}
+
+/**
+ * Idempotently advance `confirmations`/`verified` for every anchored event class
+ * (shipment anchors, status updates, milestones and escrow). Re-running at a
+ * higher head only moves rows forward; confirmed rows are never downgraded.
+ */
+export async function reverifyAnchoredBlocks(
+  adapter: ChainAdapter,
+  threshold: number = confirmationThreshold()
+): Promise<number> {
+  let reverified = 0;
+  type PendingBlock = {
+    _id: string;
+    ledger: number;
+    confirmations?: number;
+    metadata?: { eventName?: string; ledgerClosedAt?: string };
+  };
+  let pending: PendingBlock[];
+  try {
+    pending = await LedgerBlock.find({ verified: { $ne: true } }).lean<PendingBlock[]>();
+  } catch {
+    // Graceful fallback for un-connected DB in isolated unit tests
+    return 0;
+  }
+
+  for (const block of pending) {
+    const confirmations = await adapter.getConfirmationCount(block.ledger);
+    const verified = confirmations >= threshold;
+    if (confirmations < (block.confirmations ?? 0)) continue;
+    if (!verified && confirmations === (block.confirmations ?? 0)) continue;
+    await LedgerBlock.updateOne({ _id: block._id }, { $set: { confirmations, verified } });
+    if (verified) {
+      reverified += 1;
+      // #1044 — lag from the chain event time to the moment verification succeeded.
+      observeConfirmationLag(block.metadata?.eventName ?? '', block.metadata?.ledgerClosedAt);
+    }
+  }
+  return reverified;
+}
+
+export interface IndexOptions {
+  /** #1063 — report what would change without writing anything. */
+  dryRun?: boolean;
+  /** #1063 — advance the live indexer cursor. Replays set this to false. Default true. */
+  persistCursor?: boolean;
+}
+
 export interface IndexerSummary {
   processed: number;
+  /** In dry-run mode: rows that would be inserted. */
   upserted: number;
+  /** #1063 — dry-run only: rows that already exist and would be refreshed. */
+  existing?: number;
   lastCursor?: string;
+  /** #1058 — rows promoted to verified by the reconciliation pass. */
+  reverified?: number;
 }
 
 interface ConfirmablePayment {
@@ -99,7 +182,7 @@ async function recordTelemetryConfirmation(
   const confirmationMetadata = {
     ledger,
     confirmations,
-    verified: confirmations >= 3,
+    verified: confirmations >= confirmationThreshold(),
     indexedAt: new Date().toISOString(),
   };
   const filter = {
@@ -107,7 +190,7 @@ async function recordTelemetryConfirmation(
     anchorStatus: TelemetryAnchorStatus.ANCHORED,
   };
 
-  if (confirmations < 3) {
+  if (confirmations < confirmationThreshold()) {
     await Telemetry.updateOne(filter, {
       $set: { stellarTxLedger: ledger, confirmationMetadata },
     });
@@ -145,13 +228,16 @@ async function recordPaymentConfirmation(
     {
       stellarTxHash,
       status: PaymentStatus.RELEASED,
-      $or: [{ confirmations: { $lt: 3 } }, { confirmations: { $exists: false } }],
+      $or: [
+        { confirmations: { $lt: confirmationThreshold() } },
+        { confirmations: { $exists: false } },
+      ],
     },
     { $set: { stellarTxLedger: ledger, confirmations } },
     { new: true }
   ).lean<ConfirmablePayment>();
 
-  if (confirmations >= 3 && payment) {
+  if (confirmations >= confirmationThreshold() && payment) {
     emitConfirmedSettlement(payment);
   }
 }
@@ -160,7 +246,10 @@ async function updatePendingConfirmations(adapter: ChainAdapter): Promise<void> 
   const pendingPayments = await PaymentModel.find({
     status: PaymentStatus.RELEASED,
     stellarTxLedger: { $exists: true },
-    $or: [{ confirmations: { $lt: 3 } }, { confirmations: { $exists: false } }],
+    $or: [
+      { confirmations: { $lt: confirmationThreshold() } },
+      { confirmations: { $exists: false } },
+    ],
   }).lean<ConfirmablePayment[]>();
 
   for (const payment of pendingPayments) {
@@ -172,7 +261,7 @@ async function updatePendingConfirmations(adapter: ChainAdapter): Promise<void> 
     stellarTxLedger: { $exists: true },
     verified: { $ne: true },
     $or: [
-      { 'confirmationMetadata.confirmations': { $lt: 3 } },
+      { 'confirmationMetadata.confirmations': { $lt: confirmationThreshold() } },
       { 'confirmationMetadata.confirmations': { $exists: false } },
     ],
   }).lean<ConfirmableTelemetry[]>();
@@ -280,32 +369,132 @@ async function persistMalformedEvent(event: ChainEventDecodeFailure): Promise<vo
  */
 export async function indexStellarTransactions(
   adapter: ChainAdapter = getChainAdapter(),
-  initialCursor?: string
+  initialCursor?: string,
+  options: IndexOptions = {}
 ): Promise<IndexerSummary> {
+  const { dryRun = false, persistCursor = true } = options;
   let cursor = initialCursor ?? (await getStoredCursor());
   let processed = 0;
   let upserted = 0;
+  let existing = 0;
 
-  for await (const event of adapter.streamEvents(cursor)) {
+  const stream = adapter.streamEventsWithFailures
+    ? adapter.streamEventsWithFailures(cursor)
+    : adapter.streamEvents(cursor);
+
+  for await (const event of stream) {
     processed += 1;
-    if ('kind' in event && event.kind === 'decode_error') {
+    if (isChainEventDecodeFailure(event)) {
       await persistMalformedEvent(event);
-      cursor = event.cursor || cursor;
-      if (cursor) await saveStoredCursor(cursor);
+      if (event.cursor) {
+        cursor = event.cursor;
+        if (persistCursor) await saveStoredCursor(cursor);
+      }
       continue;
     }
 
     cursor = event.id;
-    if (await indexChainEvent(adapter, event)) upserted += 1;
 
-    if (cursor) {
-      await saveStoredCursor(cursor);
+    // #1058 — confirmation depth is tracked for every event class, not just payments.
+    const confirmations = await adapter.getConfirmationCount(event.ledger);
+    const verified = confirmations >= confirmationThreshold();
+
+    let milestoneEvent: MilestoneEvent;
+    let shipmentId: string;
+    /** Anchor-only; promoted to the top-level indexed `LedgerBlock.dataHash` field. */
+    let dataHash: string | undefined;
+    const metadata: Record<string, unknown> = {
+      blockNumber: event.ledger,
+      ledger: event.ledger,
+      contractId: event.contract_id,
+      eventId: event.id,
+      eventName: event.name,
+      ledgerClosedAt: event.ledger_closed_at,
+      indexedAt: new Date().toISOString(),
+    };
+
+    if (event.name === CHAIN_EVENT_NAMES.ANCHOR) {
+      milestoneEvent = MilestoneEvent.IN_TRANSIT;
+      shipmentId = event.topic[1];
+      dataHash = event.data[0];
+      metadata.dataHash = dataHash;
+    } else if (event.name === CHAIN_EVENT_NAMES.ESCROW_INIT) {
+      milestoneEvent = MilestoneEvent.SETTLEMENT_INITIATED;
+      shipmentId = event.data[0];
+      metadata.paymentId = event.topic[1];
+      metadata.payer = event.data[1];
+      metadata.payee = event.data[2];
+      metadata.token = event.data[3];
+      metadata.amount = event.data[4];
+    } else if (event.name === CHAIN_EVENT_NAMES.ESCROW_RELEASE) {
+      milestoneEvent = MilestoneEvent.SETTLEMENT_COMPLETED;
+      shipmentId = event.topic[1];
+      metadata.paymentId = event.topic[1];
+      metadata.proofHash = event.data[0];
+      metadata.payee = event.data[1];
+      metadata.amount = event.data[2];
+    } else {
+      continue;
+    }
+
+    if (dryRun) {
+      const found = await LedgerBlock.exists({ transactionHash: event.tx_hash });
+      if (found) existing += 1;
+      else upserted += 1;
+      continue;
+    }
+
+    const res = await LedgerBlock.updateOne(
+      { transactionHash: event.tx_hash },
+      {
+        // Insert-only fields. MongoDB rejects a path that appears in both $setOnInsert
+        // and $set ("would create a conflict"), so anything re-indexing should refresh
+        // (milestoneEvent, dataHash, metadata) lives in $set only.
+        $setOnInsert: {
+          shipmentId,
+          transactionHash: event.tx_hash,
+          actor: 'stellar-indexer',
+        },
+        // milestoneEvent is in $set only: Mongo rejects the same path in both operators.
+        // dataHash lives in $set (not $setOnInsert) so re-indexing backfills rows
+        // written before it was promoted; Mongo rejects a path in both operators.
+        $set: {
+          milestoneEvent,
+          metadata,
+          confirmations,
+          verified,
+          ...(dataHash !== undefined && { dataHash }),
+        },
+      },
+      { upsert: true }
+    );
+
+    if ((res as { upsertedCount?: number } | undefined)?.upsertedCount) {
+      upserted += 1;
+      // #1044 — already-confirmed on first sight; otherwise reverifyAnchoredBlocks observes it later.
+      if (verified) observeConfirmationLag(event.name, event.ledger_closed_at);
+    }
+
+    if (event.name === CHAIN_EVENT_NAMES.ANCHOR) {
+      await recordTelemetryConfirmation(adapter, event.tx_hash, event.ledger);
+    } else if (event.name === CHAIN_EVENT_NAMES.ESCROW_RELEASE) {
+      await recordPaymentConfirmation(adapter, event.tx_hash, event.ledger);
+    }
+
+    if (cursor && persistCursor) {
+      await saveStoredCursor(cursor, undefined, new Date(event.ledger_closed_at));
+      recordIndexerCursorEvent(event.ledger_closed_at);
     }
   }
 
-  await updatePendingConfirmations(adapter);
+  if (dryRun) {
+    return { processed, upserted, existing, lastCursor: cursor };
+  }
 
-  return { processed, upserted, lastCursor: cursor };
+  await updatePendingConfirmations(adapter);
+  const reverified = await reverifyAnchoredBlocks(adapter);
+
+  return { processed, upserted, lastCursor: cursor, reverified };
 }
 
 export interface DeadLetterReplaySummary {
@@ -335,11 +524,11 @@ export async function replayIndexerDeadLetters(
       summary.replayed += 1;
     } catch (err) {
       const replayError = err instanceof Error ? err.message : String(err);
-      await IndexerDeadLetterModel.updateOne(
-        { _id: record._id },
-        { $set: { replayError } }
+      await IndexerDeadLetterModel.updateOne({ _id: record._id }, { $set: { replayError } });
+      logger.warn(
+        { deadLetterId: record._id.toString(), replayError },
+        'Dead-letter replay failed'
       );
-      logger.warn({ deadLetterId: record._id.toString(), replayError }, 'Dead-letter replay failed');
       summary.failed += 1;
     }
   }
@@ -349,7 +538,9 @@ export async function replayIndexerDeadLetters(
 
 async function processIndexerJob(_job: Job): Promise<IndexerSummary> {
   const adapter = getChainAdapter();
+  await seedCursorAgeMetric();
   const summary = await indexStellarTransactions(adapter);
+  recordIndexerPoll();
   logger.info(summary, 'Stellar indexer event stream cycle complete');
 
   // Confirmation tracking for anchored telemetry (#818). Runs after indexing and
@@ -373,6 +564,7 @@ async function processIndexerJob(_job: Job): Promise<IndexerSummary> {
 }
 
 export async function startStellarIndexerWorker(): Promise<Worker> {
+  startMetricsServer();
   await connectMongo(config.mongoUri);
 
   const queue = new Queue(STELLAR_INDEXER_QUEUE, { connection: getBullMQConnection() });

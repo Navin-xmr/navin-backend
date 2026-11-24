@@ -73,7 +73,7 @@ The worker uses the following environment variables:
 
 2. **Processing Steps**:
    - Fetch job from `transaction_queue`
-   - Call `anchorTelemetryHash()` to submit Stellar transaction
+   - Call `getChainAdapter().anchorEvent()` to submit the anchor transaction
    - Update MongoDB document with `stellarTxHash` and `ANCHORED` status
    - On failure: Mark as `ANCHOR_FAILED` and retry (up to 3 attempts)
 

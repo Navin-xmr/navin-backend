@@ -85,8 +85,20 @@ function adapterStreaming(events: (ChainEvent | ChainEventDecodeFailure)[]): Cha
     async releaseEscrow() {
       throw new Error('Not implemented');
     },
+    async updateStatus() {
+      throw new Error('Not implemented');
+    },
     async *streamEvents() {
+      for (const event of events) {
+        if ('kind' in event && event.kind === 'decode_error') continue;
+        yield event;
+      }
+    },
+    async *streamEventsWithFailures() {
       yield* events;
+    },
+    async getConfirmationCount() {
+      return 3;
     },
   };
 }
@@ -99,7 +111,6 @@ function nthSet(n: number): Record<string, unknown> {
   ];
   return update.$set;
 }
-
 describe('stellar indexer worker - event driven', () => {
   beforeEach(() => {
     ledgerUpdateOneMock.mockReset();
@@ -237,7 +248,6 @@ describe('stellar indexer worker - event driven', () => {
       expect.objectContaining({
         $setOnInsert: {
           shipmentId: shipment._id,
-          milestoneEvent: 'IN_TRANSIT',
           transactionHash: mockEvents[0].tx_hash,
           actor: 'stellar-indexer',
         },
@@ -250,12 +260,12 @@ describe('stellar indexer worker - event driven', () => {
     );
 
     // Tightened field assertions (#970): milestoneEvent (never legacy eventType)
-    // in both operators, and top-level dataHash matching the event hash.
+    // in $set only (Mongo rejects both operators), and top-level dataHash matching the event hash.
     const [, anchorUpdate] = ledgerUpdateOneMock.mock.calls[0] as [
       unknown,
       { $set: Record<string, unknown>; $setOnInsert: Record<string, unknown> },
     ];
-    expect(anchorUpdate.$setOnInsert.milestoneEvent).toBe('IN_TRANSIT');
+    expect(anchorUpdate.$setOnInsert).not.toHaveProperty('milestoneEvent');
     expect(anchorUpdate.$setOnInsert).not.toHaveProperty('eventType');
     expect(anchorUpdate.$set.milestoneEvent).toBe('IN_TRANSIT');
     expect(anchorUpdate.$set).not.toHaveProperty('eventType');
@@ -287,7 +297,7 @@ describe('stellar indexer worker - event driven', () => {
       unknown,
       { $set: Record<string, unknown>; $setOnInsert: Record<string, unknown> },
     ];
-    expect(update.$setOnInsert.milestoneEvent).toBe('SETTLEMENT_INITIATED');
+    expect(update.$setOnInsert).not.toHaveProperty('milestoneEvent');
     expect(update.$setOnInsert).not.toHaveProperty('eventType');
     expect(update.$set.milestoneEvent).toBe('SETTLEMENT_INITIATED');
     expect(update.$set).not.toHaveProperty('eventType');

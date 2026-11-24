@@ -1,13 +1,16 @@
 import { describe, expect, it, jest, beforeEach } from '@jest/globals';
 import { rpc } from '@stellar/stellar-sdk';
 import { SorobanAdapter } from '../src/services/chain/soroban.adapter.js';
-import { AppError, ErrorCodes } from '../src/shared/http/errors.js';
+import { ErrorCodes } from '../src/shared/http/errors.js';
 
 describe('SorobanAdapter pipeline', () => {
   const mockSecretKey = 'SDW5W3FNA2J7FPGG6JQKQ7E5J67VMBZ3J27K4X6K4T4M7Z4K4X6K4T4M'; // Sample test secret key
 
   it('rejects invalid data_hash in anchorEvent before RPC call', async () => {
-    const adapter = new SorobanAdapter({ secretKey: mockSecretKey, contractId: 'CACAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAINCW' });
+    const adapter = new SorobanAdapter({
+      secretKey: mockSecretKey,
+      contractId: 'CACAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAINCW',
+    });
     await expect(
       adapter.anchorEvent({
         shipment_id: 'ship123',
@@ -20,15 +23,18 @@ describe('SorobanAdapter pipeline', () => {
     });
   });
 
-  it('rejects invalid proof_hash in releaseEscrow before RPC call', async () => {
-    const adapter = new SorobanAdapter({ secretKey: mockSecretKey, contractId: 'CACAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAINCW' });
+  it('rejects an invalid caller in releaseEscrow before RPC call (v2)', async () => {
+    const adapter = new SorobanAdapter({
+      secretKey: mockSecretKey,
+      contractId: 'CACAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAINCW',
+    });
     await expect(
       adapter.releaseEscrow({
-        payment_id: 'pay123',
-        proof_hash: 'short',
+        caller: 'not-an-address',
+        shipment_id: 'ship123',
       })
     ).rejects.toMatchObject({
-      code: ErrorCodes.CHAIN_INVALID_PROOF,
+      code: ErrorCodes.CHAIN_UNAUTHORIZED,
       statusCode: 422,
     });
   });
@@ -79,7 +85,7 @@ describe('SorobanAdapter pipeline', () => {
     });
     const events = [];
 
-    for await (const event of adapter.streamEvents()) {
+    for await (const event of adapter.streamEventsWithFailures()) {
       events.push(event);
     }
 

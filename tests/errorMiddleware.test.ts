@@ -5,6 +5,7 @@ import request from 'supertest';
 import mongoose from 'mongoose';
 import { errorMiddleware } from '../src/shared/http/errorMiddleware.js';
 import { AppError, ErrorCodes } from '../src/shared/http/errors.js';
+import { CHAIN_ERROR_MAP } from '../src/shared/types/chain.js';
 
 function buildTestApp(err: unknown) {
   const app = express();
@@ -25,6 +26,43 @@ describe('errorMiddleware', () => {
       expect(res.body.message).toBe('Not found');
       // Acceptance Criteria #93: Verify the standardized code envelope
       expect(res.body.error.code).toBe('ERR_NOT_FOUND');
+    });
+  });
+
+  describe('chain errors (ERR_CHAIN_*)', () => {
+    it('maps every ERR_CHAIN_* code through the middleware with safe details', async () => {
+      await Promise.all(
+        Object.entries(CHAIN_ERROR_MAP).map(async ([name, { code, status }]) => {
+          const app = buildTestApp(
+            new AppError(status, 'Chain contract error: ' + name, code, { contractCode: 3 })
+          );
+          const res = await request(app).get('/test');
+
+          expect(res.status).toBe(status);
+          expect(res.body.success).toBe(false);
+          expect(res.body.message).toBe('Chain contract error: ' + name);
+          expect(res.body.error.code).toBe(code);
+          expect(code).toMatch(/^ERR_CHAIN_/);
+          expect(res.body.details).toEqual({ contractCode: 3 });
+          expect(typeof res.body.details.contractCode).toBe('number');
+        })
+      );
+    });
+
+    it('covers every mapped ERR_CHAIN_* code (table test)', () => {
+      const registered = new Set(Object.values(ErrorCodes));
+      for (const entry of Object.entries(CHAIN_ERROR_MAP)) {
+        const name = entry[0];
+        const { code, status } = entry[1];
+        expect(code).toMatch(/^ERR_CHAIN_/);
+        expect(registered.has(code)).toBe(true);
+        expect([400, 403, 404, 409, 422, 502].includes(status)).toBe(true);
+        const err = new AppError(status, 'Chain contract error: ' + name, code, {
+          contractCode: 1,
+        });
+        expect(err.statusCode).toBe(status);
+        expect(err.code).toBe(code);
+      }
     });
   });
 
