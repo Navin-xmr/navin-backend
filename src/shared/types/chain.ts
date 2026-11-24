@@ -197,6 +197,7 @@ export const CHAIN_EVENT_NAMES = {
   ANCHOR: 'anchor',
   ESCROW_INIT: 'esc_init',
   ESCROW_RELEASE: 'esc_rel',
+  STATUS_UPDATED: 'status_updated',
 } as const;
 export type ChainEventName = (typeof CHAIN_EVENT_NAMES)[keyof typeof CHAIN_EVENT_NAMES];
 
@@ -246,16 +247,28 @@ export const EscrowReleaseEventSchema = z
   })
   .strict();
 
+/** topic `["status_updated", shipment_id]` · data `(old_status, new_status, data_hash)` */
+export const StatusUpdatedEventSchema = z
+  .object({
+    ...eventEnvelope,
+    name: z.literal(CHAIN_EVENT_NAMES.STATUS_UPDATED),
+    topic: z.tuple([z.literal(CHAIN_EVENT_NAMES.STATUS_UPDATED), U64StringSchema]),
+    data: z.tuple([ShipmentStatusSchema, ShipmentStatusSchema, Bytes32HexSchema]),
+  })
+  .strict();
+
 /** Runtime validator for the indexer and golden fixtures. */
 export const ChainEventSchema = z.discriminatedUnion('name', [
   AnchorEventSchema,
   EscrowInitEventSchema,
   EscrowReleaseEventSchema,
+  StatusUpdatedEventSchema,
 ]);
 
 export type AnchorEvent = z.infer<typeof AnchorEventSchema>;
 export type EscrowInitEvent = z.infer<typeof EscrowInitEventSchema>;
 export type EscrowReleaseEvent = z.infer<typeof EscrowReleaseEventSchema>;
+export type StatusUpdatedEvent = z.infer<typeof StatusUpdatedEventSchema>;
 export type ChainEvent = z.infer<typeof ChainEventSchema>;
 
 /** An RPC event that could not be decoded, retained for indexing and replay. */
