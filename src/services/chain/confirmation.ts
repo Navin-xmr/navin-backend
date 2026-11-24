@@ -8,8 +8,7 @@
  * Usage: pass adapter instance to confirmChainEvents(); typically invoked by a
  * background worker on a regular cadence (e.g., every 10s, or on ledger-closed hooks).
  */
-import { Payment, PaymentStatus } from '../../modules/payments/payments.model.js';
-import { Shipment } from '../../modules/shipments/shipment.model.js';
+import { PaymentModel, PaymentStatus } from '../../modules/payments/payments.model.js';
 import { Anomaly } from '../../modules/anomaly/anomaly.model.js';
 import {
   emitStatusUpdate,
@@ -77,7 +76,7 @@ export async function confirmChainEvents(
   }
 
   // Find payments with on-chain transactions that haven't yet been confirmed.
-  const candidates = await Payment.find({
+  const candidates = await PaymentModel.find({
     $and: [
       { stellarTxHash: { $ne: null } },
       { stellarTxHash: { $ne: '' } },
@@ -98,8 +97,8 @@ export async function confirmChainEvents(
   const latestLedger = await adapter.getLatestLedger();
 
   for (const payment of candidates as Array<{
-    _id: string;
-    shipmentId: string;
+    _id: { toString(): string } | string;
+    shipmentId: { toString(): string } | string;
     amount: number;
     status: PaymentStatus;
     stellarTxHash: string;
@@ -107,6 +106,8 @@ export async function confirmChainEvents(
     confirmations?: number;
   }>) {
     summary.paymentsChecked += 1;
+    const paymentIdStr = String(payment._id);
+    const shipmentIdStr = String(payment.shipmentId);
 
     try {
       const txLedger = await adapter.getTransactionLedger(payment.stellarTxHash);
@@ -122,7 +123,7 @@ export async function confirmChainEvents(
       }
 
       // Update the payment with confirmation metadata
-      const updateResult = await Payment.updateOne(
+      const updateResult = await PaymentModel.updateOne(
         { _id: payment._id, $expr: { $lt: [{ $ifNull: ['$confirmations', 0] }, minDepth] } },
         {
           $set: {
@@ -138,9 +139,9 @@ export async function confirmChainEvents(
       }
 
       // Emit settlement:status socket event with txHash and ledger
-      emitPaymentStatusChange(payment.shipmentId, {
-        paymentId: payment._id,
-        shipmentId: payment.shipmentId,
+      emitPaymentStatusChange(shipmentIdStr, {
+        paymentId: paymentIdStr,
+        shipmentId: shipmentIdStr,
         oldStatus: PaymentStatus.ESCROWED,
         newStatus: payment.status,
         amount: payment.amount,
@@ -151,8 +152,8 @@ export async function confirmChainEvents(
 
       // If payment is RELEASED, also emit shipment:status SETTLEMENT_COMPLETED
       if (payment.status === PaymentStatus.RELEASED) {
-        emitStatusUpdate(payment.shipmentId, {
-          shipmentId: payment.shipmentId,
+        emitStatusUpdate(shipmentIdStr, {
+          shipmentId: shipmentIdStr,
           status: 'SETTLEMENT_COMPLETED',
           updatedAt: new Date().toISOString(),
         });
@@ -167,13 +168,16 @@ export async function confirmChainEvents(
       }).limit(5);
 
       for (const anomaly of anomalies) {
-        emitAnomalyDetected(payment.shipmentId, {
+        emitAnomalyDetected(shipmentIdStr, {
           anomalyId: anomaly._id.toString(),
-          shipmentId: payment.shipmentId,
+          shipmentId: shipmentIdStr,
           type: anomaly.type,
           severity: anomaly.severity,
           message: anomaly.message,
-          timestamp: anomaly.timestamp instanceof Date ? anomaly.timestamp.toISOString() : String(anomaly.timestamp),
+          timestamp:
+            anomaly.timestamp instanceof Date
+              ? anomaly.timestamp.toISOString()
+              : String(anomaly.timestamp),
           resolved: anomaly.resolved,
         });
         summary.anomalyEventsEmitted += 1;

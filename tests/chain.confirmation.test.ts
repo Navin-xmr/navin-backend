@@ -5,21 +5,12 @@
  * payloads after confirmation threshold, and only uses socketEvents constants.
  */
 import { jest } from '@jest/globals';
-import { Payment, PaymentStatus } from '../src/modules/payments/payments.model.js';
-import { Shipment } from '../src/modules/shipments/shipment.model.js';
+import { PaymentModel, PaymentStatus } from '../src/modules/payments/payments.model.js';
 import { Anomaly } from '../src/modules/anomaly/anomaly.model.js';
-import {
-  confirmChainEvents,
-  confirmationDepth,
-  MIN_CONFIRMATION_LEDGERS,
-  type ChainConfirmationSummary,
-} from '../src/services/chain/confirmation.js';
-import { SOCKET_EVENTS } from '../src/shared/types/socketEvents.js';
-import * as socketIO from '../src/infra/socket/io.js';
 import type { ChainAdapter } from '../src/services/chain/types.js';
 import { Types } from 'mongoose';
 
-// Mock socket emitters
+// Mock socket emitters before importing confirmation.ts (ESM)
 jest.unstable_mockModule('../src/infra/socket/io.js', () => ({
   getIO: jest.fn(),
   emitStatusUpdate: jest.fn(),
@@ -28,6 +19,9 @@ jest.unstable_mockModule('../src/infra/socket/io.js', () => ({
   emitTelemetryUpdate: jest.fn(),
   emitNotificationNew: jest.fn(),
 }));
+
+const { confirmChainEvents, confirmationDepth, MIN_CONFIRMATION_LEDGERS } =
+  await import('../src/services/chain/confirmation.js');
 
 describe('Chain Confirmation Tracking (#1067)', () => {
   beforeEach(() => {
@@ -60,7 +54,7 @@ describe('Chain Confirmation Tracking (#1067)', () => {
     });
 
     it('returns empty summary when no payments to check', async () => {
-      jest.spyOn(Payment, 'find').mockReturnValue({
+      jest.spyOn(PaymentModel, 'find').mockReturnValue({
         sort: jest.fn().mockReturnThis(),
         limit: jest.fn().mockReturnThis(),
         select: jest.fn().mockReturnThis(),
@@ -76,7 +70,7 @@ describe('Chain Confirmation Tracking (#1067)', () => {
       const paymentId = new Types.ObjectId();
       const txHash = 'abc123def456';
 
-      jest.spyOn(Payment, 'find').mockReturnValue({
+      jest.spyOn(PaymentModel, 'find').mockReturnValue({
         sort: jest.fn().mockReturnThis(),
         limit: jest.fn().mockReturnThis(),
         select: jest.fn().mockReturnThis(),
@@ -92,11 +86,13 @@ describe('Chain Confirmation Tracking (#1067)', () => {
         ]),
       } as any);
 
-      jest.spyOn(Payment, 'updateOne').mockResolvedValue({
+      jest.spyOn(PaymentModel, 'updateOne').mockResolvedValue({
         modifiedCount: 1,
       } as any);
 
-      jest.spyOn(Anomaly, 'find').mockResolvedValue([]);
+      jest
+        .spyOn(Anomaly, 'find')
+        .mockReturnValue({ limit: jest.fn().mockResolvedValue([] as never) } as any);
 
       const { emitPaymentStatusChange } = await import('../src/infra/socket/io.js');
 
@@ -119,7 +115,7 @@ describe('Chain Confirmation Tracking (#1067)', () => {
       const shipmentId = new Types.ObjectId();
       const paymentId = new Types.ObjectId();
 
-      jest.spyOn(Payment, 'find').mockReturnValue({
+      jest.spyOn(PaymentModel, 'find').mockReturnValue({
         sort: jest.fn().mockReturnThis(),
         limit: jest.fn().mockReturnThis(),
         select: jest.fn().mockReturnThis(),
@@ -134,11 +130,13 @@ describe('Chain Confirmation Tracking (#1067)', () => {
         ]),
       } as any);
 
-      jest.spyOn(Payment, 'updateOne').mockResolvedValue({
+      jest.spyOn(PaymentModel, 'updateOne').mockResolvedValue({
         modifiedCount: 1,
       } as any);
 
-      jest.spyOn(Anomaly, 'find').mockResolvedValue([]);
+      jest
+        .spyOn(Anomaly, 'find')
+        .mockReturnValue({ limit: jest.fn().mockResolvedValue([] as never) } as any);
 
       const { emitStatusUpdate } = await import('../src/infra/socket/io.js');
 
@@ -153,7 +151,7 @@ describe('Chain Confirmation Tracking (#1067)', () => {
       const paymentId = new Types.ObjectId();
       const txHash = 'deadbeef';
 
-      jest.spyOn(Payment, 'find').mockReturnValue({
+      jest.spyOn(PaymentModel, 'find').mockReturnValue({
         sort: jest.fn().mockReturnThis(),
         limit: jest.fn().mockReturnThis(),
         select: jest.fn().mockReturnThis(),
@@ -168,11 +166,13 @@ describe('Chain Confirmation Tracking (#1067)', () => {
         ]),
       } as any);
 
-      jest.spyOn(Payment, 'updateOne').mockResolvedValue({
+      jest.spyOn(PaymentModel, 'updateOne').mockResolvedValue({
         modifiedCount: 1,
       } as any);
 
-      jest.spyOn(Anomaly, 'find').mockResolvedValue([]);
+      jest
+        .spyOn(Anomaly, 'find')
+        .mockReturnValue({ limit: jest.fn().mockResolvedValue([] as never) } as any);
 
       const { emitPaymentStatusChange } = await import('../src/infra/socket/io.js');
 
@@ -186,7 +186,7 @@ describe('Chain Confirmation Tracking (#1067)', () => {
       const shipmentId = new Types.ObjectId();
       const paymentId = new Types.ObjectId();
 
-      jest.spyOn(Payment, 'find').mockReturnValue({
+      jest.spyOn(PaymentModel, 'find').mockReturnValue({
         sort: jest.fn().mockReturnThis(),
         limit: jest.fn().mockReturnThis(),
         select: jest.fn().mockReturnThis(),
@@ -202,7 +202,7 @@ describe('Chain Confirmation Tracking (#1067)', () => {
         ]),
       } as any);
 
-      jest.spyOn(Payment, 'updateOne').mockResolvedValue({
+      jest.spyOn(PaymentModel, 'updateOne').mockResolvedValue({
         modifiedCount: 0, // No update = already confirmed
       } as any);
 
