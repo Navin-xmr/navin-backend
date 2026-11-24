@@ -132,7 +132,7 @@ describe('SorobanAdapter submission retry and duplicate detection (#1078)', () =
     invoke.mockRejectedValueOnce(new AppError(409, 'exists', ErrorCodes.CHAIN_ESCROW_EXISTS));
 
     await expect(
-      adapter.releaseEscrow({ payment_id: 'pay1', proof_hash: HASH })
+      adapter.releaseEscrow({ caller: Keypair.random().publicKey(), shipment_id: SHIPMENT })
     ).rejects.toMatchObject({ code: ErrorCodes.CHAIN_ESCROW_EXISTS });
     expect(invoke).toHaveBeenCalledTimes(1);
   });
@@ -214,11 +214,11 @@ describe('SorobanAdapter submission retry and duplicate detection (#1078)', () =
 
       await adapter.anchorEvent(anchorInput(), options);
       const release = await adapter.releaseEscrow(
-        { payment_id: 'pay1', proof_hash: HASH },
+        { caller: Keypair.random().publicKey(), shipment_id: SHIPMENT },
         { ...options, shipmentId: SHIPMENT }
       );
 
-      expect(release.paymentId).toBe('pay1');
+      expect(release.shipmentId).toBe(SHIPMENT);
       expect(invoke).toHaveBeenCalledTimes(2);
     });
 
@@ -231,11 +231,14 @@ describe('SorobanAdapter submission retry and duplicate detection (#1078)', () =
       expect(invoke).not.toHaveBeenCalled();
     });
 
-    it('a release with options needs the shipment id for its key', async () => {
+    it('a release with options rejects an empty shipment id for its key', async () => {
       const { adapter, invoke } = makeAdapter();
 
       await expect(
-        adapter.releaseEscrow({ payment_id: 'pay1', proof_hash: HASH }, options)
+        adapter.releaseEscrow(
+          { caller: Keypair.random().publicKey(), shipment_id: SHIPMENT },
+          { ...options, shipmentId: '' }
+        )
       ).rejects.toMatchObject({ code: ErrorCodes.CHAIN_INVALID_IDEMPOTENCY_KEY });
       expect(invoke).not.toHaveBeenCalled();
     });
@@ -305,7 +308,7 @@ describe('SorobanAdapter preflight (#1081)', () => {
     });
 
     await expect(
-      adapter.releaseEscrow({ payment_id: 'pay1', proof_hash: HASH })
+      adapter.releaseEscrow({ caller: Keypair.random().publicKey(), shipment_id: SHIPMENT })
     ).rejects.toMatchObject({ code: ErrorCodes.CHAIN_NOT_INITIALIZED });
     expect(invoke).not.toHaveBeenCalled();
   });
