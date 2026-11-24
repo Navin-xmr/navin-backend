@@ -338,6 +338,9 @@ export async function indexStellarTransactions(
     const res = await LedgerBlock.updateOne(
       { transactionHash: event.tx_hash },
       {
+        // Insert-only fields. MongoDB rejects a path that appears in both $setOnInsert
+        // and $set ("would create a conflict"), so anything re-indexing should refresh
+        // (milestoneEvent, dataHash, metadata) lives in $set only.
         $setOnInsert: {
           shipmentId,
           transactionHash: event.tx_hash,

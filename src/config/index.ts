@@ -57,6 +57,15 @@ export const config = {
   sorobanRpcUrl: stellarUrls.sorobanRpcUrl,
   escrowContractId: env.ESCROW_CONTRACT_ID,
   chainAdapter: env.SOROBAN_ADAPTER,
+  chainPreflight: {
+    enabled: env.CHAIN_PREFLIGHT_ENABLED,
+    checks: env.CHAIN_PREFLIGHT_CHECKS,
+  },
+  chainSubmit: {
+    maxAttempts: env.CHAIN_SUBMIT_MAX_ATTEMPTS,
+    backoffMs: env.CHAIN_SUBMIT_BACKOFF_MS,
+    backoffMaxMs: env.CHAIN_SUBMIT_BACKOFF_MAX_MS,
+  },
   /** #1058 — ledgers required before an anchored event is marked verified. */
   chainConfirmations: {
     testnet: env.CHAIN_CONFIRMATIONS_TESTNET,

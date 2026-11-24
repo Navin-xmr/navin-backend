@@ -32,6 +32,21 @@ export type AnchorEventInput = AnchorArgs;
 export type ReleaseEscrowInput = ReleaseEscrowArgs;
 
 /**
+ * Optional identity of the logical event being submitted (#1078). When given,
+ * the adapter derives a deterministic idempotency key from
+ * (shipment_id, event_type, event_counter): a repeat of the same event returns
+ * the original receipt instead of submitting again, and a retry after a
+ * timeout first checks chain state for the earlier attempt.
+ */
+export interface ChainSubmitOptions {
+  eventType: string;
+  /** Per-shipment, per-event-type counter; the same event must reuse the same value. */
+  eventCounter: number;
+  /** Needed for `releaseEscrow`, whose input carries a payment ID, not a shipment ID. */
+  shipmentId?: string;
+}
+
+/**
  * Input for `update_status(caller, shipment_id, new_status, data_hash)`.
  * `data_hash` is the backend-computed hash of the canonical status payload; the
  * adapter encodes and submits it verbatim and never recomputes or alters it.
@@ -69,7 +84,7 @@ export interface ChainAdapter {
    * Anchor a payload hash for a shipment.
    * @throws {AppError} `ChainErrorCode` on rejection (e.g. ERR_CHAIN_ALREADY_ANCHORED).
    */
-  anchorEvent(input: AnchorEventInput): Promise<AnchorResult>;
+  anchorEvent(input: AnchorEventInput, options?: ChainSubmitOptions): Promise<AnchorResult>;
 
   /**
    * Release escrowed funds for a shipment, authorized by `caller`.
@@ -78,7 +93,7 @@ export interface ChainAdapter {
    * ERR_CHAIN_INVALID_STATUS, ERR_CHAIN_UNAUTHORIZED). Never resolves with a
    * `{ success: false }` failure flag.
    */
-  releaseEscrow(input: ReleaseEscrowInput): Promise<EscrowResult>;
+  releaseEscrow(input: ReleaseEscrowInput, options?: ChainSubmitOptions): Promise<EscrowResult>;
 
   /**
    * Record a shipment status transition on-chain, authorized by `caller`.

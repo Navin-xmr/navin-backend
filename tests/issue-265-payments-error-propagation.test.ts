@@ -21,18 +21,15 @@ await jest.unstable_mockModule('../src/modules/payments/payments.repo.js', () =>
   disputePayment: jest.fn(),
 }));
 
-// Migrate from direct stellar.service mock to ChainAdapter port pattern
+// Chain operations go through the ChainAdapter port (stellar.service.ts is retired, #1082)
 const chainAdapter = createChainAdapterMock();
 await jest.unstable_mockModule('../src/services/chain/factory.js', () =>
   createChainFactoryMock(chainAdapter)
 );
 
-// Mock stellar.service for getStellarExplorerUrl utility (not chain operations)
-await jest.unstable_mockModule('../src/services/stellar.service.js', () => ({
+// Explorer URL formatting is a pure utility beside the port (not a chain operation).
+await jest.unstable_mockModule('../src/services/chain/explorer.js', () => ({
   getStellarExplorerUrl: jest.fn((hash: string) => `https://stellar.expert/explorer/testnet/tx/${hash}`),
-  tokenizeShipment: jest.fn(),
-  anchorTelemetryHash: jest.fn(),
-  releaseEscrow: jest.fn(),
 }));
 
 const { createPaymentService } = await import('../src/modules/payments/payments.service.js');
