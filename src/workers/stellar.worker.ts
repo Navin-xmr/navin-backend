@@ -8,6 +8,7 @@ import {
   markTelemetryAnchorFailed,
 } from '../modules/telemetry/telemetry.service.js';
 import { AppError, ErrorCodes } from '../shared/http/errors.js';
+import { startMetricsServer } from '../infra/metrics/metricsServer.js';
 import { logger } from '../shared/logger/logger.js';
 
 interface AnchorTelemetryJob {

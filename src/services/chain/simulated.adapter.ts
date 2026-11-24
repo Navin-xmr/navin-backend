@@ -213,6 +213,33 @@ export class SimulatedAdapter implements ChainAdapter {
     };
   }
 
+  async updateStatus(input: UpdateStatusInput): Promise<UpdateStatusResult> {
+    const parsed = UpdateStatusArgsSchema.safeParse(input);
+    if (!parsed.success) {
+      const hashIssue = parsed.error.issues.some(i => i.path[0] === 'data_hash');
+      throw chainError(
+        422,
+        'update_status arguments do not match the contract ABI',
+        hashIssue ? ErrorCodes.CHAIN_INVALID_HASH : ErrorCodes.CHAIN_UNKNOWN,
+        parsed.error.issues
+      );
+    }
+    const { shipment_id, new_status, data_hash } = parsed.data;
+    // Manage-data holds the caller-supplied data_hash verbatim (never recomputed).
+    // The status name lives in the key so the latest status is discoverable per shipment.
+    const { hash, ledger } = await this.submitManageData(
+      `${STATUS_KEY_PREFIX}${shipment_id}:${new_status}`, // ≤ 45 bytes (u64 ≤ 20 digits)
+      data_hash
+    );
+    return {
+      txHash: hash,
+      ledger,
+      simulated: true,
+      shipmentId: shipment_id,
+      newStatus: new_status,
+    };
+  }
+
   async *streamEvents(cursor?: ChainEventCursor): AsyncIterable<ChainEvent> {
     const publicKey = this.signer().publicKey();
     let position = cursor;

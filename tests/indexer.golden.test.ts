@@ -304,8 +304,9 @@ describe('Event-driven indexer golden fixtures replay', () => {
     expect(initBlock).not.toHaveProperty('dataHash');
     expect(releaseBlock).not.toHaveProperty('dataHash');
 
-    // Canonical field assertions (#970): milestoneEvent (never legacy eventType)
-    // in every $set/$setOnInsert, and the anchor's top-level dataHash equals the event hash.
+    // Canonical field assertions (#970): milestoneEvent (never legacy eventType) in every
+    // $set and never in $setOnInsert (MongoDB rejects a path in both), and the anchor's
+    // top-level dataHash equals the event hash.
     for (const [, update] of ledgerUpdateOneMock.mock.calls as Array<
       [unknown, { $set: Record<string, unknown>; $setOnInsert: Record<string, unknown> }]
     >) {

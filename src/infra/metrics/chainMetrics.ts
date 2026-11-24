@@ -17,7 +17,7 @@ import { Counter, Gauge, Histogram, Registry } from 'prom-client';
 
 import { config } from '../../config/index.js';
 import { AppError, ErrorCodes } from '../../shared/http/errors.js';
-import { CHAIN_EVENT_NAMES } from '../../shared/types/chain.js';
+import { CHAIN_EVENT_NAMES, CHAIN_SPEC_VERSION } from '../../shared/types/chain.js';
 
 /** Chain operations that submit a transaction (closed set). */
 export const CHAIN_OPERATIONS = ['anchor_event', 'release_escrow'] as const;
@@ -86,6 +86,23 @@ const lastPollTimestamp = new Gauge({
   help: 'Unix time the indexer last completed a polling cycle successfully.',
   registers: [metricsRegistry],
 });
+
+/** #P15-02 — 1 when on-chain contract version differs from backend CHAIN_SPEC_VERSION. */
+const contractVersionMismatchGauge = new Gauge({
+  name: 'navin_chain_contract_version_mismatch',
+  help: '1 when an observed on-chain contract version differs from backend CHAIN_SPEC_VERSION, 0 when matched.',
+  registers: [metricsRegistry],
+});
+
+/** #P15-02 — records contract version parity or mismatch. */
+export function recordContractVersion(
+  observedVersion: string,
+  expectedVersion: string = CHAIN_SPEC_VERSION
+): void {
+  safely(() => {
+    contractVersionMismatchGauge.set(observedVersion === expectedVersion ? 0 : 1);
+  });
+}
 
 // ─── Scrape-time gauges ──────────────────────────────────────────────────────
 

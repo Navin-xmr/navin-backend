@@ -119,6 +119,48 @@ export const ConfirmDeliveryArgsSchema = z
   })
   .strict();
 
+/**
+ * `ShipmentStatus` contract enum, in the EXACT declaration order of
+ * Navin-xmr/navin-contracts `contracts/shipment/src/types.rs`. The variant name
+ * is the on-chain identity: a `#[contracttype]` unit-variant enum is encoded as
+ * the ScVal vec `[Symbol(<VariantName>)]`. Reordering/renaming is an ABI break.
+ */
+export const SHIPMENT_STATUSES = [
+  'Created',
+  'InTransit',
+  'AtCheckpoint',
+  'PartiallyDelivered',
+  'Delivered',
+  'Disputed',
+  'Cancelled',
+  'PartiallyRefunded',
+] as const;
+export type ShipmentStatusName = (typeof SHIPMENT_STATUSES)[number];
+export const ShipmentStatusSchema = z.enum(SHIPMENT_STATUSES);
+
+/** `u64` as an unsigned decimal string (no leading zeros) — the contract's shipment id type. */
+export const U64StringSchema = z
+  .string()
+  .regex(/^(0|[1-9][0-9]*)$/, 'Expected unsigned integer string')
+  .refine(v => !/^(0|[1-9][0-9]*)$/.test(v) || BigInt(v) <= U64_MAX, 'Exceeds u64 range');
+
+/**
+ * `update_status(caller: Address, shipment_id: u64, new_status: ShipmentStatus,
+ *  data_hash: BytesN<32>)` — auth: `caller` (shipment carrier or admin).
+ *
+ * `data_hash` is computed by the backend over the canonical status payload and
+ * passed through untouched by adapters. NOTE: unlike the legacy functions above,
+ * the contract's `shipment_id` here is a `u64`, not a `Symbol`.
+ */
+export const UpdateStatusArgsSchema = z
+  .object({
+    caller: AddressSchema,
+    shipment_id: U64StringSchema,
+    new_status: ShipmentStatusSchema,
+    data_hash: Bytes32HexSchema,
+  })
+  .strict();
+
 /** Result of any confirmed state-changing invocation. */
 export const ChainTxResultSchema = z
   .object({
@@ -132,16 +174,18 @@ export const CHAIN_FUNCTIONS = [
   'init_escrow',
   'release_escrow',
   'confirm_delivery',
+  'update_status',
 ] as const;
 export type ChainFunctionName = (typeof CHAIN_FUNCTIONS)[number];
 
 /** Who must `require_auth()` for each function, per spec. */
 export const CHAIN_FUNCTION_AUTH: Readonly<
-  Record<ChainFunctionName, 'actor' | 'payer' | 'caller' | 'admin'>
+  Record<ChainFunctionName, 'actor' | 'payer' | 'caller' | 'admin' | 'receiver'>
 > = {
   anchor: 'actor',
   init_escrow: 'payer',
   release_escrow: 'caller',
+  confirm_delivery: 'receiver',
   update_status: 'caller',
 };
 
@@ -150,12 +194,14 @@ export const ChainFunctionArgsSchemas = {
   init_escrow: InitEscrowArgsSchema,
   release_escrow: ReleaseEscrowArgsSchema,
   confirm_delivery: ConfirmDeliveryArgsSchema,
+  update_status: UpdateStatusArgsSchema,
 } as const satisfies Record<ChainFunctionName, z.ZodTypeAny>;
 
 export type AnchorArgs = z.infer<typeof AnchorArgsSchema>;
 export type InitEscrowArgs = z.infer<typeof InitEscrowArgsSchema>;
 export type ReleaseEscrowArgs = z.infer<typeof ReleaseEscrowArgsSchema>;
 export type ConfirmDeliveryArgs = z.infer<typeof ConfirmDeliveryArgsSchema>;
+export type UpdateStatusArgs = z.infer<typeof UpdateStatusArgsSchema>;
 export type ChainTxResult = z.infer<typeof ChainTxResultSchema>;
 
 // ─── Events ──────────────────────────────────────────────────────────────────
@@ -302,6 +348,22 @@ export type EscrowUnfreezeEvent = z.infer<typeof EscrowUnfreezeEventSchema>;
 export type DeliverySuccessEvent = z.infer<typeof DeliverySuccessEventSchema>;
 export type EscrowReleasedEvent = z.infer<typeof EscrowReleasedEventSchema>;
 export type ChainEvent = z.infer<typeof ChainEventSchema>;
+
+/** An RPC event that could not be decoded, retained for indexing and replay. */
+export interface ChainEventDecodeFailure {
+  kind: 'decode_error';
+  cursor: string;
+  contract_id: string;
+  raw_payload: unknown;
+  candidate_payload: unknown;
+  error: string;
+}
+
+export function isChainEventDecodeFailure(
+  event: ChainEvent | ChainEventDecodeFailure
+): event is ChainEventDecodeFailure {
+  return 'kind' in event && event.kind === 'decode_error';
+}
 
 // ─── Event verification / confirmation depth (v2, #1058) ────────────────────
 
