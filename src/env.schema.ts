@@ -91,6 +91,7 @@ const EnvShape = z.object({
       .regex(/^[0-9a-fA-F]{64}$/, 'CHAIN_WEBHOOK_ENCRYPTION_KEY must be 64 hex characters')
       .optional()
   ),
+  STELLAR_NETWORK_PASSPHRASE: z.string().min(1).optional(),
   // #1058 — ledger confirmation threshold per network for anchored events.
   CHAIN_CONFIRMATIONS_TESTNET: z.coerce.number().int().min(0).max(1000).default(3),
   CHAIN_CONFIRMATIONS_PUBLIC: z.coerce.number().int().min(0).max(1000).default(3),
@@ -170,6 +171,14 @@ export const envSchema = EnvShape.superRefine((data, ctx) => {
         code: z.ZodIssueCode.custom,
         path: ['ESCROW_CONTRACT_ID'],
         message: 'ESCROW_CONTRACT_ID is required when SOROBAN_ADAPTER=soroban',
+      });
+    }
+    if (!data.STELLAR_NETWORK && !data.STELLAR_NETWORK_PASSPHRASE) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['STELLAR_NETWORK'],
+        message:
+          'STELLAR_NETWORK or STELLAR_NETWORK_PASSPHRASE is required when SOROBAN_ADAPTER=soroban',
       });
     }
   }
