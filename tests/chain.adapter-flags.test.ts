@@ -5,85 +5,74 @@
  */
 import { jest } from '@jest/globals';
 
-// Mock config to test different combinations
-let mockConfig = {
+const mockConfig: { nodeEnv: string; chainAdapter: string } = {
   nodeEnv: 'development',
   chainAdapter: 'simulated',
 };
 
-// We'll use dependency injection patterns to test flag behavior
+const mockLogger = {
+  info: jest.fn(),
+  warn: jest.fn(),
+  error: jest.fn(),
+};
+
+jest.unstable_mockModule('../src/config/index.js', () => ({
+  config: mockConfig,
+}));
+
+jest.unstable_mockModule('../src/shared/logger/logger.js', () => ({
+  logger: mockLogger,
+}));
+
+const { validateChainAdapterForEnvironment, shouldEscrowHardFail, emitEscrowFallbackWarning } =
+  await import('../src/shared/flags/chain-adapter.flags.js');
+
 describe('Chain Adapter Feature Flags (#1064)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockConfig.nodeEnv = 'development';
+    mockConfig.chainAdapter = 'simulated';
+  });
+
   describe('validateChainAdapterForEnvironment', () => {
     it('allows simulated in development', () => {
-      // Development + simulated should not throw
-      const { validateChainAdapterForEnvironment } = require('../src/shared/flags/chain-adapter.flags.js');
-      
-      jest.spyOn(require('../src/config/index.js'), 'config', 'get').mockReturnValue({
-        nodeEnv: 'development',
-        chainAdapter: 'simulated',
-      });
+      mockConfig.nodeEnv = 'development';
+      mockConfig.chainAdapter = 'simulated';
 
       expect(() => validateChainAdapterForEnvironment()).not.toThrow();
     });
 
     it('allows soroban in development', () => {
-      // Development + soroban should not throw (warns, but doesn't error)
-      const { validateChainAdapterForEnvironment } = require('../src/shared/flags/chain-adapter.flags.js');
-      
-      jest.spyOn(require('../src/config/index.js'), 'config', 'get').mockReturnValue({
-        nodeEnv: 'development',
-        chainAdapter: 'soroban',
-      });
+      mockConfig.nodeEnv = 'development';
+      mockConfig.chainAdapter = 'soroban';
 
       expect(() => validateChainAdapterForEnvironment()).not.toThrow();
     });
 
     it('allows simulated in test', () => {
-      // Test + simulated should not throw
-      const { validateChainAdapterForEnvironment } = require('../src/shared/flags/chain-adapter.flags.js');
-      
-      jest.spyOn(require('../src/config/index.js'), 'config', 'get').mockReturnValue({
-        nodeEnv: 'test',
-        chainAdapter: 'simulated',
-      });
+      mockConfig.nodeEnv = 'test';
+      mockConfig.chainAdapter = 'simulated';
 
       expect(() => validateChainAdapterForEnvironment()).not.toThrow();
     });
 
     it('allows simulated in staging', () => {
-      // Staging + simulated should not throw (warns, but allowed)
-      const { validateChainAdapterForEnvironment } = require('../src/shared/flags/chain-adapter.flags.js');
-      
-      jest.spyOn(require('../src/config/index.js'), 'config', 'get').mockReturnValue({
-        nodeEnv: 'staging',
-        chainAdapter: 'simulated',
-      });
+      mockConfig.nodeEnv = 'staging';
+      mockConfig.chainAdapter = 'simulated';
 
       expect(() => validateChainAdapterForEnvironment()).not.toThrow();
     });
 
     it('forbids simulated in production', () => {
-      // Production + simulated MUST throw
-      const { validateChainAdapterForEnvironment } = require('../src/shared/flags/chain-adapter.flags.js');
-      
-      jest.spyOn(require('../src/config/index.js'), 'config', 'get').mockReturnValue({
-        nodeEnv: 'production',
-        chainAdapter: 'simulated',
-      });
+      mockConfig.nodeEnv = 'production';
+      mockConfig.chainAdapter = 'simulated';
 
-      expect(() => validateChainAdapterForEnvironment()).toThrow(
-        /FATAL.*simulated.*production/i
-      );
+      expect(() => validateChainAdapterForEnvironment()).toThrow(/FATAL.*simulated.*production/i);
     });
 
     it('allows soroban in production', () => {
-      // Production + soroban should not throw
-      const { validateChainAdapterForEnvironment } = require('../src/shared/flags/chain-adapter.flags.js');
-      
-      jest.spyOn(require('../src/config/index.js'), 'config', 'get').mockReturnValue({
-        nodeEnv: 'production',
-        chainAdapter: 'soroban',
-      });
+      mockConfig.nodeEnv = 'production';
+      mockConfig.chainAdapter = 'soroban';
 
       expect(() => validateChainAdapterForEnvironment()).not.toThrow();
     });
@@ -91,8 +80,6 @@ describe('Chain Adapter Feature Flags (#1064)', () => {
 
   describe('shouldEscrowHardFail', () => {
     it('returns true only for production + soroban', () => {
-      const { shouldEscrowHardFail } = require('../src/shared/flags/chain-adapter.flags.js');
-      
       const cases = [
         { env: 'development', adapter: 'simulated', shouldFail: false },
         { env: 'development', adapter: 'soroban', shouldFail: false },
@@ -105,26 +92,17 @@ describe('Chain Adapter Feature Flags (#1064)', () => {
       ];
 
       for (const { env, adapter, shouldFail } of cases) {
-        jest.spyOn(require('../src/config/index.js'), 'config', 'get').mockReturnValue({
-          nodeEnv: env,
-          chainAdapter: adapter,
-        });
+        mockConfig.nodeEnv = env;
+        mockConfig.chainAdapter = adapter;
 
         const result = shouldEscrowHardFail();
-        expect(result).toBe(shouldFail, `Failed for ${env} + ${adapter}`);
+        expect(result).toBe(shouldFail);
       }
     });
   });
 
   describe('emitEscrowFallbackWarning', () => {
     it('logs fallback warnings with context', () => {
-      const { emitEscrowFallbackWarning } = require('../src/shared/flags/chain-adapter.flags.js');
-      const mockLogger = {
-        warn: jest.fn(),
-      };
-      
-      jest.spyOn(require('../src/shared/logger/logger.js'), 'logger', 'get').mockReturnValue(mockLogger);
-
       emitEscrowFallbackWarning('releaseEscrow', 'payment-123');
 
       expect(mockLogger.warn).toHaveBeenCalledWith(
@@ -139,8 +117,6 @@ describe('Chain Adapter Feature Flags (#1064)', () => {
 
   describe('Flag Matrix (Issue Description)', () => {
     it('documents the complete flag matrix', () => {
-      // This is more of a documentation test: verifying the expected behavior
-      // as described in the issue for all combinations.
       const matrix = [
         { env: 'development', adapter: 'simulated', allowed: true, recommended: true },
         { env: 'development', adapter: 'soroban', allowed: true, recommended: false },

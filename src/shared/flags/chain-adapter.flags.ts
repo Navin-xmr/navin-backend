@@ -23,7 +23,6 @@
 
 import { config } from '../../config/index.js';
 import { logger } from '../logger/logger.js';
-import type { ChainAdapterKind } from '../../services/chain/factory.js';
 
 /**
  * Validates that the configured adapter is appropriate for the environment.
@@ -37,7 +36,7 @@ import type { ChainAdapterKind } from '../../services/chain/factory.js';
  */
 export function validateChainAdapterForEnvironment(): void {
   const adapter = config.chainAdapter;
-  const env = config.nodeEnv;
+  const env: string = config.nodeEnv;
 
   if (env === 'production' && adapter === 'simulated') {
     const message = `FATAL: SOROBAN_ADAPTER=simulated in production. Escrow operations must use live Soroban contracts (SOROBAN_ADAPTER=soroban).`;
@@ -59,10 +58,7 @@ export function validateChainAdapterForEnvironment(): void {
     );
   }
 
-  logger.info(
-    { env, adapter },
-    '[Flags] Chain adapter configuration validated'
-  );
+  logger.info({ env, adapter }, '[Flags] Chain adapter configuration validated');
 }
 
 /**
