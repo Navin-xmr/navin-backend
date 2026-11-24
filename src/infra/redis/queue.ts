@@ -9,7 +9,7 @@ import type {
 import { CHAIN_WEBHOOK_RETRY_POLICY } from '../../shared/types/chainWebhook.js';
 
 let redisClient: Redis | null = null;
-type TransactionQueueLike = Pick<Queue, 'add' | 'close'>;
+type TransactionQueueLike = Pick<Queue, 'add' | 'close' | 'getJobCounts'>;
 type ChainWebhookQueueLike = Pick<Queue<ChainWebhookJobData>, 'add' | 'close'>;
 type ChainWebhookDeadLetterQueueLike = Pick<Queue<ChainWebhookDeadLetterData>, 'add' | 'close'>;
 let transactionQueue: TransactionQueueLike | null = null;
@@ -47,6 +47,7 @@ export function getTransactionQueue(): TransactionQueueLike {
       transactionQueue = {
         add: (async () => ({ id: 'test-job-id' })) as unknown as Queue['add'],
         close: (async () => undefined) as unknown as Queue['close'],
+        getJobCounts: (async () => ({})) as unknown as Queue['getJobCounts'],
       };
       return transactionQueue;
     }

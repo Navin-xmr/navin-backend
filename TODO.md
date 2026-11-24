@@ -169,7 +169,9 @@ Last updated: 2026-10-17 · branch `main` @ `113522d`
 
 ### K2. Step 2 — Contract execution layer
 - [x] `SorobanAdapter`: RPC client → `simulateTransaction` → assemble → sign → `sendTransaction` → poll — ✅ DONE (`src/services/chain/soroban.adapter.ts`, #656)
-- [x] Replace placeholder ops: `releaseEscrow()` manageData fake delegates to `adapter.releaseEscrow()` — ✅ DONE (#657)
+- [x] Replace placeholder ops: `releaseEscrow()` manageData fake delegates to `adapter.releaseEscrow()` — ✅ DONE (#657); `stellar.service.ts` removed entirely (#1082)
+- [x] Submission reliability: bounded retry/backoff, chain-state duplicate check and idempotency keys — ✅ DONE (#1078)
+- [x] Configurable preflight checks before submission — ✅ DONE (#1081; contract view-function names are assumed, confirm against the deployed contract)
 - [x] Fix hardcoded Horizon URL bug — `config.horizonUrl` derived from `STELLAR_NETWORK` — ✅ DONE (#658)
 - [x] Keep validation logic in the CONTRACT — backend only submits — ✅ DONE
 
@@ -186,7 +188,7 @@ Last updated: 2026-10-17 · branch `main` @ `113522d`
 
 ## L. Alignment enforcement (mechanical, not goodwill)
 
-- [x] **L1. Golden-vector tests** — `tests/indexer.golden.test.ts` + `tests/fixtures/chain/` — ✅ DONE (#666)
+- [x] **L1. Golden-vector tests** — `tests/indexer.golden.test.ts` + `tests/fixtures/chain/` — ✅ DONE (#666); exact LedgerBlock rows pinned by `tests/indexer.ledger-rows.integration.test.ts` + `ledger-rows.json` (#1077)
 - [ ] **L2. Contract-test harness** — Stellar quickstart docker (standalone network) in CI — Follow-up tracked in Phase 8
 - [ ] **L3. Acceptance scripts = demo = conformance suite** — 4 runnable scenarios in `scripts/acceptance/` — Follow-up tracked in Phase 8
 - [x] **L4. Sequencing safety gate** — `tests/chain.signing-concurrency.test.ts` — ✅ DONE (#669)

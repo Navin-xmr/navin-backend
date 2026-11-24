@@ -2,9 +2,10 @@
  * Chain interface — typed mirror of docs/chain-interface.md (TODO I2).
  *
  * ┌──────────────────────────────────────────────────────────────────────┐
- * │ SPEC VERSION: 2.0.0  (see CHAIN_SPEC_VERSION below)                  │
+ * │ SPEC VERSION: 2.1.0  (see CHAIN_SPEC_VERSION below)                  │
  * │ Mirrors the v2 surface (v1 from P6-01/#649, evolved by #1056/#1058):  │
  * │   functions  anchor · init_escrow · release_escrow (+ authz)         │
+ * │              update_status (v2.1, #1047 — real contract ABI)         │
  * │              release_escrow = (caller, shipment_id), escrow is       │
  * │              per-shipment — there is no proof_hash argument.         │
  * │   events     anchor · esc_init · esc_rel (topic + data tuples)       │
@@ -29,12 +30,13 @@ import { z } from 'zod';
 import { AppError, ErrorCodes } from '../http/errors.js';
 import type { ErrorCode } from '../http/errors.js';
 
-export const CHAIN_SPEC_VERSION = '2.0.0' as const;
+export const CHAIN_SPEC_VERSION = '2.1.0' as const;
 
 // ─── Soroban primitives ──────────────────────────────────────────────────────
 
 const I128_MAX = (BigInt(1) << BigInt(127)) - BigInt(1);
 const U32_MAX = 0xffffffff;
+const U64_MAX = (BigInt(1) << BigInt(64)) - BigInt(1);
 
 /** Soroban `Symbol`: up to 32 chars of [a-zA-Z0-9_]. */
 export const SymbolSchema = z.string().regex(/^[A-Za-z0-9_]{1,32}$/, 'Invalid Soroban Symbol');
@@ -108,6 +110,48 @@ export const ReleaseEscrowArgsSchema = z
   })
   .strict();
 
+/**
+ * `ShipmentStatus` contract enum, in the EXACT declaration order of
+ * Navin-xmr/navin-contracts `contracts/shipment/src/types.rs`. The variant name
+ * is the on-chain identity: a `#[contracttype]` unit-variant enum is encoded as
+ * the ScVal vec `[Symbol(<VariantName>)]`. Reordering/renaming is an ABI break.
+ */
+export const SHIPMENT_STATUSES = [
+  'Created',
+  'InTransit',
+  'AtCheckpoint',
+  'PartiallyDelivered',
+  'Delivered',
+  'Disputed',
+  'Cancelled',
+  'PartiallyRefunded',
+] as const;
+export type ShipmentStatusName = (typeof SHIPMENT_STATUSES)[number];
+export const ShipmentStatusSchema = z.enum(SHIPMENT_STATUSES);
+
+/** `u64` as an unsigned decimal string (no leading zeros) — the contract's shipment id type. */
+export const U64StringSchema = z
+  .string()
+  .regex(/^(0|[1-9][0-9]*)$/, 'Expected unsigned integer string')
+  .refine(v => !/^(0|[1-9][0-9]*)$/.test(v) || BigInt(v) <= U64_MAX, 'Exceeds u64 range');
+
+/**
+ * `update_status(caller: Address, shipment_id: u64, new_status: ShipmentStatus,
+ *  data_hash: BytesN<32>)` — auth: `caller` (shipment carrier or admin).
+ *
+ * `data_hash` is computed by the backend over the canonical status payload and
+ * passed through untouched by adapters. NOTE: unlike the legacy functions above,
+ * the contract's `shipment_id` here is a `u64`, not a `Symbol`.
+ */
+export const UpdateStatusArgsSchema = z
+  .object({
+    caller: AddressSchema,
+    shipment_id: U64StringSchema,
+    new_status: ShipmentStatusSchema,
+    data_hash: Bytes32HexSchema,
+  })
+  .strict();
+
 /** Result of any confirmed state-changing invocation. */
 export const ChainTxResultSchema = z
   .object({
@@ -116,7 +160,12 @@ export const ChainTxResultSchema = z
   })
   .strict();
 
-export const CHAIN_FUNCTIONS = ['anchor', 'init_escrow', 'release_escrow'] as const;
+export const CHAIN_FUNCTIONS = [
+  'anchor',
+  'init_escrow',
+  'release_escrow',
+  'update_status',
+] as const;
 export type ChainFunctionName = (typeof CHAIN_FUNCTIONS)[number];
 
 /** Who must `require_auth()` for each function, per spec. */
@@ -126,17 +175,20 @@ export const CHAIN_FUNCTION_AUTH: Readonly<
   anchor: 'actor',
   init_escrow: 'payer',
   release_escrow: 'caller',
+  update_status: 'caller',
 };
 
 export const ChainFunctionArgsSchemas = {
   anchor: AnchorArgsSchema,
   init_escrow: InitEscrowArgsSchema,
   release_escrow: ReleaseEscrowArgsSchema,
+  update_status: UpdateStatusArgsSchema,
 } as const satisfies Record<ChainFunctionName, z.ZodTypeAny>;
 
 export type AnchorArgs = z.infer<typeof AnchorArgsSchema>;
 export type InitEscrowArgs = z.infer<typeof InitEscrowArgsSchema>;
 export type ReleaseEscrowArgs = z.infer<typeof ReleaseEscrowArgsSchema>;
+export type UpdateStatusArgs = z.infer<typeof UpdateStatusArgsSchema>;
 export type ChainTxResult = z.infer<typeof ChainTxResultSchema>;
 
 // ─── Events ──────────────────────────────────────────────────────────────────
@@ -205,6 +257,22 @@ export type AnchorEvent = z.infer<typeof AnchorEventSchema>;
 export type EscrowInitEvent = z.infer<typeof EscrowInitEventSchema>;
 export type EscrowReleaseEvent = z.infer<typeof EscrowReleaseEventSchema>;
 export type ChainEvent = z.infer<typeof ChainEventSchema>;
+
+/** An RPC event that could not be decoded, retained for indexing and replay. */
+export interface ChainEventDecodeFailure {
+  kind: 'decode_error';
+  cursor: string;
+  contract_id: string;
+  raw_payload: unknown;
+  candidate_payload: unknown;
+  error: string;
+}
+
+export function isChainEventDecodeFailure(
+  event: ChainEvent | ChainEventDecodeFailure
+): event is ChainEventDecodeFailure {
+  return 'kind' in event && event.kind === 'decode_error';
+}
 
 // ─── Event verification / confirmation depth (v2, #1058) ────────────────────
 
@@ -306,6 +374,61 @@ export function chainErrorToAppError(contractCode: number): AppError {
   }
   const { code, status } = CHAIN_ERROR_MAP[name];
   return new AppError(status, `Chain contract error: ${name}`, code, { contractCode });
+}
+
+/**
+ * `NavinError` discriminants the REAL shipment contract can raise from
+ * `update_status` (Navin-xmr/navin-contracts `errors.rs`). The legacy table
+ * above predates the deployed contract and numbers errors differently
+ * (e.g. its `InvalidStatus` is 9, the contract's is 5), so update_status errors
+ * are decoded with this function-scoped table — never the legacy one.
+ */
+export const UPDATE_STATUS_CONTRACT_ERRORS = {
+  Unauthorized: 3,
+  ShipmentNotFound: 4,
+  InvalidStatus: 5,
+  InvalidHash: 6,
+  ShipmentFinalized: 38,
+  DuplicateAction: 41,
+} as const;
+export type UpdateStatusContractErrorName = keyof typeof UPDATE_STATUS_CONTRACT_ERRORS;
+
+export const UPDATE_STATUS_ERROR_MAP: Readonly<
+  Record<UpdateStatusContractErrorName, { code: ErrorCode; status: number }>
+> = {
+  Unauthorized: { code: ErrorCodes.CHAIN_UNAUTHORIZED, status: 403 },
+  ShipmentNotFound: { code: ErrorCodes.CHAIN_SHIPMENT_NOT_FOUND, status: 404 },
+  InvalidStatus: { code: ErrorCodes.CHAIN_INVALID_STATUS, status: 409 },
+  InvalidHash: { code: ErrorCodes.CHAIN_INVALID_HASH, status: 422 },
+  ShipmentFinalized: { code: ErrorCodes.CHAIN_INVALID_STATUS, status: 409 },
+  DuplicateAction: { code: ErrorCodes.CHAIN_DUPLICATE_ACTION, status: 409 },
+};
+
+const updateStatusErrorNameByCode = new Map<number, UpdateStatusContractErrorName>(
+  (Object.entries(UPDATE_STATUS_CONTRACT_ERRORS) as [UpdateStatusContractErrorName, number][]).map(
+    ([n, c]) => [c, n]
+  )
+);
+
+/**
+ * Decode a contract error raised by `update_status`. Unlisted codes become
+ * ERR_CHAIN_UNKNOWN (502) with the raw code preserved in `details`.
+ */
+export function updateStatusErrorToAppError(contractCode: number): AppError {
+  const name = updateStatusErrorNameByCode.get(contractCode);
+  if (!name) {
+    return new AppError(
+      502,
+      `Unmapped update_status contract error ${contractCode} (spec ${CHAIN_SPEC_VERSION})`,
+      ErrorCodes.CHAIN_UNKNOWN,
+      { contractCode, function: 'update_status' }
+    );
+  }
+  const { code, status } = UPDATE_STATUS_ERROR_MAP[name];
+  return new AppError(status, `Chain contract error: ${name}`, code, {
+    contractCode,
+    function: 'update_status',
+  });
 }
 
 /**

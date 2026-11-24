@@ -28,6 +28,7 @@ All error codes follow the naming convention: `ERR_<DOMAIN>_<DESCRIPTION>` or `E
 | **500**     | `ERR_STELLAR_CONFIG`              | Stellar server-side configuration missing                                | Anchor / webhook / signing endpoints                             | `STELLAR_SECRET_KEY` or webhook secret not configured                        |
 | **400**     | `ERR_STELLAR_INVALID_HASH`        | Invalid Stellar data hash                                                | Anchor / memo verification endpoints                             | Empty or malformed hash payload                                              |
 | **404**     | `ERR_LEDGER_BLOCK_NOT_FOUND`      | Ledger block not found                                                   | `GET /api/ledger/blocks/:id`                                     | Block height/hash does not exist                                             |
+| **422**     | `ERR_LEDGER_PAYLOAD_INVALID`      | Stored canonical payload is malformed (not a versioned object)           | `GET /api/ledger/blocks/:id/verification`                        | Block cannot be independently verified                                       |
 | **409**     | `ERR_DUPLICATE_KEY`               | Unique constraint violation                                              | `POST /api/auth/signup`, `POST /api/users`                       | Email already registered, duplicate field value                              |
 | **429**     | `ERR_RATE_LIMIT_EXCEEDED`         | Too many requests (rate limit exceeded)                                  | OTP / SMS endpoints (e.g. resend), throttled routes              | Retry only after the delay indicated by the `Retry-After` response header    |
 | **500**     | `ERR_INTERNAL_SERVER_ERROR`       | Unhandled server error                                                   | All endpoints                                                    | Unexpected error in backend processing                                       |
@@ -113,6 +114,8 @@ Content-Type: application/json
 - `ERR_FILE_DELETE_FAILED` (502) — Provider rejected the delete (#701)
 - `ERR_FILE_TOO_LARGE` (413) — Upload exceeds the configured size cap
 - `ERR_INVALID_MIME_TYPE` (415) — Upload MIME type is not accepted
+- `ERR_IDEMPOTENCY_IN_PROGRESS` (409) — A request with the same `Idempotency-Key` is still being processed; retry shortly
+- `ERR_IDEMPOTENCY_KEY_REUSED` (422) — `Idempotency-Key` was already used with a different request body
 - `ERR_INVALID_DOCUMENT_TYPE` (415) — Uploaded document type is not accepted
 - `ERR_PHOTO_LIMIT_EXCEEDED` (400) — Photo count limit reached for this resource
 
@@ -202,6 +205,18 @@ Mapped from Soroban contract errors by `chainErrorToAppError()` in `src/shared/t
 - `ERR_CHAIN_UNKNOWN` (502) — Contract error code not in the spec (spec drift)
 - `ERR_CHAIN_INVALID_EVENT` (502) — Indexed contract event failed spec validation
 - `ERR_CHAIN_FEE_BUDGET_EXCEEDED` (503) — Soroban simulation exceeded the configured fee or resource ceilings; retry only after reviewing congestion/resource usage
+- `ERR_CHAIN_SUBMISSION_TIMEOUT` (504, or 503 when the RPC asks to retry later) — A sent transaction was not confirmed within the polling window. Retried automatically (see Submission reliability); if all attempts time out this is what the caller receives. `details.txHash` is the unconfirmed transaction when one was sent.
+- `ERR_CHAIN_INVALID_IDEMPOTENCY_KEY` (422) — `ChainSubmitOptions` had an empty `shipment_id` / `event_type` or an `event_counter` that is not a non-negative integer.
+
+#### Preflight failures (`CHAIN_PREFLIGHT_ENABLED=true`)
+
+Returned before anything is signed. Each message says what to fix on the contract.
+
+- `ERR_CHAIN_NOT_INITIALIZED` (503) — The escrow contract has not been initialized. Call `initialize()` on the contract.
+- `ERR_CHAIN_ROLE_REQUIRED` (403) — The acting address holds neither the Company nor the Carrier role. `details`: `{ actor, requiredRoles }`.
+- `ERR_CHAIN_CARRIER_NOT_WHITELISTED` (403) — The actor is a Carrier (and not a Company) that has not been whitelisted. `details`: `{ actor }`.
+- `ERR_CHAIN_ACTOR_SUSPENDED` (403) — The acting address is suspended on the contract. `details`: `{ actor }`.
+- `ERR_CHAIN_INVALID_TOKEN_DECIMALS` (422) — The escrow token does not have 7 decimals. `details`: `{ token, decimals, expected }`.
 
 ### Webhook Errors
 
@@ -306,6 +321,11 @@ A: No. Always check the `code` field for precise error type identification, as m
 A: No. Error messages are currently English only. Frontend teams should map error codes to localized messages.
 
 ## Changelog
+
+### Version 1.4.0
+
+- Added `ERR_CHAIN_SUBMISSION_TIMEOUT` and `ERR_CHAIN_INVALID_IDEMPOTENCY_KEY` (#1078)
+- Added preflight codes `ERR_CHAIN_NOT_INITIALIZED`, `ERR_CHAIN_ROLE_REQUIRED`, `ERR_CHAIN_CARRIER_NOT_WHITELISTED`, `ERR_CHAIN_ACTOR_SUSPENDED`, `ERR_CHAIN_INVALID_TOKEN_DECIMALS` (#1081)
 
 ### Version 1.3.0
 

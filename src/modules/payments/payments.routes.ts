@@ -19,6 +19,7 @@ import {
 import { requireAuth } from '../../shared/middleware/requireAuth.js';
 import { UserRole } from '../../shared/constants/index.js';
 import { requireRole } from '../../shared/middleware/requireRole.js';
+import { idempotency } from '../../shared/middleware/idempotency.js';
 import { asyncHandler } from '../../shared/http/asyncHandler.js';
 import { z } from 'zod';
 
@@ -41,6 +42,7 @@ paymentsRouter.get(
 paymentsRouter.post(
   '/',
   requireRole(UserRole.ADMIN, UserRole.SUPER_ADMIN),
+  idempotency(),
   validateRequest({ body: CreatePaymentBodySchema }),
   asyncHandler(createPaymentController)
 );
@@ -60,6 +62,7 @@ paymentsRouter.get(
 paymentsRouter.patch(
   '/:id/status',
   requireRole(UserRole.ADMIN, UserRole.SUPER_ADMIN),
+  idempotency(),
   validateRequest({ params: PaymentIdParamSchema, body: UpdatePaymentStatusBodySchema }),
   asyncHandler(updatePaymentStatusController)
 );
