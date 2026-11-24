@@ -9,7 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Indexer golden-row integration test: the spec fixtures run through the real indexer and `LedgerBlock` model must produce exactly `tests/fixtures/chain/ledger-rows.json` (hashes, counters, keys, statuses), and replaying is idempotent (#1077).
+- `SorobanAdapter` submission reliability: bounded retry with exponential backoff for timeouts (`ERR_CHAIN_SUBMISSION_TIMEOUT`), a chain-state duplicate check before each retry, and deterministic idempotency keys from `(shipment_id, event_type, event_counter)` via the optional `ChainSubmitOptions` argument. New env vars `CHAIN_SUBMIT_MAX_ATTEMPTS`, `CHAIN_SUBMIT_BACKOFF_MS`, `CHAIN_SUBMIT_BACKOFF_MAX_MS` (#1078).
+- Configurable on-chain preflight checks before submission (initialized, Company/Carrier roles, carrier whitelist, suspension, 7-decimal token) with `ERR_CHAIN_NOT_INITIALIZED`, `ERR_CHAIN_ROLE_REQUIRED`, `ERR_CHAIN_CARRIER_NOT_WHITELISTED`, `ERR_CHAIN_ACTOR_SUSPENDED` and `ERR_CHAIN_INVALID_TOKEN_DECIMALS`. Off by default (`CHAIN_PREFLIGHT_ENABLED`); the contract view functions it calls are assumed and documented (#1081).
 - Three-ledger Stellar confirmation tracking for released payments and telemetry anchors, with immediate confirmations in simulated mode (#838, #837).
+- Chain spec **v2.0.0**: `release_escrow(caller, shipment_id)` replaces the backend-invented `(payment_id, proof_hash)` input; release receipts now carry `shipmentId` and failures reject with coded `ERR_CHAIN_UNAUTHORIZED` / `ERR_CHAIN_INVALID_STATUS` instead of `{ success: false }` (#1056).
+- Confirmation depth (`confirmations` / `verified`) on every anchored ledger event class, per-network thresholds via `CHAIN_CONFIRMATIONS_TESTNET` / `CHAIN_CONFIRMATIONS_PUBLIC`, and idempotent re-verification (#1058).
+- V2 schema round-trip/mutation suite (`tests/chain.v2.schemas.test.ts`, `reports/chain-schema-coverage.md`) and chain threat model with negative tests (`docs/chain-threat-model.md`) (#1057, #1059).
 
 **Phase 6 — Hash-and-Emit chain architecture**
 
@@ -110,12 +116,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
+- `src/services/stellar.service.ts`: the legacy Horizon `manageData` shipment and escrow paths (`tokenizeShipment`, `anchorTelemetryHash`, `getHorizonServer`) and its `releaseEscrow` wrapper. Chain work goes through the `ChainAdapter` port and factory; `getStellarExplorerUrl` moved to `src/services/chain/explorer.ts`. `tests/stellar.service.retired.test.ts` keeps the module, imports of it and `{ success: false }` returns from coming back (#1082).
 - Archived `AUDIT_REPORT_*.html` files outside the repository for the current session.
 - Deleted stale scrapes / snapshots: `navinmxv`, `Issues.md`, `md`, `documentation md`, and the `issues/` directory (#56–#65).
 - Dropped the stale `eventType` index from the `LedgerBlock` schema; the canonical `milestoneEvent` field is indexed instead.
 
 ### Fixed
 
+- The indexer no longer puts `milestoneEvent` in both `$setOnInsert` and `$set` of its `LedgerBlock` upsert; MongoDB rejects a path in two update operators, and the mocked tests could not see it (#1077).
 - Restored per-account Stellar signing serialization and bounded `tx_bad_seq` retries (#692)
 - Repaired merge-corrupted `src/config/index.ts` and duplicate keys in `src/env.ts` so `npm run build` succeeds (#396)
 - Restored missing `organizationsRouter` import in `buildApp` and repaired broken `auth.controller` / Swagger YAML so pagination and search suites can boot

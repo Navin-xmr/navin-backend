@@ -294,8 +294,8 @@ describe('Ledger block creation on lifecycle events', () => {
       metadata: { paymentId: 'pay-1' },
     });
     expect(chainAdapter.releaseEscrow).toHaveBeenCalledWith({
-      payment_id: 'pay-1',
-      proof_hash: expect.stringMatching(/^[0-9a-f]{64}$/),
+      caller: 'GAAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQDZ7H',
+      shipment_id: 'ship-1',
     });
   });
 });

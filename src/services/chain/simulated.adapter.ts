@@ -8,10 +8,10 @@
  * Mapping (legacy stellar.service.ts → port):
  * - anchorTelemetryHash → anchorEvent: manage-data `telemetry:<shipment_id>` = data_hash, hash memo
  * - tokenizeShipment    → anchorEvent: hash of the tokenized shipment fields
- * - releaseEscrow       → releaseEscrow: manage-data `release:<payment_id>` = proof_hash, hash memo.
- *   (The legacy `Memo.text('escrow-release:<id>')` exceeds Stellar's 28-byte text-memo limit for
- *   ObjectId payment ids, so it is not reproduced here.) Failures reject with AppError instead of
- *   resolving `{ success: false }`.
+ * - releaseEscrow       → releaseEscrow (v2): manage-data `release:<shipment_id>` holds a
+ *   deterministic digest of `(caller, shipment_id)` with a matching hash memo. Escrow is
+ *   per-shipment; the v1 payment_id/proof_hash pair is gone. Failures reject with AppError
+ *   (ERR_CHAIN_*) instead of resolving `{ success: false }`.
  * - streamEvents: replays anchor manage-data writes from the signer account's Horizon history as
  *   spec `anchor` events. Release writes are not streamed — manage-data never recorded the payee
  *   or amount that a spec `esc_rel` event requires, and fabricating them would be dishonest.
@@ -34,14 +34,18 @@ import {
 import type { Account, Transaction } from '@stellar/stellar-sdk';
 
 import { config } from '../../config/index.js';
+import { instrumentSubmission } from '../../infra/metrics/chainMetrics.js';
 import { AppError, ErrorCodes } from '../../shared/http/errors.js';
 import {
+  AddressSchema,
   Bytes32HexSchema,
   CHAIN_EVENT_NAMES,
   SymbolSchema,
+  UpdateStatusArgsSchema,
   parseChainEvent,
 } from '../../shared/types/chain.js';
 import type { ChainEvent } from '../../shared/types/chain.js';
+import { generateDataHash } from '../../shared/utils/crypto.js';
 import { KeyedSerializer } from './serializer.js';
 import type {
   AnchorEventInput,
@@ -51,6 +55,8 @@ import type {
   ChainEventCursor,
   EscrowResult,
   ReleaseEscrowInput,
+  UpdateStatusInput,
+  UpdateStatusResult,
 } from './types.js';
 
 /** Sentinel contract id for simulated events (all-zero contract strkey) — no contract exists. */
@@ -58,6 +64,7 @@ const SIMULATED_CONTRACT_ID = StrKey.encodeContract(Buffer.alloc(32));
 
 const ANCHOR_KEY_PREFIX = 'telemetry:';
 const RELEASE_KEY_PREFIX = 'release:';
+const STATUS_KEY_PREFIX = 'status:';
 const PAGE_SIZE = 200;
 const MAX_BAD_SEQ_RETRIES = 2;
 
@@ -136,7 +143,11 @@ export class SimulatedAdapter implements ChainAdapter {
       (config.stellarNetwork === 'public' ? Networks.PUBLIC : Networks.TESTNET);
   }
 
-  async anchorEvent(input: AnchorEventInput): Promise<AnchorResult> {
+  anchorEvent(input: AnchorEventInput): Promise<AnchorResult> {
+    return instrumentSubmission('anchor_event', () => this.doAnchorEvent(input));
+  }
+
+  private async doAnchorEvent(input: AnchorEventInput): Promise<AnchorResult> {
     assertBytes32(input.data_hash, 'data_hash', ErrorCodes.CHAIN_INVALID_HASH);
     const { hash, ledger } = await this.submitManageData(
       `${ANCHOR_KEY_PREFIX}${input.shipment_id}`,
@@ -145,13 +156,58 @@ export class SimulatedAdapter implements ChainAdapter {
     return { txHash: hash, ledger, simulated: true };
   }
 
-  async releaseEscrow(input: ReleaseEscrowInput): Promise<EscrowResult> {
-    assertBytes32(input.proof_hash, 'proof_hash', ErrorCodes.CHAIN_INVALID_PROOF);
+  releaseEscrow(input: ReleaseEscrowInput): Promise<EscrowResult> {
+    return instrumentSubmission('release_escrow', () => this.doReleaseEscrow(input));
+  }
+
+  private async doReleaseEscrow(input: ReleaseEscrowInput): Promise<EscrowResult> {
+    if (!AddressSchema.safeParse(input.caller).success) {
+      throw chainError(
+        422,
+        'caller must be a valid Stellar address strkey',
+        ErrorCodes.CHAIN_UNAUTHORIZED
+      );
+    }
+    if (!SymbolSchema.safeParse(input.shipment_id).success) {
+      throw chainError(422, 'shipment_id must be a valid Soroban Symbol', ErrorCodes.CHAIN_UNKNOWN);
+    }
+
+    const releaseDigest = generateDataHash({
+      caller: input.caller,
+      shipment_id: input.shipment_id,
+    });
     const { hash, ledger } = await this.submitManageData(
-      `${RELEASE_KEY_PREFIX}${input.payment_id}`,
-      input.proof_hash
+      `${RELEASE_KEY_PREFIX}${input.shipment_id}`,
+      releaseDigest
     );
-    return { txHash: hash, ledger, simulated: true, paymentId: input.payment_id };
+    return { txHash: hash, ledger, simulated: true, shipmentId: input.shipment_id };
+  }
+
+  async updateStatus(input: UpdateStatusInput): Promise<UpdateStatusResult> {
+    const parsed = UpdateStatusArgsSchema.safeParse(input);
+    if (!parsed.success) {
+      const hashIssue = parsed.error.issues.some(i => i.path[0] === 'data_hash');
+      throw chainError(
+        422,
+        'update_status arguments do not match the contract ABI',
+        hashIssue ? ErrorCodes.CHAIN_INVALID_HASH : ErrorCodes.CHAIN_UNKNOWN,
+        parsed.error.issues
+      );
+    }
+    const { shipment_id, new_status, data_hash } = parsed.data;
+    // Manage-data holds the caller-supplied data_hash verbatim (never recomputed).
+    // The status name lives in the key so the latest status is discoverable per shipment.
+    const { hash, ledger } = await this.submitManageData(
+      `${STATUS_KEY_PREFIX}${shipment_id}:${new_status}`, // ≤ 45 bytes (u64 ≤ 20 digits)
+      data_hash
+    );
+    return {
+      txHash: hash,
+      ledger,
+      simulated: true,
+      shipmentId: shipment_id,
+      newStatus: new_status,
+    };
   }
 
   async *streamEvents(cursor?: ChainEventCursor): AsyncIterable<ChainEvent> {
@@ -221,9 +277,7 @@ export class SimulatedAdapter implements ChainAdapter {
       return await fn();
     } catch (err) {
       if (err instanceof AppError && err.code.startsWith('ERR_CHAIN_')) throw err;
-      throw chainError(502, 'Simulated chain (Horizon) request failed', ErrorCodes.CHAIN_UNKNOWN, {
-        cause: err instanceof Error ? err.message : String(err),
-      });
+      throw chainError(502, 'Simulated chain (Horizon) request failed', ErrorCodes.CHAIN_UNKNOWN);
     }
   }
 
