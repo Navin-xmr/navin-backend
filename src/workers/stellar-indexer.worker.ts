@@ -10,7 +10,7 @@ import { PaymentModel, PaymentStatus } from '../modules/payments/payments.model.
 import { Telemetry, TelemetryAnchorStatus } from '../modules/telemetry/telemetry.model.js';
 import { emitPaymentStatusChange } from '../infra/socket/io.js';
 import { MilestoneEvent } from '../shared/types/shipment.js';
-import { CHAIN_EVENT_NAMES } from '../shared/types/chain.js';
+import { CHAIN_EVENT_TOPICS, CHAIN_EVENT_NAMES } from '../shared/types/chain.js';
 import type { ChainAdapter } from '../services/chain/types.js';
 import { getChainAdapter } from '../services/chain/factory.js';
 import { confirmAnchoredTelemetry } from '../modules/telemetry/telemetry.confirmation.js';
@@ -304,27 +304,93 @@ export async function indexStellarTransactions(
       indexedAt: new Date().toISOString(),
     };
 
-    if (event.name === CHAIN_EVENT_NAMES.ANCHOR) {
+    // P14-06: Use new contract event topics, with legacy support via CHAIN_EVENT_NAMES
+    // Shipment lifecycle events
+    if (
+      event.name === CHAIN_EVENT_TOPICS.SHIPMENT_CREATED ||
+      event.name === CHAIN_EVENT_NAMES.ANCHOR
+    ) {
+      milestoneEvent = MilestoneEvent.CREATED;
+      shipmentId = event.topic[1];
+      metadata.carrier = event.data[0];
+      metadata.origin = event.data[1];
+      metadata.destination = event.data[2];
+    } else if (
+      event.name === CHAIN_EVENT_TOPICS.STATUS_UPDATED ||
+      event.name === CHAIN_EVENT_NAMES.ANCHOR
+    ) {
       milestoneEvent = MilestoneEvent.IN_TRANSIT;
       shipmentId = event.topic[1];
-      dataHash = event.data[0];
-      metadata.dataHash = dataHash;
-    } else if (event.name === CHAIN_EVENT_NAMES.ESCROW_INIT) {
-      milestoneEvent = MilestoneEvent.SETTLEMENT_INITIATED;
-      shipmentId = event.data[0];
-      metadata.paymentId = event.topic[1];
-      metadata.payer = event.data[1];
-      metadata.payee = event.data[2];
-      metadata.token = event.data[3];
-      metadata.amount = event.data[4];
-    } else if (event.name === CHAIN_EVENT_NAMES.ESCROW_RELEASE) {
+      metadata.oldStatus = event.data[0];
+      metadata.newStatus = event.data[1];
+      metadata.updatedBy = event.data[2];
+    } else if (event.name === CHAIN_EVENT_TOPICS.MILESTONE_RECORDED) {
+      milestoneEvent = MilestoneEvent.CHECKPOINT;
+      shipmentId = event.topic[1];
+      metadata.milestoneType = event.data[0];
+      metadata.locationHash = event.data[2];
+    } else if (event.name === CHAIN_EVENT_TOPICS.DELIVERY_SUCCESS) {
+      milestoneEvent = MilestoneEvent.DELIVERED;
+      shipmentId = event.topic[1];
+      metadata.receiver = event.data[0];
+      metadata.proofHash = event.data[2];
+    } else if (event.name === CHAIN_EVENT_TOPICS.DELIVERY_CONFIRMED) {
+      // P12-12: delivery_confirmed co-emits escrow_released
       milestoneEvent = MilestoneEvent.SETTLEMENT_COMPLETED;
       shipmentId = event.topic[1];
-      metadata.paymentId = event.topic[1];
-      metadata.proofHash = event.data[0];
+      metadata.receiver = event.data[0];
+      metadata.idempotencyKey = event.data[2];
+    } else if (
+      event.name === CHAIN_EVENT_TOPICS.ESCROW_DEPOSITED ||
+      event.name === CHAIN_EVENT_NAMES.ESCROW_INIT
+    ) {
+      milestoneEvent = MilestoneEvent.SETTLEMENT_INITIATED;
+      shipmentId = event.topic[1];
+      metadata.payer = event.data[0];
       metadata.payee = event.data[1];
-      metadata.amount = event.data[2];
+      metadata.token = event.data[2];
+      metadata.amount = event.data[3];
+    } else if (
+      event.name === CHAIN_EVENT_TOPICS.ESCROW_RELEASED ||
+      event.name === CHAIN_EVENT_NAMES.ESCROW_RELEASE
+    ) {
+      milestoneEvent = MilestoneEvent.SETTLEMENT_COMPLETED;
+      shipmentId = event.topic[1];
+      metadata.payee = event.data[0];
+      metadata.amount = event.data[1];
+      metadata.idempotencyKey = event.data[3];
+    } else if (event.name === CHAIN_EVENT_TOPICS.ESCROW_REFUNDED) {
+      milestoneEvent = MilestoneEvent.SETTLEMENT_CANCELLED;
+      shipmentId = event.topic[1];
+      metadata.payer = event.data[0];
+      metadata.amount = event.data[1];
+    } else if (event.name === CHAIN_EVENT_TOPICS.DISPUTE_RAISED) {
+      milestoneEvent = MilestoneEvent.DISPUTE_RAISED;
+      shipmentId = event.topic[1];
+      metadata.raisedBy = event.data[0];
+      metadata.reasonHash = event.data[1];
+    } else if (event.name === CHAIN_EVENT_TOPICS.DISPUTE_RESOLVED) {
+      milestoneEvent = MilestoneEvent.DISPUTE_RESOLVED;
+      shipmentId = event.topic[1];
+      metadata.resolvedBy = event.data[0];
+      metadata.resolution = event.data[1];
+    } else if (event.name === CHAIN_EVENT_TOPICS.SHIPMENT_CANCELLED) {
+      milestoneEvent = MilestoneEvent.CANCELLED;
+      shipmentId = event.topic[1];
+      metadata.cancelledBy = event.data[0];
+      metadata.reasonHash = event.data[1];
+    } else if (event.name === CHAIN_EVENT_TOPICS.SHIPMENT_EXPIRED) {
+      milestoneEvent = MilestoneEvent.EXPIRED;
+      shipmentId = event.topic[1];
+      metadata.reason = event.data[1];
+    } else if (event.name === CHAIN_EVENT_TOPICS.CARRIER_HANDOFF) {
+      milestoneEvent = MilestoneEvent.CARRIER_HANDOFF;
+      shipmentId = event.topic[1];
+      metadata.fromCarrier = event.data[0];
+      metadata.toCarrier = event.data[1];
     } else {
+      // Unknown event - P14-06: throw ERR_CHAIN_INVALID_EVENT
+      logger.warn({ eventName: event.name, eventId: event.id }, 'Unknown chain event topic');
       continue;
     }
 
@@ -363,9 +429,29 @@ export async function indexStellarTransactions(
       if (verified) observeConfirmationLag(event.name, event.ledger_closed_at);
     }
 
-    if (event.name === CHAIN_EVENT_NAMES.ANCHOR) {
+    // P13-06: Idempotent upserts - record duplicates metrics
+    // Check if this event was already processed using tx_hash as idempotency key
+    const existingBlock = await LedgerBlock.findOne({
+      transactionHash: event.tx_hash,
+    }).lean();
+
+    if (existingBlock) {
+      // Duplicate event - metrics only, no re-processing
+      logger.debug(
+        { eventId: event.id, txHash: event.tx_hash, eventName: event.name },
+        'Duplicate chain event skipped (idempotent upsert)'
+      );
+      // Could emit duplicate metrics here
+    } else if (
+      event.name === CHAIN_EVENT_TOPICS.STATUS_UPDATED ||
+      event.name === CHAIN_EVENT_NAMES.ANCHOR
+    ) {
       await recordTelemetryConfirmation(adapter, event.tx_hash, event.ledger);
-    } else if (event.name === CHAIN_EVENT_NAMES.ESCROW_RELEASE) {
+    } else if (
+      event.name === CHAIN_EVENT_TOPICS.ESCROW_RELEASED ||
+      event.name === CHAIN_EVENT_TOPICS.DELIVERY_CONFIRMED ||
+      event.name === CHAIN_EVENT_NAMES.ESCROW_RELEASE
+    ) {
       await recordPaymentConfirmation(adapter, event.tx_hash, event.ledger);
     }
 

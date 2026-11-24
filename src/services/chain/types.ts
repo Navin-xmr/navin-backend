@@ -64,6 +64,23 @@ export interface EscrowResult extends ChainTxReceipt {
 /** Opaque resume position: the `id` of the last event processed. */
 export type ChainEventCursor = ChainEvent['id'];
 
+/** Input for `confirm_delivery(receiver, shipment_id, amount?, idempotency_key?)` (P12-12). */
+export interface ConfirmDeliveryInput {
+  receiver: string;
+  shipment_id: string;
+  /** Optional amount for partial release; omit for full escrow release. */
+  amount?: string;
+  /** Contract-provided idempotency key for deduplication (P13-06). */
+  idempotency_key?: string;
+}
+
+/** Result of confirm_delivery (co-emits delivery_confirmed + escrow_released). */
+export interface ConfirmDeliveryResult extends ChainTxReceipt {
+  shipmentId: string;
+  /** Whether this was a partial release (amount < total escrow). */
+  partial: boolean;
+}
+
 export interface ChainAdapter {
   /**
    * Anchor a payload hash for a shipment.
@@ -79,6 +96,15 @@ export interface ChainAdapter {
    * `{ success: false }` failure flag.
    */
   releaseEscrow(input: ReleaseEscrowInput): Promise<EscrowResult>;
+
+  /**
+   * Confirm delivery and release escrow in one contract call (P12-12).
+   * Co-emits both `delivery_confirmed` and `escrow_released` events.
+   * Supports partial release (amount specified) vs full release (amount omitted).
+   * Uses idempotency_key for deduplication (P13-06).
+   * @throws {AppError} ERR_CHAIN_* on rejection; ERR_CHAIN_TIMEOUT on polling timeout.
+   */
+  confirmDelivery?(input: ConfirmDeliveryInput): Promise<ConfirmDeliveryResult>;
 
   /**
    * Record a shipment status transition on-chain, authorized by `caller`.

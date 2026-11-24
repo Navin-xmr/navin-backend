@@ -116,20 +116,30 @@ export async function anchorTelemetryHash(telemetryData: {
 /**
  * Releases escrow on Stellar via the ChainAdapter `release_escrow(caller, shipment_id)`
  * port (v2, #1056). Escrow is per-shipment; there is no proof hash to invent.
+ * P12-12: Always goes through the contract - no simulated path for soroban mode.
  * Rejects with AppError codes on failure (no error swallowing, no `{success:false}`).
  */
 export async function releaseEscrow(escrowData: {
   caller: string;
   shipmentId: string;
-}): Promise<{ success: boolean; transactionHash?: string; simulated?: boolean }> {
+}): Promise<{ txHash: string; ledger: number; simulated: boolean }> {
   const result = await getChainAdapter().releaseEscrow({
     caller: escrowData.caller,
     shipment_id: escrowData.shipmentId,
   });
 
+  // P12-12: In soroban mode, txHash must be present - no success without tx hash
+  if (!result.txHash) {
+    throw new AppError(
+      500,
+      'Release submitted but no transaction hash returned',
+      ErrorCodes.CHAIN_UNKNOWN
+    );
+  }
+
   return {
-    success: true,
-    transactionHash: result.txHash,
+    txHash: result.txHash,
+    ledger: result.ledger,
     simulated: result.simulated,
   };
 }
@@ -137,4 +147,70 @@ export async function releaseEscrow(escrowData: {
 export function getStellarExplorerUrl(txHash: string): string {
   const network = config.stellarNetwork === 'public' ? 'public' : 'testnet';
   return `https://stellar.expert/explorer/${network}/tx/${txHash}`;
+}
+
+/**
+ * Confirms delivery and releases escrow via the contract's `confirm_delivery` function (P12-12).
+ * This co-emits both `delivery_confirmed` and `escrow_released` events.
+ * Partial vs full release semantics:
+ * - Full release: entire escrow balance released to payee
+ * - Partial release: only specified amount released (remainder stays in escrow)
+ * Returns the transaction hash only after on-chain confirmation.
+ *
+ * @param input.confirmDelivery Data: receiver address, shipment_id, amount (optional for partial)
+ * @returns Confirmed transaction receipt with txHash and ledger
+ * @throws {AppError} On contract rejection, timeout, or missing tx hash
+ */
+export async function confirmDeliveryAndRelease(input: {
+  receiver: string;
+  shipmentId: string;
+  amount?: string; // Optional: omit for full release, specify for partial
+  idempotencyKey?: string;
+}): Promise<{ txHash: string; ledger: number; simulated: boolean }> {
+  const adapter = getChainAdapter();
+
+  // Use the adapter's confirmDelivery method if available (soroban mode)
+  if ('confirmDelivery' in adapter && typeof adapter.confirmDelivery === 'function') {
+    const result = await adapter.confirmDelivery({
+      receiver: input.receiver,
+      shipment_id: input.shipmentId,
+      amount: input.amount,
+      idempotency_key: input.idempotencyKey,
+    });
+
+    // P12-12: No code path reports success without a tx hash in soroban mode
+    if (!result.txHash) {
+      throw new AppError(
+        500,
+        'Delivery confirmation submitted but no transaction hash returned',
+        ErrorCodes.CHAIN_UNKNOWN
+      );
+    }
+
+    return {
+      txHash: result.txHash,
+      ledger: result.ledger,
+      simulated: result.simulated,
+    };
+  }
+
+  // Fallback: call release_escrow directly for simulated mode
+  const result = await adapter.releaseEscrow({
+    caller: input.receiver,
+    shipment_id: input.shipmentId,
+  });
+
+  if (!result.txHash) {
+    throw new AppError(
+      500,
+      'Escrow release submitted but no transaction hash returned',
+      ErrorCodes.CHAIN_UNKNOWN
+    );
+  }
+
+  return {
+    txHash: result.txHash,
+    ledger: result.ledger,
+    simulated: result.simulated,
+  };
 }

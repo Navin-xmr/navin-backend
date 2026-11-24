@@ -86,6 +86,12 @@ export const ErrorCodes = {
   CHAIN_SHIPMENT_NOT_FOUND: 'ERR_CHAIN_SHIPMENT_NOT_FOUND',
   CHAIN_UNKNOWN: 'ERR_CHAIN_UNKNOWN',
   CHAIN_INVALID_EVENT: 'ERR_CHAIN_INVALID_EVENT',
+  /** P12-06: Transaction execution failed on-chain (distinct from simulation failure). */
+  CHAIN_TRANSACTION_FAILED: 'ERR_CHAIN_TRANSACTION_FAILED',
+  /** P12-06: Polling for transaction confirmation timed out. */
+  CHAIN_TIMEOUT: 'ERR_CHAIN_TIMEOUT',
+  /** P12-06: RPC returned TRY_AGAIN_LATER - temporary failure, retry later. */
+  CHAIN_TRY_AGAIN_LATER: 'ERR_CHAIN_TRY_AGAIN_LATER',
   RATE_LIMIT_EXCEEDED: 'ERR_RATE_LIMIT_EXCEEDED',
   LEDGER_BLOCK_NOT_FOUND: 'ERR_LEDGER_BLOCK_NOT_FOUND',
   /** #1046 — stored canonical payload is not a versioned plain object; block cannot be verified. */

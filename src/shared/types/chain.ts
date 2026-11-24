@@ -30,7 +30,7 @@ import { z } from 'zod';
 import { AppError, ErrorCodes } from '../http/errors.js';
 import type { ErrorCode } from '../http/errors.js';
 
-export const CHAIN_SPEC_VERSION = '2.1.0' as const;
+export const CHAIN_SPEC_VERSION = '3.0.0' as const;
 
 // ─── Soroban primitives ──────────────────────────────────────────────────────
 
@@ -193,70 +193,249 @@ export type ChainTxResult = z.infer<typeof ChainTxResultSchema>;
 
 // ─── Events ──────────────────────────────────────────────────────────────────
 
-export const CHAIN_EVENT_NAMES = {
-  ANCHOR: 'anchor',
-  ESCROW_INIT: 'esc_init',
-  ESCROW_RELEASE: 'esc_rel',
+/**
+ * Contract event topics (P14-06). Replaces legacy anchor/esc_init/esc_rel.
+ * Each topic's data tuple order mirrors the contract's published event.
+ */
+export const CHAIN_EVENT_TOPICS = {
+  SHIPMENT_CREATED: 'shipment_created',
+  STATUS_UPDATED: 'status_updated',
+  MILESTONE_RECORDED: 'milestone_recorded',
+  DELIVERY_SUCCESS: 'delivery_success',
+  DELIVERY_CONFIRMED: 'delivery_confirmed',
+  SHIPMENT_CANCELLED: 'shipment_cancelled',
+  SHIPMENT_EXPIRED: 'shipment_expired',
+  ESCROW_DEPOSITED: 'escrow_deposited',
+  ESCROW_RELEASED: 'escrow_released',
+  ESCROW_REFUNDED: 'escrow_refunded',
+  DISPUTE_RAISED: 'dispute_raised',
+  DISPUTE_RESOLVED: 'dispute_resolved',
+  CONDITION_BREACH: 'condition_breach',
+  CARRIER_HANDOFF: 'carrier_handoff',
 } as const;
-export type ChainEventName = (typeof CHAIN_EVENT_NAMES)[keyof typeof CHAIN_EVENT_NAMES];
+export type ChainEventTopic = (typeof CHAIN_EVENT_TOPICS)[keyof typeof CHAIN_EVENT_TOPICS];
+
+/** Legacy topic names mapped to new equivalents for backward compatibility. */
+export const LEGACY_TOPIC_MAP: Record<string, ChainEventTopic> = {
+  anchor: CHAIN_EVENT_TOPICS.STATUS_UPDATED,
+  esc_init: CHAIN_EVENT_TOPICS.ESCROW_DEPOSITED,
+  esc_rel: CHAIN_EVENT_TOPICS.ESCROW_RELEASED,
+};
 
 /** Envelope fields common to every decoded contract event. */
 const eventEnvelope = {
   /** RPC event id — stable paging cursor, used for idempotent indexing. */
   id: z.string().min(1),
+  /** Contract-provided idempotency key for deduplication (P13-06). */
+  idempotency_key: z.string().optional(),
   contract_id: ContractAddressSchema,
   tx_hash: TxHashSchema,
   ledger: U32Schema,
   ledger_closed_at: z.string().datetime(),
 };
 
-/** topic `["anchor", shipment_id]` · data `(data_hash, ledger)` */
-export const AnchorEventSchema = z
+/** topic `["shipment_created", shipment_id]` · data `(carrier, origin, destination, created_at)` */
+export const ShipmentCreatedEventSchema = z
   .object({
     ...eventEnvelope,
-    name: z.literal(CHAIN_EVENT_NAMES.ANCHOR),
-    topic: z.tuple([z.literal(CHAIN_EVENT_NAMES.ANCHOR), SymbolSchema]),
-    data: z.tuple([Bytes32HexSchema, U32Schema]),
+    name: z.literal(CHAIN_EVENT_TOPICS.SHIPMENT_CREATED),
+    topic: z.tuple([z.literal(CHAIN_EVENT_TOPICS.SHIPMENT_CREATED), SymbolSchema]),
+    data: z.tuple([AddressSchema, SymbolSchema, SymbolSchema, U32Schema]),
   })
   .strict();
 
-/** topic `["esc_init", payment_id]` · data `(shipment_id, payer, payee, token, amount)` */
-export const EscrowInitEventSchema = z
+/**
+ * topic `["status_updated", shipment_id]` · data `(old_status, new_status, updated_by, ledger)`.
+ * Field order matches contract's tuple (old_status first).
+ */
+export const StatusUpdatedEventSchema = z
   .object({
     ...eventEnvelope,
-    name: z.literal(CHAIN_EVENT_NAMES.ESCROW_INIT),
-    topic: z.tuple([z.literal(CHAIN_EVENT_NAMES.ESCROW_INIT), SymbolSchema]),
+    name: z.literal(CHAIN_EVENT_TOPICS.STATUS_UPDATED),
+    topic: z.tuple([z.literal(CHAIN_EVENT_TOPICS.STATUS_UPDATED), SymbolSchema]),
+    data: z.tuple([ShipmentStatusSchema, ShipmentStatusSchema, AddressSchema, U32Schema]),
+  })
+  .strict();
+
+/** topic `["milestone_recorded", shipment_id]` · data `(milestone_type, timestamp, location_hash)` */
+export const MilestoneRecordedEventSchema = z
+  .object({
+    ...eventEnvelope,
+    name: z.literal(CHAIN_EVENT_TOPICS.MILESTONE_RECORDED),
+    topic: z.tuple([z.literal(CHAIN_EVENT_TOPICS.MILESTONE_RECORDED), SymbolSchema]),
+    data: z.tuple([SymbolSchema, U32Schema, Bytes32HexSchema]),
+  })
+  .strict();
+
+/** topic `["delivery_success", shipment_id]` · data `(receiver, delivered_at, proof_hash)` */
+export const DeliverySuccessEventSchema = z
+  .object({
+    ...eventEnvelope,
+    name: z.literal(CHAIN_EVENT_TOPICS.DELIVERY_SUCCESS),
+    topic: z.tuple([z.literal(CHAIN_EVENT_TOPICS.DELIVERY_SUCCESS), SymbolSchema]),
+    data: z.tuple([AddressSchema, U32Schema, Bytes32HexSchema]),
+  })
+  .strict();
+
+/**
+ * topic `["delivery_confirmed", shipment_id]` · data `(receiver, confirmed_at, idempotency_key)`.
+ * Co-emits ESCROW_RELEASED per P12-12.
+ */
+export const DeliveryConfirmedEventSchema = z
+  .object({
+    ...eventEnvelope,
+    name: z.literal(CHAIN_EVENT_TOPICS.DELIVERY_CONFIRMED),
+    topic: z.tuple([z.literal(CHAIN_EVENT_TOPICS.DELIVERY_CONFIRMED), SymbolSchema]),
+    data: z.tuple([AddressSchema, U32Schema, SymbolSchema]),
+  })
+  .strict();
+
+/** topic `["shipment_cancelled", shipment_id]` · data `(cancelled_by, reason_hash, cancelled_at)` */
+export const ShipmentCancelledEventSchema = z
+  .object({
+    ...eventEnvelope,
+    name: z.literal(CHAIN_EVENT_TOPICS.SHIPMENT_CANCELLED),
+    topic: z.tuple([z.literal(CHAIN_EVENT_TOPICS.SHIPMENT_CANCELLED), SymbolSchema]),
+    data: z.tuple([AddressSchema, Bytes32HexSchema, U32Schema]),
+  })
+  .strict();
+
+/** topic `["shipment_expired", shipment_id]` · data `(expired_at, reason)` */
+export const ShipmentExpiredEventSchema = z
+  .object({
+    ...eventEnvelope,
+    name: z.literal(CHAIN_EVENT_TOPICS.SHIPMENT_EXPIRED),
+    topic: z.tuple([z.literal(CHAIN_EVENT_TOPICS.SHIPMENT_EXPIRED), SymbolSchema]),
+    data: z.tuple([U32Schema, SymbolSchema]),
+  })
+  .strict();
+
+/** topic `["escrow_deposited", shipment_id]` · data `(payer, payee, token, amount, deposited_at)` */
+export const EscrowDepositedEventSchema = z
+  .object({
+    ...eventEnvelope,
+    name: z.literal(CHAIN_EVENT_TOPICS.ESCROW_DEPOSITED),
+    topic: z.tuple([z.literal(CHAIN_EVENT_TOPICS.ESCROW_DEPOSITED), SymbolSchema]),
     data: z.tuple([
-      SymbolSchema,
       AddressSchema,
       AddressSchema,
       ContractAddressSchema,
       PositiveI128Schema,
+      U32Schema,
     ]),
   })
   .strict();
 
-/** topic `["esc_rel", payment_id]` · data `(proof_hash, payee, amount)` */
-export const EscrowReleaseEventSchema = z
+/**
+ * topic `["escrow_released", shipment_id]` · data `(payee, amount, released_at, idempotency_key)`.
+ * Emitted by both confirm_delivery (receiver) and release_escrow (receiver/admin).
+ */
+export const EscrowReleasedEventSchema = z
   .object({
     ...eventEnvelope,
-    name: z.literal(CHAIN_EVENT_NAMES.ESCROW_RELEASE),
-    topic: z.tuple([z.literal(CHAIN_EVENT_NAMES.ESCROW_RELEASE), SymbolSchema]),
-    data: z.tuple([Bytes32HexSchema, AddressSchema, PositiveI128Schema]),
+    name: z.literal(CHAIN_EVENT_TOPICS.ESCROW_RELEASED),
+    topic: z.tuple([z.literal(CHAIN_EVENT_TOPICS.ESCROW_RELEASED), SymbolSchema]),
+    data: z.tuple([AddressSchema, PositiveI128Schema, U32Schema, SymbolSchema]),
   })
   .strict();
 
-/** Runtime validator for the indexer and golden fixtures. */
+/** topic `["escrow_refunded", shipment_id]` · data `(payer, amount, refunded_at)` */
+export const EscrowRefundedEventSchema = z
+  .object({
+    ...eventEnvelope,
+    name: z.literal(CHAIN_EVENT_TOPICS.ESCROW_REFUNDED),
+    topic: z.tuple([z.literal(CHAIN_EVENT_TOPICS.ESCROW_REFUNDED), SymbolSchema]),
+    data: z.tuple([AddressSchema, PositiveI128Schema, U32Schema]),
+  })
+  .strict();
+
+/** topic `["dispute_raised", shipment_id]` · data `(raised_by, reason_hash, raised_at)` */
+export const DisputeRaisedEventSchema = z
+  .object({
+    ...eventEnvelope,
+    name: z.literal(CHAIN_EVENT_TOPICS.DISPUTE_RAISED),
+    topic: z.tuple([z.literal(CHAIN_EVENT_TOPICS.DISPUTE_RAISED), SymbolSchema]),
+    data: z.tuple([AddressSchema, Bytes32HexSchema, U32Schema]),
+  })
+  .strict();
+
+/** topic `["dispute_resolved", shipment_id]` · data `(resolved_by, resolution, resolved_at)` */
+export const DisputeResolvedEventSchema = z
+  .object({
+    ...eventEnvelope,
+    name: z.literal(CHAIN_EVENT_TOPICS.DISPUTE_RESOLVED),
+    topic: z.tuple([z.literal(CHAIN_EVENT_TOPICS.DISPUTE_RESOLVED), SymbolSchema]),
+    data: z.tuple([AddressSchema, SymbolSchema, U32Schema]),
+  })
+  .strict();
+
+/** topic `["condition_breach", shipment_id]` · data `(condition_type, breached_at)` */
+export const ConditionBreachEventSchema = z
+  .object({
+    ...eventEnvelope,
+    name: z.literal(CHAIN_EVENT_TOPICS.CONDITION_BREACH),
+    topic: z.tuple([z.literal(CHAIN_EVENT_TOPICS.CONDITION_BREACH), SymbolSchema]),
+    data: z.tuple([SymbolSchema, U32Schema]),
+  })
+  .strict();
+
+/** topic `["carrier_handoff", shipment_id]` · data `(from_carrier, to_carrier, handoff_at)` */
+export const CarrierHandoffEventSchema = z
+  .object({
+    ...eventEnvelope,
+    name: z.literal(CHAIN_EVENT_TOPICS.CARRIER_HANDOFF),
+    topic: z.tuple([z.literal(CHAIN_EVENT_TOPICS.CARRIER_HANDOFF), SymbolSchema]),
+    data: z.tuple([AddressSchema, AddressSchema, U32Schema]),
+  })
+  .strict();
+
+/**
+ * Runtime validator for the indexer and golden fixtures (P14-06).
+ * Uses discriminated union on topic name; unknown topic throws ERR_CHAIN_INVALID_EVENT.
+ */
 export const ChainEventSchema = z.discriminatedUnion('name', [
-  AnchorEventSchema,
-  EscrowInitEventSchema,
-  EscrowReleaseEventSchema,
+  ShipmentCreatedEventSchema,
+  StatusUpdatedEventSchema,
+  MilestoneRecordedEventSchema,
+  DeliverySuccessEventSchema,
+  DeliveryConfirmedEventSchema,
+  ShipmentCancelledEventSchema,
+  ShipmentExpiredEventSchema,
+  EscrowDepositedEventSchema,
+  EscrowReleasedEventSchema,
+  EscrowRefundedEventSchema,
+  DisputeRaisedEventSchema,
+  DisputeResolvedEventSchema,
+  ConditionBreachEventSchema,
+  CarrierHandoffEventSchema,
 ]);
 
-export type AnchorEvent = z.infer<typeof AnchorEventSchema>;
-export type EscrowInitEvent = z.infer<typeof EscrowInitEventSchema>;
-export type EscrowReleaseEvent = z.infer<typeof EscrowReleaseEventSchema>;
+export type ShipmentCreatedEvent = z.infer<typeof ShipmentCreatedEventSchema>;
+export type StatusUpdatedEvent = z.infer<typeof StatusUpdatedEventSchema>;
+export type MilestoneRecordedEvent = z.infer<typeof MilestoneRecordedEventSchema>;
+export type DeliverySuccessEvent = z.infer<typeof DeliverySuccessEventSchema>;
+export type DeliveryConfirmedEvent = z.infer<typeof DeliveryConfirmedEventSchema>;
+export type ShipmentCancelledEvent = z.infer<typeof ShipmentCancelledEventSchema>;
+export type ShipmentExpiredEvent = z.infer<typeof ShipmentExpiredEventSchema>;
+export type EscrowDepositedEvent = z.infer<typeof EscrowDepositedEventSchema>;
+export type EscrowReleasedEvent = z.infer<typeof EscrowReleasedEventSchema>;
+export type EscrowRefundedEvent = z.infer<typeof EscrowRefundedEventSchema>;
+export type DisputeRaisedEvent = z.infer<typeof DisputeRaisedEventSchema>;
+export type DisputeResolvedEvent = z.infer<typeof DisputeResolvedEventSchema>;
+export type ConditionBreachEvent = z.infer<typeof ConditionBreachEventSchema>;
+export type CarrierHandoffEvent = z.infer<typeof CarrierHandoffEventSchema>;
 export type ChainEvent = z.infer<typeof ChainEventSchema>;
+
+/**
+ * Legacy alias for backward compatibility during transition.
+ * @deprecated Use CHAIN_EVENT_TOPICS instead (P14-06).
+ */
+export const CHAIN_EVENT_NAMES = {
+  ANCHOR: 'status_updated',
+  ESCROW_INIT: 'escrow_deposited',
+  ESCROW_RELEASE: 'escrow_released',
+} as const;
+export type ChainEventName = ChainEventTopic;
 
 // ─── Event verification / confirmation depth (v2, #1058) ────────────────────
 
@@ -418,8 +597,26 @@ export function updateStatusErrorToAppError(contractCode: number): AppError {
 /**
  * Validate an untrusted decoded event (indexer ingress).
  * Throws AppError(502, ERR_CHAIN_INVALID_EVENT) on any spec mismatch.
+ * Handles both new contract topics (P14-06) and legacy topic names via LEGACY_TOPIC_MAP.
  */
 export function parseChainEvent(raw: unknown): ChainEvent {
+  // Normalize legacy topics to new format
+  if (raw && typeof raw === 'object' && 'topic' in raw) {
+    const rawTopic = (raw as { topic: unknown }).topic;
+    if (Array.isArray(rawTopic) && typeof rawTopic[0] === 'string') {
+      const normalizedName = LEGACY_TOPIC_MAP[rawTopic[0]] ?? rawTopic[0];
+      if (!Object.values(CHAIN_EVENT_TOPICS).includes(normalizedName as ChainEventTopic)) {
+        throw new AppError(
+          502,
+          `Unknown chain event topic: ${rawTopic[0]} (spec ${CHAIN_SPEC_VERSION})`,
+          ErrorCodes.CHAIN_INVALID_EVENT,
+          { topic: rawTopic[0] }
+        );
+      }
+      raw = { ...raw, name: normalizedName };
+    }
+  }
+
   const result = ChainEventSchema.safeParse(raw);
   if (!result.success) {
     throw new AppError(

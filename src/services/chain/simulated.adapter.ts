@@ -39,6 +39,7 @@ import { AppError, ErrorCodes } from '../../shared/http/errors.js';
 import {
   AddressSchema,
   Bytes32HexSchema,
+  CHAIN_EVENT_TOPICS,
   CHAIN_EVENT_NAMES,
   SymbolSchema,
   UpdateStatusArgsSchema,
@@ -299,14 +300,15 @@ export class SimulatedAdapter implements ChainAdapter {
       if (!SymbolSchema.safeParse(shipmentId).success) continue;
       if (!Bytes32HexSchema.safeParse(dataHash).success) continue;
 
+      // P14-06: Use new topic names (legacy names still work via LEGACY_TOPIC_MAP)
       return parseChainEvent({
         id: record.paging_token,
         contract_id: SIMULATED_CONTRACT_ID,
         tx_hash: record.hash,
         ledger: record.ledger_attr,
         ledger_closed_at: record.created_at,
-        name: CHAIN_EVENT_NAMES.ANCHOR,
-        topic: [CHAIN_EVENT_NAMES.ANCHOR, shipmentId],
+        name: CHAIN_EVENT_TOPICS.STATUS_UPDATED,
+        topic: [CHAIN_EVENT_TOPICS.STATUS_UPDATED, shipmentId],
         data: [dataHash, record.ledger_attr],
       });
     }
