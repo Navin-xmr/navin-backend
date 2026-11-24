@@ -20,6 +20,7 @@ import {
   PHOTO_UPLOAD_CONSTRAINTS,
 } from './shipments.service.js';
 import { sendResponse } from '../../shared/http/sendResponse.js';
+import { IDEMPOTENCY_HEADER } from '../../shared/middleware/idempotency.js';
 import type {
   GetShipmentsQuery,
   ExportShipmentsQuery,
@@ -222,6 +223,7 @@ export const patchShipmentStatus = async (req: Request, res: Response) => {
 
   const updated = await updateShipmentStatusService(id, status as ShipmentStatus, {
     userId: user?.userId,
+    idempotencyKey: req.header(IDEMPOTENCY_HEADER),
   });
   if (!updated) {
     sendResponse(res, 404, false, 'Shipment not found', null);
