@@ -101,7 +101,7 @@ Prefer domain events over direct service calls. Never import a sibling controlle
 - [ ] Zod schemas export inferred types · models use `isoDatePlugin` + soft-delete
 - [ ] Swagger updated · `npm run build` passes · full `npm test` passes (CI-blocking, see §4)
 - [ ] **AGENTS.md reviewed if conventions, boundaries, or module structure changed**
-- [ ] **Chain spec drift:** if `docs/chain-interface.md` changed, `src/shared/types/chain.ts` (+ `CHAIN_SPEC_VERSION`) and `tests/fixtures/chain/*.json` (`spec_version`) changed in the same PR — and vice versa. Chain shapes are imported only from `src/shared/types/chain.ts`.
+- [ ] **Chain spec drift:** if `docs/chain-interface.md` or the vendored contract ABI changed, then `src/shared/types/chain.ts` (+ `CHAIN_SPEC_VERSION`), `tests/fixtures/chain/*.json` (`spec_version`), ABI checksum, and contracts-repo commit must all change in the same PR — and vice versa. Sync all four with `npm run chain:sync`. Chain shapes are imported only from `src/shared/types/chain.ts`.
 
 ### Clean-Install Build Triage (hard rule)
 
