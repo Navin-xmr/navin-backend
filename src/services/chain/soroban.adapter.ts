@@ -539,6 +539,12 @@ export class SorobanAdapter implements ChainAdapter {
         return { txHash, ledger: statusRes.ledger };
       }
       if (statusRes.status === 'FAILED') {
+        // Extract contract error from failed transaction result
+        const resultXdr = statusRes.resultXdr ? statusRes.resultXdr.toString() : '';
+        const contractErrorMatch = resultXdr.match(/Error\(Contract, #(\d+)\)/);
+        if (contractErrorMatch?.[1]) {
+          throw decodeContractError(parseInt(contractErrorMatch[1], 10));
+        }
         throw new AppError(
           400,
           'Soroban transaction execution failed on-chain',
@@ -621,7 +627,13 @@ export class SorobanAdapter implements ChainAdapter {
     }
 
     if (rpc.Api.isSimulationError(sim)) {
-      const code = Number(String(sim.error).match(/Error\(Contract, #(\d+)\)/)?.[1]);
+      const errorStr = String(sim.error);
+      const contractErrorMatch = errorStr.match(/Error\(Contract, #(\d+)\)/);
+      const code = contractErrorMatch ? parseInt(contractErrorMatch[1], 10) : NaN;
+      if (!Number.isNaN(code)) {
+        if (notFoundAsNull && code === SHIPMENT_NOT_FOUND) return null;
+        throw chainErrorToAppError(code);
+      }
       if (notFoundAsNull && code === SHIPMENT_NOT_FOUND) return null;
       throw new AppError(
         502,
