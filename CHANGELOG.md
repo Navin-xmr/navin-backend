@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Simulation-only contract reads on the `ChainAdapter` port (`getShipment`, `getShipmentStatus`, `getEscrowBalance`, `getVersion`, `getAdmin`, `getExpectedTokenDecimals`), implemented by `SorobanAdapter` with typed ScVal decoders, plus a non-blocking startup readiness check (`src/services/chain/readiness.ts`) (#1060).
 - Persist malformed Soroban indexer events with raw payloads, alert through BullMQ, and provide `npm run replay:indexer-dead-letters` for retries.
 - Indexer golden-row integration test: the spec fixtures run through the real indexer and `LedgerBlock` model must produce exactly `tests/fixtures/chain/ledger-rows.json` (hashes, counters, keys, statuses), and replaying is idempotent (#1077).
 - `SorobanAdapter` submission reliability: bounded retry with exponential backoff for timeouts (`ERR_CHAIN_SUBMISSION_TIMEOUT`), a chain-state duplicate check before each retry, and deterministic idempotency keys from `(shipment_id, event_type, event_counter)` via the optional `ChainSubmitOptions` argument. New env vars `CHAIN_SUBMIT_MAX_ATTEMPTS`, `CHAIN_SUBMIT_BACKOFF_MS`, `CHAIN_SUBMIT_BACKOFF_MAX_MS` (#1078).
