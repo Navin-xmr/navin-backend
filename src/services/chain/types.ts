@@ -18,6 +18,7 @@ import type { ErrorCode } from '../../shared/http/errors.js';
 import type {
   AnchorArgs,
   ChainEvent,
+  ChainEventDecodeFailure,
   ReleaseEscrowArgs,
   UpdateStatusArgs,
 } from '../../shared/types/chain.js';
@@ -112,6 +113,14 @@ export interface ChainAdapter {
    * @throws {AppError} ERR_CHAIN_INVALID_EVENT when an emitted event violates the spec.
    */
   streamEvents(cursor?: ChainEventCursor): AsyncIterable<ChainEvent>;
+
+  /**
+   * Optional event stream that surfaces decode failures as `ChainEventDecodeFailure`
+   * so consumers can persist and alert on them without halting the stream.
+   */
+  streamEventsWithFailures?(
+    cursor?: ChainEventCursor
+  ): AsyncIterable<ChainEvent | ChainEventDecodeFailure>;
 
   /**
    * Optional read-only ledger queries used by confirmation tracking (#818).

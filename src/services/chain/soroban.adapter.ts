@@ -17,11 +17,12 @@ import {
   Bytes32HexSchema,
   SymbolSchema,
   parseChainEvent,
+  isChainEventDecodeFailure,
   UpdateStatusArgsSchema,
   chainErrorToAppError,
   updateStatusErrorToAppError,
 } from '../../shared/types/chain.js';
-import type { ChainEvent } from '../../shared/types/chain.js';
+import type { ChainEvent, ChainEventDecodeFailure } from '../../shared/types/chain.js';
 import { buildIdempotencyKey, ReceiptCache } from './idempotency.js';
 import { runChainPreflight } from './preflight.js';
 import type { ChainPreflightConfig, ChainStateReader, PreflightSubject } from './preflight.js';
@@ -364,6 +365,17 @@ export class SorobanAdapter implements ChainAdapter {
   }
 
   async *streamEvents(cursor?: ChainEventCursor): AsyncIterable<ChainEvent> {
+    for await (const event of this.streamEventsWithFailures(cursor)) {
+      if (isChainEventDecodeFailure(event)) {
+        continue;
+      }
+      yield event;
+    }
+  }
+
+  async *streamEventsWithFailures(
+    cursor?: ChainEventCursor
+  ): AsyncIterable<ChainEvent | ChainEventDecodeFailure> {
     if (!this.contractId) return;
 
     let startLedger: number | undefined;
@@ -392,9 +404,25 @@ export class SorobanAdapter implements ChainAdapter {
             data: rawEvent.value,
           });
           yield parsed;
-        } catch {
-          // Skip unparseable / off-spec events
-          continue;
+        } catch (err) {
+          yield {
+            kind: 'decode_error',
+            cursor: typeof rawEvent.id === 'string' ? rawEvent.id : '',
+            contract_id:
+              typeof rawEvent.contractId === 'string' ? rawEvent.contractId : this.contractId,
+            raw_payload: rawEvent,
+            candidate_payload: {
+              id: rawEvent.id,
+              contract_id: rawEvent.contractId,
+              tx_hash: rawEvent.txHash,
+              ledger: rawEvent.ledger,
+              ledger_closed_at: rawEvent.ledgerClosedAt,
+              name: rawEvent.topic?.[0],
+              topic: rawEvent.topic,
+              data: rawEvent.value,
+            },
+            error: err instanceof Error ? err.message : String(err),
+          };
         }
       }
     } catch (err) {

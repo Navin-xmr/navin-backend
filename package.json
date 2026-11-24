@@ -21,6 +21,7 @@
     "generate-api-key": "tsx src/scripts/generateApiKey.ts",
     "worker:stellar": "tsx src/workers/stellar.worker.ts",
     "worker:stellar-indexer": "tsx src/workers/stellar-indexer.worker.ts",
+    "replay:indexer-dead-letters": "tsx src/scripts/replayIndexerDeadLetters.ts",
     "chain:replay": "tsx src/scripts/chainReplay.ts",
     "migrate:up": "migrate-mongo up --file migrate-mongo.config.cjs",
     "migrate:down": "migrate-mongo down --file migrate-mongo.config.cjs",

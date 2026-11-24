@@ -13,6 +13,8 @@ import { MilestoneEvent } from '../shared/types/shipment.js';
 import { CHAIN_EVENT_NAMES } from '../shared/types/chain.js';
 import type { ChainAdapter } from '../services/chain/types.js';
 import { getChainAdapter } from '../services/chain/factory.js';
+import { isChainEventDecodeFailure, parseChainEvent } from '../shared/types/chain.js';
+import type { ChainEvent, ChainEventDecodeFailure } from '../shared/types/chain.js';
 import { confirmAnchoredTelemetry } from '../modules/telemetry/telemetry.confirmation.js';
 import {
   observeConfirmationLag,
@@ -21,6 +23,8 @@ import {
 } from '../infra/metrics/chainMetrics.js';
 import { startMetricsServer } from '../infra/metrics/metricsServer.js';
 import { logger } from '../shared/logger/logger.js';
+import { dispatchAlert } from '../services/queue.service.js';
+import { IndexerDeadLetterModel } from './indexer-dead-letter.model.js';
 
 export const STELLAR_INDEXER_QUEUE = 'stellar_indexer_queue';
 export const STELLAR_INDEXER_JOB = 'poll_stellar_transactions';
@@ -267,6 +271,98 @@ async function updatePendingConfirmations(adapter: ChainAdapter): Promise<void> 
   }
 }
 
+async function indexChainEvent(adapter: ChainAdapter, event: ChainEvent): Promise<boolean> {
+  let milestoneEvent: MilestoneEvent;
+  let shipmentId: string;
+  let dataHash: string | undefined;
+  const metadata: Record<string, unknown> = {
+    blockNumber: event.ledger,
+    ledger: event.ledger,
+    contractId: event.contract_id,
+    eventId: event.id,
+    indexedAt: new Date().toISOString(),
+  };
+
+  if (event.name === CHAIN_EVENT_NAMES.ANCHOR) {
+    milestoneEvent = MilestoneEvent.IN_TRANSIT;
+    shipmentId = event.topic[1];
+    dataHash = event.data[0];
+    metadata.dataHash = dataHash;
+  } else if (event.name === CHAIN_EVENT_NAMES.ESCROW_INIT) {
+    milestoneEvent = MilestoneEvent.SETTLEMENT_INITIATED;
+    shipmentId = event.data[0];
+    metadata.paymentId = event.topic[1];
+    metadata.payer = event.data[1];
+    metadata.payee = event.data[2];
+    metadata.token = event.data[3];
+    metadata.amount = event.data[4];
+  } else {
+    milestoneEvent = MilestoneEvent.SETTLEMENT_COMPLETED;
+    shipmentId = event.topic[1];
+    metadata.paymentId = event.topic[1];
+    metadata.proofHash = event.data[0];
+    metadata.payee = event.data[1];
+    metadata.amount = event.data[2];
+  }
+
+  const result = await LedgerBlock.updateOne(
+    { transactionHash: event.tx_hash },
+    {
+      $setOnInsert: {
+        shipmentId,
+        milestoneEvent,
+        transactionHash: event.tx_hash,
+        actor: 'stellar-indexer',
+      },
+      // Keep dataHash only in $set so re-indexing can backfill existing rows.
+      $set: {
+        milestoneEvent,
+        metadata,
+        ...(dataHash !== undefined && { dataHash }),
+      },
+    },
+    { upsert: true }
+  );
+
+  if (event.name === CHAIN_EVENT_NAMES.ANCHOR) {
+    await recordTelemetryConfirmation(adapter, event.tx_hash, event.ledger);
+  } else if (event.name === CHAIN_EVENT_NAMES.ESCROW_RELEASE) {
+    await recordPaymentConfirmation(adapter, event.tx_hash, event.ledger);
+  }
+
+  return Boolean((result as { upsertedCount?: number }).upsertedCount);
+}
+
+async function persistMalformedEvent(event: ChainEventDecodeFailure): Promise<void> {
+  await IndexerDeadLetterModel.create({
+    cursor: event.cursor,
+    contractId: event.contract_id,
+    rawPayload: event.raw_payload,
+    candidatePayload: event.candidate_payload,
+    error: event.error,
+    status: 'pending',
+  });
+
+  logger.error(
+    { cursor: event.cursor, contractId: event.contract_id, error: event.error },
+    'Malformed Stellar event stored in indexer dead-letter queue'
+  );
+
+  try {
+    await dispatchAlert({
+      type: 'INDEXER_MALFORMED_EVENT',
+      message: `Malformed Stellar event: ${event.error}`,
+      cursor: event.cursor,
+      contractId: event.contract_id,
+    });
+  } catch (err) {
+    logger.error(
+      { err, cursor: event.cursor, contractId: event.contract_id },
+      'Failed to enqueue malformed Stellar event alert'
+    );
+  }
+}
+
 /**
  * Event-driven indexer pipeline consuming spec events from ChainAdapter.streamEvents().
  * Zero string-inference or memo-guessing. Persists event cursor across restarts.
@@ -282,8 +378,21 @@ export async function indexStellarTransactions(
   let upserted = 0;
   let existing = 0;
 
-  for await (const event of adapter.streamEvents(cursor)) {
+  const stream = adapter.streamEventsWithFailures
+    ? adapter.streamEventsWithFailures(cursor)
+    : adapter.streamEvents(cursor);
+
+  for await (const event of stream) {
     processed += 1;
+    if (isChainEventDecodeFailure(event)) {
+      await persistMalformedEvent(event);
+      if (event.cursor) {
+        cursor = event.cursor;
+        if (persistCursor) await saveStoredCursor(cursor);
+      }
+      continue;
+    }
+
     cursor = event.id;
 
     // #1058 — confirmation depth is tracked for every event class, not just payments.
@@ -386,6 +495,45 @@ export async function indexStellarTransactions(
   const reverified = await reverifyAnchoredBlocks(adapter);
 
   return { processed, upserted, lastCursor: cursor, reverified };
+}
+
+export interface DeadLetterReplaySummary {
+  attempted: number;
+  replayed: number;
+  failed: number;
+}
+
+/** Revalidates pending dead letters and indexes those accepted by the current chain spec. */
+export async function replayIndexerDeadLetters(
+  adapter: ChainAdapter = getChainAdapter(),
+  limit = 100
+): Promise<DeadLetterReplaySummary> {
+  const records = await IndexerDeadLetterModel.find({ status: 'pending' })
+    .sort({ createdAt: 1 })
+    .limit(limit);
+  const summary: DeadLetterReplaySummary = { attempted: records.length, replayed: 0, failed: 0 };
+
+  for (const record of records) {
+    try {
+      const event = parseChainEvent(record.candidatePayload);
+      await indexChainEvent(adapter, event);
+      await IndexerDeadLetterModel.updateOne(
+        { _id: record._id },
+        { $set: { status: 'replayed', replayedAt: new Date() }, $unset: { replayError: 1 } }
+      );
+      summary.replayed += 1;
+    } catch (err) {
+      const replayError = err instanceof Error ? err.message : String(err);
+      await IndexerDeadLetterModel.updateOne({ _id: record._id }, { $set: { replayError } });
+      logger.warn(
+        { deadLetterId: record._id.toString(), replayError },
+        'Dead-letter replay failed'
+      );
+      summary.failed += 1;
+    }
+  }
+
+  return summary;
 }
 
 async function processIndexerJob(_job: Job): Promise<IndexerSummary> {
