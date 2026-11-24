@@ -1,0 +1,110 @@
+{
+  "spec_version": "2.1.0",
+  "contract": "navin-escrow",
+  "source": "https://github.com/Navin-xmr/navin-contracts",
+  "functions": {
+    "anchor": {
+      "auth": "actor",
+      "inputs": [
+        {
+          "name": "shipment_id",
+          "type": "Symbol"
+        },
+        {
+          "name": "data_hash",
+          "type": "BytesN<32>"
+        },
+        {
+          "name": "actor",
+          "type": "Address"
+        }
+      ]
+    },
+    "init_escrow": {
+      "auth": "payer",
+      "inputs": [
+        {
+          "name": "payment_id",
+          "type": "Symbol"
+        },
+        {
+          "name": "shipment_id",
+          "type": "Symbol"
+        },
+        {
+          "name": "payer",
+          "type": "Address"
+        },
+        {
+          "name": "payee",
+          "type": "Address"
+        },
+        {
+          "name": "token",
+          "type": "Address"
+        },
+        {
+          "name": "amount",
+          "type": "i128"
+        }
+      ]
+    },
+    "release_escrow": {
+      "auth": "caller",
+      "inputs": [
+        {
+          "name": "caller",
+          "type": "Address"
+        },
+        {
+          "name": "shipment_id",
+          "type": "Symbol"
+        }
+      ]
+    },
+    "update_status": {
+      "auth": "caller",
+      "inputs": [
+        {
+          "name": "caller",
+          "type": "Address"
+        },
+        {
+          "name": "shipment_id",
+          "type": "u64"
+        },
+        {
+          "name": "new_status",
+          "type": "ShipmentStatus"
+        },
+        {
+          "name": "data_hash",
+          "type": "BytesN<32>"
+        }
+      ],
+      "errors": {
+        "Unauthorized": 3,
+        "ShipmentNotFound": 4,
+        "InvalidStatus": 5,
+        "InvalidHash": 6,
+        "ShipmentFinalized": 38,
+        "DuplicateAction": 41
+      }
+    }
+  },
+  "enums": {
+    "ShipmentStatus": {
+      "encoding": "ScVal Vec[Symbol(variant)]",
+      "variants": [
+        "Created",
+        "InTransit",
+        "AtCheckpoint",
+        "PartiallyDelivered",
+        "Delivered",
+        "Disputed",
+        "Cancelled",
+        "PartiallyRefunded"
+      ]
+    }
+  }
+}
