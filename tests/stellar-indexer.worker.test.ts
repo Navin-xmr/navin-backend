@@ -8,7 +8,7 @@ import {
 import type { ChainAdapter } from '../src/services/chain/types.js';
 import { CHAIN_EVENT_NAMES } from '../src/shared/types/chain.js';
 import type { ChainEvent, ChainEventDecodeFailure } from '../src/shared/types/chain.js';
-import { createMockPayment, createMockShipment } from './fixtures/factories.js';
+import { createMockShipment } from './fixtures/factories.js';
 
 const ledgerUpdateOneMock = jest.fn();
 const paymentFindOneAndUpdateMock = jest.fn((): { lean: () => Promise<unknown> } => ({
@@ -31,7 +31,9 @@ const emitPaymentStatusChangeMock = jest.fn();
 const enqueueChainWebhookEventMock = jest.fn<() => Promise<number>>().mockResolvedValue(0);
 const deadLetterCreateMock = jest.fn(async () => ({}));
 const deadLetterFindMock = jest.fn(() => ({
-  sort: () => ({ limit: async () => [] as { _id: { toString(): string }; candidatePayload: unknown }[] }),
+  sort: () => ({
+    limit: async () => [] as { _id: { toString(): string }; candidatePayload: unknown }[],
+  }),
 }));
 const deadLetterUpdateOneMock = jest.fn(async () => ({ modifiedCount: 1 }));
 const dispatchAlertMock = jest.fn(async (_payload: { type: string }) => {});
@@ -78,47 +80,12 @@ await jest.unstable_mockModule('../src/services/queue.service.js', () => ({
   dispatchAlert: dispatchAlertMock,
 }));
 
-const { indexStellarTransactions, replayIndexerDeadLetters } = await import(
-  '../src/workers/stellar-indexer.worker.js'
-);
+const { indexStellarTransactions, replayIndexerDeadLetters } =
+  await import('../src/workers/stellar-indexer.worker.js');
 
 const CONTRACT_ID = 'CACAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAINCW';
 const PAYEE = 'GAAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQDZ7H';
 
-function adapterStreaming(events: (ChainEvent | ChainEventDecodeFailure)[]): ChainAdapter {
-  return {
-    async anchorEvent() {
-      throw new Error('Not implemented');
-    },
-    async releaseEscrow() {
-      throw new Error('Not implemented');
-    },
-    async updateStatus() {
-      throw new Error('Not implemented');
-    },
-    async *streamEvents() {
-      for (const event of events) {
-        if ('kind' in event && event.kind === 'decode_error') continue;
-        yield event;
-      }
-    },
-    async *streamEventsWithFailures() {
-      yield* events;
-    },
-    async getConfirmationCount() {
-      return 3;
-    },
-  };
-}
-
-/** The `$set` stage of the n-th (0-based) LedgerBlock upsert. */
-function nthSet(n: number): Record<string, unknown> {
-  const [, update] = ledgerUpdateOneMock.mock.calls[n] as [
-    unknown,
-    { $set: Record<string, unknown> },
-  ];
-  return update.$set;
-}
 describe('stellar indexer worker - event driven', () => {
   beforeEach(() => {
     ledgerUpdateOneMock.mockReset();
@@ -403,6 +370,8 @@ describe('stellar indexer worker - event driven', () => {
       expect.objectContaining({
         $setOnInsert: expect.objectContaining({
           shipmentId: '65f1a2b3c4d5e6f708192a3b',
+        }),
+        $set: expect.objectContaining({
           milestoneEvent: 'SETTLEMENT_COMPLETED',
         }),
       }),
