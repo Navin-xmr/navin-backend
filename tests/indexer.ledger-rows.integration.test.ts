@@ -121,7 +121,8 @@ function persistedRows(): Doc[] {
     .sort((a, b) => Number(a.metadata.ledger) - Number(b.metadata.ledger))
     .map(row => {
       expect(row.metadata.indexedAt).toEqual(expect.stringMatching(/^\d{4}-\d{2}-\d{2}T[\d:.]+Z$/));
-      const { indexedAt: _indexedAt, ...metadata } = row.metadata;
+      const metadata = { ...row.metadata };
+      delete metadata.indexedAt;
       return { ...row, metadata };
     });
 }
@@ -145,7 +146,12 @@ describe('indexer golden fixtures → LedgerBlock rows (#1077)', () => {
   it('persists exactly the golden rows (hashes, counters, keys, statuses)', async () => {
     const summary = await indexStellarTransactions(adapter);
 
-    expect(summary).toEqual({ processed: 3, upserted: 3, lastCursor: events[2].id });
+    expect(summary).toEqual({
+      processed: 3,
+      upserted: 3,
+      reverified: 0,
+      lastCursor: events[2].id,
+    });
     expect(persistedRows()).toStrictEqual(goldenRows);
   });
 
@@ -189,7 +195,12 @@ describe('indexer golden fixtures → LedgerBlock rows (#1077)', () => {
 
     const replay = await indexStellarTransactions(adapter);
 
-    expect(replay).toEqual({ processed: 3, upserted: 0, lastCursor: events[2].id });
+    expect(replay).toEqual({
+      processed: 3,
+      upserted: 0,
+      reverified: 0,
+      lastCursor: events[2].id,
+    });
     expect(collection.docs.size).toBe(3);
     expect(persistedRows()).toStrictEqual(first);
     expect(persistedRows()).toStrictEqual(goldenRows);
