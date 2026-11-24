@@ -269,6 +269,7 @@ export function createTelemetryModelMock(
 export type PaymentModelMock = {
   PaymentModel: {
     find: MockFn;
+    findById: MockFn;
     findOneAndUpdate: MockFn;
   };
   PaymentStatus: Record<string, string>;
@@ -283,6 +284,7 @@ export function createPaymentModelMock(
   return {
     PaymentModel: {
       find: jest.fn(() => createModelQuery([])),
+      findById: jest.fn(() => createModelQuery(null)),
       findOneAndUpdate: jest.fn(),
       ...(overrides.PaymentModel ?? {}),
     },

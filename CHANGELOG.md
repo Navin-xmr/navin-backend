@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Soroban simulation fee/CPU/ledger-byte ceilings with a typed retryable error and observable over-budget metric (#1074).
+- Frontend chain verification v2 guide and deterministic fixture covering canonical payload hashing and idempotency keys (#1071, #1079).
+- Soroban submission operations runbook and per-network resource policy configuration (#1074).
+- Organization-scoped chain webhook subscriptions with signed payloads, exponential retries, and a persistent dead-letter queue (#1072).
 - Simulation-only contract reads on the `ChainAdapter` port (`getShipment`, `getShipmentStatus`, `getEscrowBalance`, `getVersion`, `getAdmin`, `getExpectedTokenDecimals`), implemented by `SorobanAdapter` with typed ScVal decoders, plus a non-blocking startup readiness check (`src/services/chain/readiness.ts`) (#1060).
 - Persist malformed Soroban indexer events with raw payloads, alert through BullMQ, and provide `npm run replay:indexer-dead-letters` for retries.
 - Indexer golden-row integration test: the spec fixtures run through the real indexer and `LedgerBlock` model must produce exactly `tests/fixtures/chain/ledger-rows.json` (hashes, counters, keys, statuses), and replaying is idempotent (#1077).

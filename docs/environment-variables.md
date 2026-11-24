@@ -91,11 +91,16 @@ Every row below is 1-to-1 with a key in `src/env.schema.ts`. If you add a key to
 
 ## Soroban / escrow
 
-| Variable             | Validated | `.env.example` | Used in code | Required vs optional                               | Notes / implementing issue                                                                                                 |
-| -------------------- | :-------: | :------------: | :----------: | -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `ESCROW_CONTRACT_ID` |    yes    |      yes       |     yes      | Required when `SOROBAN_ADAPTER=soroban`            | Contract invoked by `SorobanAdapter`; validated conditionally at startup.                                                  |
-| `SOROBAN_RPC_URL`    |    yes    |      yes       |     yes      | Required explicitly when `SOROBAN_ADAPTER=soroban` | Soroban RPC endpoint. Otherwise it defaults from `STELLAR_NETWORK` and can be overridden (`src/config/stellarNetwork.ts`). |
-| `SOROBAN_ADAPTER`    |    yes    |      yes       |     yes      | Optional (default `simulated`)                     | Selects `simulated` or `soroban`; an unrecognized value or missing Soroban settings fails validation at startup.           |
+| Variable                           | Validated | `.env.example` | Used in code | Required vs optional                               | Notes / implementing issue                                                                                                 |
+| ---------------------------------- | :-------: | :------------: | :----------: | -------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `ESCROW_CONTRACT_ID`               |    yes    |      yes       |     yes      | Required when `SOROBAN_ADAPTER=soroban`            | Contract invoked by `SorobanAdapter`; validated conditionally at startup.                                                  |
+| `SOROBAN_RPC_URL`                  |    yes    |      yes       |     yes      | Required explicitly when `SOROBAN_ADAPTER=soroban` | Soroban RPC endpoint. Otherwise it defaults from `STELLAR_NETWORK` and can be overridden (`src/config/stellarNetwork.ts`). |
+| `SOROBAN_ADAPTER`                  |    yes    |      yes       |     yes      | Optional (default `simulated`)                     | Selects `simulated` or `soroban`; an unrecognized value or missing Soroban settings fails validation at startup.           |
+| `SOROBAN_MAX_RESOURCE_FEE_TESTNET` |    yes    |      yes       |     yes      | Optional (default `10000000`)                      | Maximum Soroban resource fee on testnet, in stroops.                                                                       |
+| `SOROBAN_MAX_RESOURCE_FEE_PUBLIC`  |    yes    |      yes       |     yes      | Optional (default `1000000`)                       | Maximum Soroban resource fee on public network, in stroops.                                                                |
+| `SOROBAN_MAX_CPU_INSTRUCTIONS`     |    yes    |      yes       |     yes      | Optional (default `100000000`)                     | Maximum simulated CPU instructions per transaction.                                                                        |
+| `SOROBAN_MAX_LEDGER_BYTES`         |    yes    |      yes       |     yes      | Optional (default `40000000`)                      | Maximum combined simulated ledger disk-read and write bytes.                                                               |
+| `CHAIN_WEBHOOK_ENCRYPTION_KEY`     |    yes    |      yes       |     yes      | Optional; required to create subscriptions         | 64 hex characters (32 bytes). AES-256-GCM key used to encrypt per-subscriber signing secrets at rest.                      |
 
 ### ChainAdapter env matrix
 
