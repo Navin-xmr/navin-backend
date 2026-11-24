@@ -3,6 +3,7 @@ import { LedgerBlock, type ILedgerBlock } from './ledger.model.js';
 import { MilestoneEvent } from '../../shared/types/shipment.js';
 import { AppError, ErrorCodes } from '../../shared/http/errors.js';
 import { paginateCursor } from '../../shared/utils/pagination.js';
+import { config } from '../../config/index.js';
 
 export interface LedgerBlockInput {
   shipmentId: string | Types.ObjectId;
@@ -22,7 +23,15 @@ export interface LedgerBlockInput {
   /** Exact payload hashed into dataHash. Persisted alongside every dataHash. */
   canonicalPayload?: Record<string, unknown>;
   transactionHash?: string;
+  /** Overrides the network recorded for the block; defaults to the configured network. */
+  network?: 'testnet' | 'public';
+  /** Contract the transaction targeted; defaults to the configured escrow contract. */
+  contractId?: string;
+  /** Client `Idempotency-Key` of the originating request. */
+  idempotencyKey?: string;
   ledger?: number;
+  /** #1058 — confirmation depth; defaults to 0 until the head advances. */
+  confirmations?: number;
   verified?: boolean;
   actor?: string;
   metadata?: Record<string, unknown>;
@@ -44,7 +53,13 @@ export async function createLedgerBlock(input: LedgerBlockInput): Promise<ILedge
     ...(input.transactionHash && { transactionHash: input.transactionHash }),
     ...(input.dataHash && { dataHash: input.dataHash }),
     ...(input.canonicalPayload && { canonicalPayload: input.canonicalPayload }),
+    network: input.network ?? config.stellarNetwork,
+    ...((input.contractId ?? config.escrowContractId) && {
+      contractId: input.contractId ?? config.escrowContractId,
+    }),
+    ...(input.idempotencyKey && { idempotencyKey: input.idempotencyKey }),
     ledger: input.ledger ?? input.blockNumber ?? 0,
+    confirmations: input.confirmations ?? 0,
     verified: input.verified ?? false,
     ...(input.actor && { actor: input.actor }),
     ...(input.metadata && { metadata: input.metadata }),

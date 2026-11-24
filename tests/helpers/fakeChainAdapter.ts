@@ -39,10 +39,17 @@ export function createFakeChainAdapter(
         txHash: 'b'.repeat(64),
         ledger: 2,
         simulated: true,
-        paymentId: input.payment_id,
+        shipmentId: input.shipment_id,
       };
     }),
-    streamEvents: (async function* (cursor) {
+    updateStatus: jest.fn(async input => ({
+      txHash: 'd'.repeat(64),
+      ledger: 4,
+      simulated: true,
+      shipmentId: input.shipment_id,
+      newStatus: input.new_status,
+    })),
+    streamEvents: async function* (cursor) {
       let pastCursor = cursor === undefined;
       for (const event of [...(options.events ?? []), ...(options.malformedEvents ?? [])]) {
         const candidate = event as ChainEvent;
@@ -52,7 +59,7 @@ export function createFakeChainAdapter(
         }
         yield candidate;
       }
-    }) as ChainAdapter['streamEvents'],
+    } as ChainAdapter['streamEvents'],
     ...overrides,
   };
 }

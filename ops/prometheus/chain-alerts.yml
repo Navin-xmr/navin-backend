@@ -1,0 +1,50 @@
+# Alert rules for chain metrics (#1044). Thresholds are starting points — tune per environment.
+groups:
+  - name: navin-chain
+    rules:
+      - alert: NavinChainSubmissionFailureRateHigh
+        expr: |
+          sum(rate(navin_chain_submissions_total{outcome="failure"}[15m]))
+            / clamp_min(sum(rate(navin_chain_submissions_total[15m])), 1e-9) > 0.2
+          and sum(rate(navin_chain_submissions_total[15m])) > 0
+        for: 10m
+        labels: { severity: page }
+        annotations:
+          summary: '>20% of chain submissions failing'
+          description: 'Break down with: sum by (error_code) (rate(navin_chain_submission_failures_total[15m]))'
+
+      - alert: NavinChainSubmissionSlow
+        expr: |
+          histogram_quantile(0.95, sum by (le) (rate(navin_chain_submission_duration_seconds_bucket[15m]))) > 20
+        for: 15m
+        labels: { severity: warn }
+        annotations: { summary: 'p95 chain submission latency above 20s' }
+
+      - alert: NavinChainQueueBacklog
+        expr: sum(navin_chain_queue_depth{queue="transaction_queue",state=~"waiting|delayed"}) > 500
+        for: 15m
+        labels: { severity: warn }
+        annotations: { summary: 'transaction_queue backlog above 500 jobs' }
+
+      - alert: NavinChainConfirmationLagHigh
+        expr: |
+          histogram_quantile(0.95, sum by (le) (rate(navin_chain_confirmation_lag_seconds_bucket[30m]))) > 600
+        for: 30m
+        labels: { severity: warn }
+        annotations: { summary: 'p95 confirmation lag above 10 minutes' }
+
+      - alert: NavinIndexerNotPolling
+        expr: time() - navin_indexer_last_poll_timestamp_seconds > 300
+        for: 5m
+        labels: { severity: page }
+        annotations: { summary: 'Indexer has not completed a cycle in 5 minutes' }
+
+      - alert: NavinIndexerCursorStale
+        # Only meaningful while the poller is alive; a quiet chain also raises cursor age.
+        expr: |
+          navin_indexer_cursor_age_seconds > 1800
+          and on() (time() - navin_indexer_last_poll_timestamp_seconds < 120)
+        for: 30m
+        labels: { severity: info }
+        annotations:
+          { summary: 'No new chain events processed for 30 minutes (indexer is polling)' }

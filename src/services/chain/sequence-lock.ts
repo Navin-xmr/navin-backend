@@ -12,7 +12,7 @@
  * - A failed lock acquisition doesn't block the next attempt
  */
 
-import { createClient } from 'redis';
+import { Redis } from 'ioredis';
 import { config } from '../../config/index.js';
 import { logger } from '../../shared/logger/logger.js';
 import { KeyedSerializer } from './serializer.js';
@@ -21,12 +21,27 @@ const LOCK_KEY_PREFIX = 'chain:seq-lock:';
 const DEFAULT_LOCK_TTL_MS = 30_000; // 30 seconds
 const DEFAULT_LOCK_WAIT_MS = 100; // Poll interval when lock is held
 
-let redisClient: ReturnType<typeof createClient> | null = null;
+let redisClient: Redis | null = null;
 
-/** Lazy-init Redis client for locks. */
-function getRedisClient() {
+function isTestEnv(): boolean {
+  return process.env.NODE_ENV === 'test' || typeof process.env.JEST_WORKER_ID !== 'undefined';
+}
+
+/** Lazy-init Redis client for locks (disabled in unit tests to avoid real sockets). */
+function getRedisClient(): Redis | null {
+  if (isTestEnv()) return null;
   if (redisClient) return redisClient;
-  redisClient = createClient({ url: config.redisUrl });
+
+  redisClient = new Redis(config.redisUrl, {
+    lazyConnect: true,
+    maxRetriesPerRequest: 1,
+  });
+  redisClient.on('error', err => {
+    logger.error(
+      { error: err instanceof Error ? err.message : String(err) },
+      '[Chain] Redis sequence lock client error'
+    );
+  });
   void redisClient.connect().catch(err => {
     logger.error(
       { error: err instanceof Error ? err.message : String(err) },
@@ -66,14 +81,13 @@ export async function serializeSubmission<T>(
 
     // Phase 2: Try to acquire Redis lock (cluster-wide serialization)
     const lockValue = `${Date.now()}-${Math.random()}`;
-    const acquired = await acquireRedisLock(lockKey, lockValue, lockTtl);
+    const acquired = await acquireRedisLock(lockKey, lockValue, lockTtl, waitMs);
 
-    if (!acquired) {
+    if (!acquired && !isTestEnv()) {
       logger.warn(
         { account: sourceAccount, maxWaitMs: lockTtl },
         '[Chain] Sequence lock acquisition failed; proceeding with in-process lock only'
       );
-      // Proceed with just the in-process lock if Redis fails
     }
 
     try {
@@ -94,17 +108,17 @@ export async function serializeSubmission<T>(
 
 /**
  * Try to acquire a Redis lock for the given key, retrying until TTL expires.
- * Uses SET with NX (only if not exists) and EX (expiration) for atomicity.
+ * Uses SET with EX and NX for atomicity.
  * Returns true only if we successfully acquired it.
  */
 async function acquireRedisLock(
   key: string,
   value: string,
-  ttlMs: number
+  ttlMs: number,
+  waitMs: number
 ): Promise<boolean> {
   const client = getRedisClient();
-  if (!client.isOpen && !client.isConnecting) {
-    // Redis not available; allow submission without distributed lock
+  if (!client || (client.status !== 'ready' && client.status !== 'connecting')) {
     return false;
   }
 
@@ -113,28 +127,23 @@ async function acquireRedisLock(
 
   for (;;) {
     try {
-      // SET with NX and EX for atomic "set if not exists + expiration"
-      const result = await client.set(key, value, {
-        NX: true,
-        EX: ttlSec,
-      });
+      const result = await client.set(key, value, 'EX', ttlSec, 'NX');
       if (result === 'OK') {
-        return true; // Successfully acquired the lock
+        return true;
       }
     } catch (err) {
       logger.error(
         { error: err instanceof Error ? err.message : String(err) },
         '[Chain] Redis lock acquisition error'
       );
-      return false; // Redis error; give up on distributed lock
+      return false;
     }
 
-    // Lock already held by another process; wait and retry
     if (Date.now() - startTime > ttlMs) {
-      return false; // Timeout: give up
+      return false;
     }
 
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await new Promise(resolve => setTimeout(resolve, waitMs));
   }
 }
 
@@ -144,16 +153,16 @@ async function acquireRedisLock(
  */
 async function releaseRedisLock(key: string, value: string): Promise<void> {
   const client = getRedisClient();
-  if (!client.isOpen) return; // Not connected; nothing to release
+  if (!client || client.status !== 'ready') return;
 
   try {
-    // Lua script: delete only if the value matches (atomic compare-and-delete)
     await client.eval(
       `if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end`,
-      { keys: [key], arguments: [value] }
+      1,
+      key,
+      value
     );
   } catch (err) {
-    // Log but don't throw; release failures should not fail the task
     logger.debug(
       { error: err instanceof Error ? err.message : String(err) },
       '[Chain] Redis lock release error'
@@ -163,8 +172,12 @@ async function releaseRedisLock(key: string, value: string): Promise<void> {
 
 /** Close the Redis client (for shutdown or tests). */
 export async function closeSequenceLockClient(): Promise<void> {
-  if (redisClient?.isOpen) {
-    await redisClient.disconnect();
+  if (redisClient) {
+    try {
+      await redisClient.quit();
+    } catch {
+      redisClient.disconnect();
+    }
     redisClient = null;
   }
 }
