@@ -7,7 +7,9 @@ on:
       - 'docs/chain-interface.md'
       - 'tests/fixtures/chain/**'
       - 'contracts/abi/**'
+      - 'docs/abi/**'
       - 'scripts/check-chain-drift.mjs'
+      - 'scripts/sync-abi.mjs'
       - '.github/workflows/chain-drift.yml'
 
 jobs:
@@ -19,5 +21,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
+      - name: Verify vendored ABI checksums
+        run: node scripts/sync-abi.mjs --verify
       - name: Check vendored ABI, spec version and fixtures
         run: node scripts/check-chain-drift.mjs
