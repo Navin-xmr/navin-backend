@@ -40,6 +40,7 @@ import type {
   UpdateStatusInput,
   UpdateStatusResult,
 } from './types.js';
+import { serializeSubmission } from './sequence-lock.js';
 
 /** Contract rejections that mean "this exact thing was already done". */
 const DUPLICATE_CODES: ReadonlySet<string> = new Set([
@@ -148,7 +149,9 @@ export class SorobanAdapter implements ChainAdapter {
         new Address(input.actor).toScVal()
       );
 
-      const { txHash, ledger } = await this.submitWithRetry(op);
+      const { txHash, ledger } = await serializeSubmission(this.signer().publicKey(), () =>
+        this.submitWithRetry(op)
+      );
       return { txHash, ledger, simulated: false };
     });
   }
@@ -194,7 +197,9 @@ export class SorobanAdapter implements ChainAdapter {
         nativeToScVal(input.shipment_id, { type: 'symbol' })
       );
 
-      const { txHash, ledger } = await this.submitWithRetry(op);
+      const { txHash, ledger } = await serializeSubmission(this.signer().publicKey(), () =>
+        this.submitWithRetry(op)
+      );
       return { txHash, ledger, simulated: false, shipmentId: input.shipment_id };
     });
   }
@@ -346,10 +351,8 @@ export class SorobanAdapter implements ChainAdapter {
       nativeToScVal(Buffer.from(args.data_hash, 'hex'), { type: 'bytes' })
     );
 
-    const { txHash, ledger } = await this.invokePipeline(
-      op,
-      undefined,
-      updateStatusErrorToAppError
+    const { txHash, ledger } = await serializeSubmission(this.signer().publicKey(), () =>
+      this.invokePipeline(op, undefined, updateStatusErrorToAppError)
     );
     return {
       txHash,
