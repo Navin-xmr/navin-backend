@@ -210,12 +210,6 @@ export const CHAIN_EVENT_NAMES = {
   ANCHOR: 'anchor',
   ESCROW_INIT: 'esc_init',
   ESCROW_RELEASE: 'esc_rel',
-  ESCROW_DISPUTE: 'esc_dispute',
-  ESCROW_RESOLVE: 'esc_resolve',
-  ESCROW_FREEZE: 'esc_freeze',
-  ESCROW_UNFREEZE: 'esc_unfreeze',
-  DELIVERY_SUCCESS: 'delivery_success',
-  ESCROW_RELEASED: 'escrow_released',
 } as const;
 export type ChainEventName = (typeof CHAIN_EVENT_NAMES)[keyof typeof CHAIN_EVENT_NAMES];
 
@@ -265,88 +259,16 @@ export const EscrowReleaseEventSchema = z
   })
   .strict();
 
-/** topic `["esc_dispute", payment_id]` · data `(reason_hash: Bytes32Hex)` — opens a dispute record */
-export const EscrowDisputeEventSchema = z
-  .object({
-    ...eventEnvelope,
-    name: z.literal(CHAIN_EVENT_NAMES.ESCROW_DISPUTE),
-    topic: z.tuple([z.literal(CHAIN_EVENT_NAMES.ESCROW_DISPUTE), SymbolSchema]),
-    data: z.tuple([Bytes32HexSchema]),
-  })
-  .strict();
-
-/** topic `["esc_resolve", payment_id]` · data `(outcome: Symbol)` — resolves a dispute with a reflected outcome */
-export const EscrowResolveEventSchema = z
-  .object({
-    ...eventEnvelope,
-    name: z.literal(CHAIN_EVENT_NAMES.ESCROW_RESOLVE),
-    topic: z.tuple([z.literal(CHAIN_EVENT_NAMES.ESCROW_RESOLVE), SymbolSchema]),
-    data: z.tuple([SymbolSchema]),
-  })
-  .strict();
-
-/** topic `["esc_freeze", payment_id]` · data `()` — freezes escrow state */
-export const EscrowFreezeEventSchema = z
-  .object({
-    ...eventEnvelope,
-    name: z.literal(CHAIN_EVENT_NAMES.ESCROW_FREEZE),
-    topic: z.tuple([z.literal(CHAIN_EVENT_NAMES.ESCROW_FREEZE), SymbolSchema]),
-    data: z.tuple([]),
-  })
-  .strict();
-
-/** topic `["esc_unfreeze", payment_id]` · data `()` — unfreezes escrow state */
-export const EscrowUnfreezeEventSchema = z
-  .object({
-    ...eventEnvelope,
-    name: z.literal(CHAIN_EVENT_NAMES.ESCROW_UNFREEZE),
-    topic: z.tuple([z.literal(CHAIN_EVENT_NAMES.ESCROW_UNFREEZE), SymbolSchema]),
-    data: z.tuple([]),
-  })
-  .strict();
-
-/** topic `["delivery_success", shipment_id]` · data `(proof_hash, receiver)` — co-emitted by confirm_delivery */
-export const DeliverySuccessEventSchema = z
-  .object({
-    ...eventEnvelope,
-    name: z.literal(CHAIN_EVENT_NAMES.DELIVERY_SUCCESS),
-    topic: z.tuple([z.literal(CHAIN_EVENT_NAMES.DELIVERY_SUCCESS), SymbolSchema]),
-    data: z.tuple([Bytes32HexSchema, AddressSchema]),
-  })
-  .strict();
-
-/** topic `["escrow_released", shipment_id]` · data `(proof_hash, receiver)` — co-emitted by confirm_delivery */
-export const EscrowReleasedEventSchema = z
-  .object({
-    ...eventEnvelope,
-    name: z.literal(CHAIN_EVENT_NAMES.ESCROW_RELEASED),
-    topic: z.tuple([z.literal(CHAIN_EVENT_NAMES.ESCROW_RELEASED), SymbolSchema]),
-    data: z.tuple([Bytes32HexSchema, AddressSchema]),
-  })
-  .strict();
-
 /** Runtime validator for the indexer and golden fixtures. */
 export const ChainEventSchema = z.discriminatedUnion('name', [
   AnchorEventSchema,
   EscrowInitEventSchema,
   EscrowReleaseEventSchema,
-  EscrowDisputeEventSchema,
-  EscrowResolveEventSchema,
-  EscrowFreezeEventSchema,
-  EscrowUnfreezeEventSchema,
-  DeliverySuccessEventSchema,
-  EscrowReleasedEventSchema,
 ]);
 
 export type AnchorEvent = z.infer<typeof AnchorEventSchema>;
 export type EscrowInitEvent = z.infer<typeof EscrowInitEventSchema>;
 export type EscrowReleaseEvent = z.infer<typeof EscrowReleaseEventSchema>;
-export type EscrowDisputeEvent = z.infer<typeof EscrowDisputeEventSchema>;
-export type EscrowResolveEvent = z.infer<typeof EscrowResolveEventSchema>;
-export type EscrowFreezeEvent = z.infer<typeof EscrowFreezeEventSchema>;
-export type EscrowUnfreezeEvent = z.infer<typeof EscrowUnfreezeEventSchema>;
-export type DeliverySuccessEvent = z.infer<typeof DeliverySuccessEventSchema>;
-export type EscrowReleasedEvent = z.infer<typeof EscrowReleasedEventSchema>;
 export type ChainEvent = z.infer<typeof ChainEventSchema>;
 
 /** An RPC event that could not be decoded, retained for indexing and replay. */

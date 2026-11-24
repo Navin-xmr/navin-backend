@@ -10,6 +10,8 @@ import type {
   ChainAdapter,
   ChainErrorCode,
   ChainEventCursor,
+  ConfirmDeliveryInput,
+  ConfirmDeliveryResult,
   EscrowResult,
   ReleaseEscrowInput,
   UpdateStatusInput,
@@ -66,6 +68,16 @@ export class MockChainAdapter implements ChainAdapter {
       simulated: true,
       shipmentId: input.shipment_id,
       newStatus: input.new_status,
+    };
+  }
+
+  async confirmDelivery(input: ConfirmDeliveryInput): Promise<ConfirmDeliveryResult> {
+    return {
+      txHash: HASH,
+      ledger: 4,
+      simulated: true,
+      receiver: input.receiver,
+      shipmentId: input.shipment_id,
     };
   }
 
