@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - V2 schema round-trip/mutation suite (`tests/chain.v2.schemas.test.ts`, `reports/chain-schema-coverage.md`) and chain threat model with negative tests (`docs/chain-threat-model.md`) (#1057, #1059).
 
 **Phase 6 — Hash-and-Emit chain architecture**
+--
 
 - `ChainAdapter` port (`src/services/chain/types.ts`) with `anchorEvent`, `releaseEscrow`, `streamEvents`, `getConfirmationCount` and the `AnchorResult` / `EscrowResult` / `ChainEvent` shapes; domain modules may depend on the port and the factory only, never on an adapter implementation or the Stellar SDK (#650).
 - `SimulatedAdapter` (`src/services/chain/simulated.adapter.ts`) — Horizon `manageData` anchors and releases with `simulated: true` receipts; every result is explicitly flagged so demos never imply a real escrow (#650).
