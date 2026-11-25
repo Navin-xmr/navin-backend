@@ -53,7 +53,7 @@ describe('v2 spec pin', () => {
     ['errors.json', errors.spec_version],
   ])('%s matches CHAIN_SPEC_VERSION', (_file, version) => {
     expect(version).toBe(CHAIN_SPEC_VERSION);
-    expect(CHAIN_SPEC_VERSION).toBe('2.0.0');
+    expect(CHAIN_SPEC_VERSION).toBe('2.2.0');
   });
 });
 
