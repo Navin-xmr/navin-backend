@@ -232,7 +232,7 @@ describe('getLedgerBlockVerificationService — canonicalPayload presence (issue
       lean: async () => ({
         _id: new Types.ObjectId().toHexString(),
         milestoneEvent: 'IN_TRANSIT',
-        canonicalPayload: { shipmentId: 'ship-1', event: 'IN_TRANSIT' },
+        canonicalPayload: { v: 1, shipmentId: 'ship-1', event: 'IN_TRANSIT' },
         dataHash: 'd'.repeat(64),
         transactionHash: 'stellar-tx-abc',
         ledger: 5,
