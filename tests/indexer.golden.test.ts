@@ -33,6 +33,7 @@ const telemetryModelMock = createTelemetryModelMock({
 });
 const socketIoMock = createSocketIoMock();
 
+jest.resetModules();
 await jest.unstable_mockModule('../src/modules/ledger/ledger.model.js', () => ({
   LedgerBlock: {
     updateOne: ledgerUpdateOneMock,
@@ -44,6 +45,9 @@ await jest.unstable_mockModule(
   () => telemetryModelMock
 );
 await jest.unstable_mockModule('../src/infra/socket/io.js', () => socketIoMock);
+await jest.unstable_mockModule('../src/modules/webhooks/chainWebhook.service.js', () => ({
+  enqueueChainWebhookEvent: jest.fn<() => Promise<number>>().mockResolvedValue(0),
+}));
 
 const { indexStellarTransactions } = await import('../src/workers/stellar-indexer.worker.js');
 
@@ -61,10 +65,6 @@ describe('Event-driven indexer golden fixtures replay', () => {
       fixtureData.events.anchor,
       fixtureData.events.esc_init,
       fixtureData.events.esc_rel,
-      fixtureData.events.esc_dispute,
-      fixtureData.events.esc_resolve,
-      fixtureData.events.esc_freeze,
-      fixtureData.events.esc_unfreeze,
     ];
 
     const mockAdapter: ChainAdapter = {
@@ -72,6 +72,9 @@ describe('Event-driven indexer golden fixtures replay', () => {
         throw new Error('Not implemented');
       },
       async releaseEscrow() {
+        throw new Error('Not implemented');
+      },
+      async updateStatus() {
         throw new Error('Not implemented');
       },
       async *streamEvents() {
@@ -86,9 +89,9 @@ describe('Event-driven indexer golden fixtures replay', () => {
 
     const summary = await indexStellarTransactions(mockAdapter);
 
-    expect(summary.processed).toBe(7);
-    expect(summary.upserted).toBe(7);
-    expect(summary.lastCursor).toBe(events[6].id);
+    expect(summary.processed).toBe(3);
+    expect(summary.upserted).toBe(3);
+    expect(summary.lastCursor).toBe(events[2].id);
 
     // Verify call 1: anchor -> IN_TRANSIT
     expect(ledgerUpdateOneMock).toHaveBeenNthCalledWith(
@@ -97,7 +100,6 @@ describe('Event-driven indexer golden fixtures replay', () => {
       {
         $setOnInsert: {
           shipmentId: '65f1a2b3c4d5e6f708192a3b',
-          milestoneEvent: 'IN_TRANSIT',
           transactionHash: events[0].tx_hash,
           actor: 'stellar-indexer',
         },
@@ -111,6 +113,8 @@ describe('Event-driven indexer golden fixtures replay', () => {
             ledger: 512345,
             contractId: events[0].contract_id,
             eventId: events[0].id,
+            eventName: events[0].name,
+            ledgerClosedAt: events[0].ledger_closed_at,
             dataHash: events[0].data[0],
             indexedAt: expect.any(String),
           },
@@ -126,7 +130,6 @@ describe('Event-driven indexer golden fixtures replay', () => {
       {
         $setOnInsert: {
           shipmentId: '65f1a2b3c4d5e6f708192a3b',
-          milestoneEvent: 'SETTLEMENT_INITIATED',
           transactionHash: events[1].tx_hash,
           actor: 'stellar-indexer',
         },
@@ -139,6 +142,8 @@ describe('Event-driven indexer golden fixtures replay', () => {
             ledger: 512346,
             contractId: events[1].contract_id,
             eventId: events[1].id,
+            eventName: events[1].name,
+            ledgerClosedAt: events[1].ledger_closed_at,
             paymentId: '66a0b1c2d3e4f50617283940',
             payer: events[1].data[1],
             payee: events[1].data[2],
@@ -158,7 +163,6 @@ describe('Event-driven indexer golden fixtures replay', () => {
       {
         $setOnInsert: {
           shipmentId: '66a0b1c2d3e4f50617283940',
-          milestoneEvent: 'SETTLEMENT_COMPLETED',
           transactionHash: events[2].tx_hash,
           actor: 'stellar-indexer',
         },
@@ -171,118 +175,12 @@ describe('Event-driven indexer golden fixtures replay', () => {
             ledger: 512400,
             contractId: events[2].contract_id,
             eventId: events[2].id,
+            eventName: events[2].name,
+            ledgerClosedAt: events[2].ledger_closed_at,
             paymentId: '66a0b1c2d3e4f50617283940',
             proofHash: events[2].data[0],
             payee: events[2].data[1],
             amount: '1500000000',
-            indexedAt: expect.any(String),
-          },
-        },
-      },
-      { upsert: true }
-    );
-
-    // Verify call 4: esc_dispute -> DISPUTED (reason hash stored, no free-text parsing)
-    expect(ledgerUpdateOneMock).toHaveBeenNthCalledWith(
-      4,
-      { transactionHash: events[3].tx_hash },
-      {
-        $setOnInsert: {
-          shipmentId: '66a0b1c2d3e4f50617283940',
-          milestoneEvent: 'DISPUTED',
-          transactionHash: events[3].tx_hash,
-          actor: 'stellar-indexer',
-        },
-        $set: {
-          milestoneEvent: 'DISPUTED',
-          metadata: {
-            blockNumber: 512450,
-            ledger: 512450,
-            contractId: events[3].contract_id,
-            eventId: events[3].id,
-            paymentId: '66a0b1c2d3e4f50617283940',
-            reasonHash: events[3].data[0],
-            indexedAt: expect.any(String),
-          },
-        },
-      },
-      { upsert: true }
-    );
-
-    // Verify call 5: esc_resolve -> RESOLVED (outcome reflected, not inferred)
-    expect(ledgerUpdateOneMock).toHaveBeenNthCalledWith(
-      5,
-      { transactionHash: events[4].tx_hash },
-      {
-        $setOnInsert: {
-          shipmentId: '66a0b1c2d3e4f50617283940',
-          milestoneEvent: 'RESOLVED',
-          transactionHash: events[4].tx_hash,
-          actor: 'stellar-indexer',
-        },
-        $set: {
-          milestoneEvent: 'RESOLVED',
-          metadata: {
-            blockNumber: 512500,
-            ledger: 512500,
-            contractId: events[4].contract_id,
-            eventId: events[4].id,
-            paymentId: '66a0b1c2d3e4f50617283940',
-            outcome: events[4].data[0],
-            indexedAt: expect.any(String),
-          },
-        },
-      },
-      { upsert: true }
-    );
-
-    // Verify call 6: esc_freeze -> ESCROW_FROZEN
-    expect(ledgerUpdateOneMock).toHaveBeenNthCalledWith(
-      6,
-      { transactionHash: events[5].tx_hash },
-      {
-        $setOnInsert: {
-          shipmentId: '66a0b1c2d3e4f50617283940',
-          milestoneEvent: 'ESCROW_FROZEN',
-          transactionHash: events[5].tx_hash,
-          actor: 'stellar-indexer',
-        },
-        $set: {
-          milestoneEvent: 'ESCROW_FROZEN',
-          metadata: {
-            blockNumber: 512520,
-            ledger: 512520,
-            contractId: events[5].contract_id,
-            eventId: events[5].id,
-            paymentId: '66a0b1c2d3e4f50617283940',
-            frozen: true,
-            indexedAt: expect.any(String),
-          },
-        },
-      },
-      { upsert: true }
-    );
-
-    // Verify call 7: esc_unfreeze -> ESCROW_UNFROZEN
-    expect(ledgerUpdateOneMock).toHaveBeenNthCalledWith(
-      7,
-      { transactionHash: events[6].tx_hash },
-      {
-        $setOnInsert: {
-          shipmentId: '66a0b1c2d3e4f50617283940',
-          milestoneEvent: 'ESCROW_UNFROZEN',
-          transactionHash: events[6].tx_hash,
-          actor: 'stellar-indexer',
-        },
-        $set: {
-          milestoneEvent: 'ESCROW_UNFROZEN',
-          metadata: {
-            blockNumber: 512540,
-            ledger: 512540,
-            contractId: events[6].contract_id,
-            eventId: events[6].id,
-            paymentId: '66a0b1c2d3e4f50617283940',
-            frozen: false,
             indexedAt: expect.any(String),
           },
         },
@@ -298,14 +196,15 @@ describe('Event-driven indexer golden fixtures replay', () => {
     expect(initBlock).not.toHaveProperty('dataHash');
     expect(releaseBlock).not.toHaveProperty('dataHash');
 
-    // Canonical field assertions (#970): milestoneEvent (never legacy eventType)
-    // in every $set/$setOnInsert, and the anchor's top-level dataHash equals the event hash.
+    // Canonical field assertions (#970): milestoneEvent (never legacy eventType) in every
+    // $set and never in $setOnInsert (MongoDB rejects a path in both), and the anchor's
+    // top-level dataHash equals the event hash.
     for (const [, update] of ledgerUpdateOneMock.mock.calls as Array<
       [unknown, { $set: Record<string, unknown>; $setOnInsert: Record<string, unknown> }]
     >) {
-      expect(update.$setOnInsert).toHaveProperty('milestoneEvent');
+      expect(update.$setOnInsert).not.toHaveProperty('milestoneEvent');
       expect(update.$setOnInsert).not.toHaveProperty('eventType');
-      expect(update.$set.milestoneEvent).toBe(update.$setOnInsert.milestoneEvent);
+      expect(update.$set.milestoneEvent).toBeDefined();
       expect(update.$set).not.toHaveProperty('eventType');
     }
     expect(anchorBlock.dataHash).toBe((events[0].data as unknown[])[0]);

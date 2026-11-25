@@ -57,11 +57,31 @@ export const config = {
   sorobanRpcUrl: stellarUrls.sorobanRpcUrl,
   escrowContractId: env.ESCROW_CONTRACT_ID,
   chainAdapter: env.SOROBAN_ADAPTER,
+  sorobanFeePolicy: {
+    maxResourceFeeByNetwork: {
+      testnet: env.SOROBAN_MAX_RESOURCE_FEE_TESTNET,
+      public: env.SOROBAN_MAX_RESOURCE_FEE_PUBLIC,
+    },
+    maxCpuInstructions: env.SOROBAN_MAX_CPU_INSTRUCTIONS,
+    maxLedgerBytes: env.SOROBAN_MAX_LEDGER_BYTES,
+  },
+  chainWebhookEncryptionKey: env.CHAIN_WEBHOOK_ENCRYPTION_KEY,
+  chainPreflight: {
+    enabled: env.CHAIN_PREFLIGHT_ENABLED,
+    checks: env.CHAIN_PREFLIGHT_CHECKS,
+  },
+  chainSubmit: {
+    maxAttempts: env.CHAIN_SUBMIT_MAX_ATTEMPTS,
+    backoffMs: env.CHAIN_SUBMIT_BACKOFF_MS,
+    backoffMaxMs: env.CHAIN_SUBMIT_BACKOFF_MAX_MS,
+  },
   /** #1058 — ledgers required before an anchored event is marked verified. */
   chainConfirmations: {
     testnet: env.CHAIN_CONFIRMATIONS_TESTNET,
     public: env.CHAIN_CONFIRMATIONS_PUBLIC,
   },
   sentryDsn: env.SENTRY_DSN,
+  metricsToken: env.METRICS_TOKEN,
+  metricsPort: env.METRICS_PORT,
   totpEncryptionKey: env.TOTP_ENCRYPTION_KEY,
 } as const;

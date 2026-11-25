@@ -1,23 +1,45 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
+import fs from 'node:fs';
+import path from 'node:path';
+
+import {
+  createPaymentModelMock,
+  createSocketIoMock,
+  createTelemetryModelMock,
+} from './helpers/mocks.js';
 import type { ChainAdapter } from '../src/services/chain/types.js';
 import { CHAIN_EVENT_NAMES } from '../src/shared/types/chain.js';
-import { MilestoneEvent } from '../src/shared/constants/index.js';
 import type { ChainEvent } from '../src/shared/types/chain.js';
-import { createMockPayment } from './fixtures/factories.js';
+import { MilestoneEvent } from '../src/shared/constants/index.js';
 
 const ledgerUpdateOneMock = jest.fn();
+const paymentModelMock = createPaymentModelMock();
+const telemetryModelMock = createTelemetryModelMock({
+  Telemetry: { find: jest.fn(() => ({ lean: async () => [] })) },
+});
+const socketIoMock = createSocketIoMock();
 
 await jest.unstable_mockModule('../src/modules/ledger/ledger.model.js', () => ({
   LedgerBlock: {
     updateOne: ledgerUpdateOneMock,
   },
 }));
+await jest.unstable_mockModule('../src/modules/payments/payments.model.js', () => paymentModelMock);
+await jest.unstable_mockModule(
+  '../src/modules/telemetry/telemetry.model.js',
+  () => telemetryModelMock
+);
+await jest.unstable_mockModule('../src/infra/socket/io.js', () => socketIoMock);
 
 const { indexStellarTransactions } = await import('../src/workers/stellar-indexer.worker.js');
 
-const CONTRACT_ID = 'CACAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAINCW';
-const REASON_HASH = 'c3e23e8160039594a33894f6564e1b1348bbd7a0088d42c4acb73eeaed59c00d';
-const RESOLVE_OUTCOME = 'refund_payer';
+const fixtureData = JSON.parse(
+  fs.readFileSync(path.resolve(process.cwd(), 'tests/fixtures/chain/events.json'), 'utf8')
+) as { events: Record<string, ChainEvent> };
+
+const raised = fixtureData.events.dispute_raised!;
+const frozen = fixtureData.events.escrow_frozen!;
+const resolved = fixtureData.events.dispute_resolved!;
 
 function adapterStreaming(events: ChainEvent[]): ChainAdapter {
   return {
@@ -27,13 +49,19 @@ function adapterStreaming(events: ChainEvent[]): ChainAdapter {
     async releaseEscrow() {
       throw new Error('Not implemented');
     },
+    async updateStatus() {
+      throw new Error('Not implemented');
+    },
     async *streamEvents() {
       yield* events;
+    },
+    async getConfirmationCount() {
+      return 3;
     },
   };
 }
 
-/** The `$set` stage of the n-th (0-based) LedgerBlock upsert. */
+/** The `$set` stage of the n-th (0-based) LedgerBlock update. */
 function nthSet(n: number): Record<string, unknown> {
   const [, update] = ledgerUpdateOneMock.mock.calls[n] as [
     unknown,
@@ -42,178 +70,121 @@ function nthSet(n: number): Record<string, unknown> {
   return update.$set;
 }
 
-describe('indexer dispute events — raise → resolve fixture paths', () => {
+describe('indexer dispute events — raise → resolve fixture paths (#1053)', () => {
   beforeEach(() => {
     ledgerUpdateOneMock.mockReset();
-    ledgerUpdateOneMock.mockResolvedValue({ upsertedCount: 1 });
   });
 
-  it('raises a dispute and stores the reason hash (no free-text parsing)', async () => {
-    const payment = createMockPayment();
-    const dispute: ChainEvent = {
-      id: 'evt-dispute-1',
-      contract_id: CONTRACT_ID,
-      tx_hash: '11'.repeat(32),
-      ledger: 200,
-      ledger_closed_at: '2026-09-27T11:00:00Z',
-      name: CHAIN_EVENT_NAMES.ESCROW_DISPUTE,
-      topic: [CHAIN_EVENT_NAMES.ESCROW_DISPUTE, payment._id],
-      data: [REASON_HASH],
-    };
+  it('opens the dispute record with the reason hash, then merges the co-emitted freeze', async () => {
+    // `raise_dispute` emits dispute_raised AND escrow_frozen in one transaction,
+    // so both fixture events share a tx_hash.
+    expect(raised.tx_hash).toBe(frozen.tx_hash);
+    expect(raised.name).toBe(CHAIN_EVENT_NAMES.DISPUTE_RAISED);
+    expect(frozen.name).toBe(CHAIN_EVENT_NAMES.ESCROW_FROZEN);
 
-    const result = await indexStellarTransactions(adapterStreaming([dispute]));
+    ledgerUpdateOneMock.mockResolvedValueOnce({ upsertedCount: 1, matchedCount: 0 });
+    ledgerUpdateOneMock.mockResolvedValueOnce({ matchedCount: 1 });
 
-    expect(result.processed).toBe(1);
-    expect(result.upserted).toBe(1);
+    const summary = await indexStellarTransactions(adapterStreaming([raised, frozen]));
 
-    const set = nthSet(0);
-    expect(set.milestoneEvent).toBe(MilestoneEvent.DISPUTED);
-    expect(set.metadata.paymentId).toBe(payment._id);
-    expect(set.metadata.reasonHash).toBe(REASON_HASH);
-    // Reason hash is stored verbatim — never parsed as free text.
-    expect(set.metadata.reason).toBeUndefined();
-    expect(set.metadata.description).toBeUndefined();
-    expect(set.metadata.disputeReason).toBeUndefined();
+    expect(summary.processed).toBe(2);
+    expect(summary.upserted).toBe(1);
+
+    // 1. dispute_raised opens the record and stores the hash verbatim.
+    const openSet = nthSet(0);
+    expect(openSet.milestoneEvent).toBe(MilestoneEvent.DISPUTED);
+    const openMetadata = openSet.metadata as Record<string, unknown>;
+    expect(openMetadata.disputeState).toBe('OPEN');
+    expect(openMetadata.reasonHash).toBe(raised.data[2]);
+    expect(openMetadata.raisedBy).toBe(raised.data[1]);
+    // Reason hashes are stored verbatim — never parsed as free text.
+    expect(openMetadata.reason).toBeUndefined();
+    expect(openMetadata.description).toBeUndefined();
+    expect(openMetadata.disputeReason).toBeUndefined();
+
+    expect(ledgerUpdateOneMock).toHaveBeenNthCalledWith(
+      1,
+      { transactionHash: raised.tx_hash },
+      expect.any(Object),
+      {
+        upsert: true,
+      }
+    );
+
+    // 2. escrow_frozen merges freeze state into that same row (same tx_hash):
+    // dotted paths only, so the DISPUTED milestone and reason hash survive.
+    const freezeSet = nthSet(1);
+    expect(freezeSet).toMatchObject({
+      'metadata.escrowFrozen': true,
+      'metadata.escrowFreezeReason': frozen.data[1],
+      'metadata.frozenBy': frozen.data[2],
+      'metadata.frozenAt': frozen.data[3],
+    });
+    expect(freezeSet.milestoneEvent).toBeUndefined();
+    expect(freezeSet.metadata).toBeUndefined();
+    expect(ledgerUpdateOneMock).toHaveBeenNthCalledWith(
+      2,
+      { transactionHash: frozen.tx_hash },
+      expect.any(Object)
+    );
   });
 
-  it('resolves a dispute and reflects the outcome from chain data (not inferred)', async () => {
-    const payment = createMockPayment();
-    const resolve: ChainEvent = {
-      id: 'evt-resolve-1',
-      contract_id: CONTRACT_ID,
-      tx_hash: '22'.repeat(32),
-      ledger: 201,
-      ledger_closed_at: '2026-09-27T11:05:00Z',
-      name: CHAIN_EVENT_NAMES.ESCROW_RESOLVE,
-      topic: [CHAIN_EVENT_NAMES.ESCROW_RESOLVE, payment._id],
-      data: [RESOLVE_OUTCOME],
-    };
+  it('closes the dispute record with the contract resolution reflected verbatim', async () => {
+    ledgerUpdateOneMock.mockResolvedValueOnce({ upsertedCount: 1, matchedCount: 0 });
 
-    const result = await indexStellarTransactions(adapterStreaming([resolve]));
+    const summary = await indexStellarTransactions(adapterStreaming([resolved]));
 
-    expect(result.processed).toBe(1);
+    expect(summary.processed).toBe(1);
+    expect(summary.upserted).toBe(1);
 
     const set = nthSet(0);
     expect(set.milestoneEvent).toBe(MilestoneEvent.RESOLVED);
-    expect(set.metadata.paymentId).toBe(payment._id);
-    expect(set.metadata.outcome).toBe(RESOLVE_OUTCOME);
+    const metadata = set.metadata as Record<string, unknown>;
+    expect(metadata.disputeState).toBe('CLOSED');
+    expect(metadata.resolution).toBe('RefundToCompany');
+    expect(metadata.reasonHash).toBe(resolved.data[2]);
+    expect(metadata.resolvedBy).toBe(resolved.data[3]);
+    // Resolution clears the freeze; there is no separate unfreeze event.
+    expect(metadata.escrowFrozen).toBe(false);
     // Outcome is reflected from chain data, not inferred from status.
-    expect(set.metadata.inferredOutcome).toBeUndefined();
+    expect(metadata.inferredOutcome).toBeUndefined();
   });
 
-  it('freezes escrow state on esc_freeze event', async () => {
-    const payment = createMockPayment();
-    const freeze: ChainEvent = {
-      id: 'evt-freeze-1',
-      contract_id: CONTRACT_ID,
-      tx_hash: '33'.repeat(32),
-      ledger: 202,
-      ledger_closed_at: '2026-09-27T11:10:00Z',
-      name: CHAIN_EVENT_NAMES.ESCROW_FREEZE,
-      topic: [CHAIN_EVENT_NAMES.ESCROW_FREEZE, payment._id],
-      data: [],
-    };
+  it('replays raise → resolve in ledger order and advances the cursor', async () => {
+    ledgerUpdateOneMock.mockResolvedValue({ upsertedCount: 1, matchedCount: 1 });
 
-    const result = await indexStellarTransactions(adapterStreaming([freeze]));
+    const summary = await indexStellarTransactions(adapterStreaming([raised, resolved]));
 
-    expect(result.processed).toBe(1);
-
-    const set = nthSet(0);
-    expect(set.milestoneEvent).toBe(MilestoneEvent.ESCROW_FROZEN);
-    expect(set.metadata.paymentId).toBe(payment._id);
-    expect(set.metadata.frozen).toBe(true);
-  });
-
-  it('unfreezes escrow state on esc_unfreeze event', async () => {
-    const payment = createMockPayment();
-    const unfreeze: ChainEvent = {
-      id: 'evt-unfreeze-1',
-      contract_id: CONTRACT_ID,
-      tx_hash: '44'.repeat(32),
-      ledger: 203,
-      ledger_closed_at: '2026-09-27T11:15:00Z',
-      name: CHAIN_EVENT_NAMES.ESCROW_UNFREEZE,
-      topic: [CHAIN_EVENT_NAMES.ESCROW_UNFREEZE, payment._id],
-      data: [],
-    };
-
-    const result = await indexStellarTransactions(adapterStreaming([unfreeze]));
-
-    expect(result.processed).toBe(1);
-
-    const set = nthSet(0);
-    expect(set.milestoneEvent).toBe(MilestoneEvent.ESCROW_UNFROZEN);
-    expect(set.metadata.paymentId).toBe(payment._id);
-    expect(set.metadata.frozen).toBe(false);
-  });
-
-  it('raises → resolves → freezes → unfreezes in sequence, cursor advances', async () => {
-    const payment = createMockPayment();
-    const events: ChainEvent[] = [
-      {
-        id: 'evt-seq-1',
-        contract_id: CONTRACT_ID,
-        tx_hash: '51'.repeat(32),
-        ledger: 210,
-        ledger_closed_at: '2026-09-27T12:00:00Z',
-        name: CHAIN_EVENT_NAMES.ESCROW_DISPUTE,
-        topic: [CHAIN_EVENT_NAMES.ESCROW_DISPUTE, payment._id],
-        data: [REASON_HASH],
-      },
-      {
-        id: 'evt-seq-2',
-        contract_id: CONTRACT_ID,
-        tx_hash: '52'.repeat(32),
-        ledger: 211,
-        ledger_closed_at: '2026-09-27T12:01:00Z',
-        name: CHAIN_EVENT_NAMES.ESCROW_RESOLVE,
-        topic: [CHAIN_EVENT_NAMES.ESCROW_RESOLVE, payment._id],
-        data: [RESOLVE_OUTCOME],
-      },
-      {
-        id: 'evt-seq-3',
-        contract_id: CONTRACT_ID,
-        tx_hash: '53'.repeat(32),
-        ledger: 212,
-        ledger_closed_at: '2026-09-27T12:02:00Z',
-        name: CHAIN_EVENT_NAMES.ESCROW_FREEZE,
-        topic: [CHAIN_EVENT_NAMES.ESCROW_FREEZE, payment._id],
-        data: [],
-      },
-      {
-        id: 'evt-seq-4',
-        contract_id: CONTRACT_ID,
-        tx_hash: '54'.repeat(32),
-        ledger: 213,
-        ledger_closed_at: '2026-09-27T12:03:00Z',
-        name: CHAIN_EVENT_NAMES.ESCROW_UNFREEZE,
-        topic: [CHAIN_EVENT_NAMES.ESCROW_UNFREEZE, payment._id],
-        data: [],
-      },
-    ];
-
-    const result = await indexStellarTransactions(adapterStreaming(events));
-
-    expect(result.processed).toBe(4);
-    expect(result.upserted).toBe(4);
-    expect(result.lastCursor).toBe('evt-seq-4');
-
-    // Dispute raised with reason hash
+    expect(summary.processed).toBe(2);
+    expect(summary.lastCursor).toBe(resolved.id);
     expect(nthSet(0).milestoneEvent).toBe(MilestoneEvent.DISPUTED);
-    expect(nthSet(0).metadata.reasonHash).toBe(REASON_HASH);
-    // Dispute resolved with chain-reflected outcome
     expect(nthSet(1).milestoneEvent).toBe(MilestoneEvent.RESOLVED);
-    expect(nthSet(1).metadata.outcome).toBe(RESOLVE_OUTCOME);
-    // Escrow frozen
-    expect(nthSet(2).milestoneEvent).toBe(MilestoneEvent.ESCROW_FROZEN);
-    expect(nthSet(2).metadata.frozen).toBe(true);
-    // Escrow unfrozen
-    expect(nthSet(3).milestoneEvent).toBe(MilestoneEvent.ESCROW_UNFROZEN);
-    expect(nthSet(3).metadata.frozen).toBe(false);
+    expect((nthSet(0).metadata as Record<string, unknown>).reasonHash).toBe(raised.data[2]);
+    expect((nthSet(1).metadata as Record<string, unknown>).resolution).toBe('RefundToCompany');
+  });
 
-    // All payments reference the same payment id
-    for (let i = 0; i < 4; i += 1) {
-      expect(nthSet(i).metadata.paymentId).toBe(payment._id);
-    }
+  it('records a standalone freeze (suspension/pause) as its own projection row', async () => {
+    ledgerUpdateOneMock.mockResolvedValueOnce({ matchedCount: 0 });
+    ledgerUpdateOneMock.mockResolvedValueOnce({ upsertedCount: 1 });
+
+    const summary = await indexStellarTransactions(adapterStreaming([frozen]));
+
+    expect(summary.processed).toBe(1);
+    expect(summary.upserted).toBe(1);
+
+    // The merge attempt matched nothing, so a dedicated freeze row is upserted.
+    expect(nthSet(0)).toMatchObject({
+      'metadata.escrowFrozen': true,
+      'metadata.escrowFreezeReason': frozen.data[1],
+    });
+    const rowSet = nthSet(1);
+    expect(rowSet.milestoneEvent).toBe(MilestoneEvent.ESCROW_FROZEN);
+    expect(rowSet.metadata).toMatchObject({
+      eventName: CHAIN_EVENT_NAMES.ESCROW_FROZEN,
+      escrowFrozen: true,
+      escrowFreezeReason: 'DisputeRaised',
+      frozenBy: frozen.data[2],
+      frozenAt: frozen.data[3],
+    });
   });
 });

@@ -1,0 +1,19 @@
+{
+  "schema_version": 2,
+  "event_name": "shipment_created",
+  "shipment_id": "1",
+  "event_counter": 1,
+  "event_type_symbol_xdr": "00000010736869706d656e745f63726561746564",
+  "idempotency_key": "1579e986caaf4fd6239e8dc59dc93eafb0ef1f4b8d22458872ba6ab75e4c5a7d",
+  "canonical_payload": {
+    "destination": "Oakland",
+    "event": "shipment_created",
+    "idempotency_key": "1579e986caaf4fd6239e8dc59dc93eafb0ef1f4b8d22458872ba6ab75e4c5a7d",
+    "origin": "LosAngeles",
+    "schema_version": 2,
+    "shipment_id": "1",
+    "tracking_number": "NVN-000001"
+  },
+  "canonical_json": "{\"destination\":\"Oakland\",\"event\":\"shipment_created\",\"idempotency_key\":\"1579e986caaf4fd6239e8dc59dc93eafb0ef1f4b8d22458872ba6ab75e4c5a7d\",\"origin\":\"LosAngeles\",\"schema_version\":2,\"shipment_id\":\"1\",\"tracking_number\":\"NVN-000001\"}",
+  "data_hash": "2aef69c53ddbad2febbf2a4f204a0dfdee4d5d9850d8569cfb2a8cd820f67ed9"
+}
