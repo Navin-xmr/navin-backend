@@ -4,8 +4,8 @@ import type { NextFunction, Request, Response } from 'express';
 import { AppError, ErrorCodes } from '../src/shared/http/errors.js';
 import { verifyStellarSignature } from '../src/shared/middleware/verifyStellarSignature.js';
 import {
-  CHAIN_CONTRACT_ERRORS,
   CHAIN_EVENT_NAMES,
+  NAVIN_ERRORS,
   CHAIN_SPEC_VERSION,
   ChainFunctionArgsSchemas,
   chainErrorToAppError,
@@ -75,8 +75,8 @@ describe('T4 — backend/on-chain role confusion is rejected', () => {
   });
 
   it('surfaces Unauthorized and InvalidStatus as coded AppErrors', () => {
-    const unauthorized = chainErrorToAppError(CHAIN_CONTRACT_ERRORS.NotAuthorized);
-    const invalidStatus = chainErrorToAppError(CHAIN_CONTRACT_ERRORS.InvalidStatus);
+    const unauthorized = chainErrorToAppError(NAVIN_ERRORS.Unauthorized);
+    const invalidStatus = chainErrorToAppError(NAVIN_ERRORS.InvalidStatus);
     expect(unauthorized).toBeInstanceOf(AppError);
     expect(unauthorized.code).toBe(ErrorCodes.CHAIN_UNAUTHORIZED);
     expect(invalidStatus.code).toBe(ErrorCodes.CHAIN_INVALID_STATUS);

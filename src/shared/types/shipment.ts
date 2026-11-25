@@ -70,6 +70,8 @@ export interface IShipment {
   offChainMetadata?: Record<string, unknown>;
   stellarTokenId?: string;
   stellarTxHash?: string;
+  /** P13-08 — anchor hash from the indexed `shipment_created` event. */
+  chainDataHash?: string;
   deliveryProof?: IDeliveryProof;
   documents: IShipmentDocument[];
   photos: IShipmentPhoto[];

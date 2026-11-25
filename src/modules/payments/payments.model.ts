@@ -7,6 +7,7 @@ export enum PaymentStatus {
   RELEASED = 'Released',
   FAILED = 'Failed',
   DISPUTED = 'Disputed',
+  /** P14-08 #1032 — set only after the `escrow_refunded` chain event is indexed. */
   REFUNDED = 'Refunded',
 }
 
@@ -34,6 +35,9 @@ export interface IPayment {
   stellarTxLedger?: number;
   confirmations?: number;
   escrowRelease?: IEscrowRelease;
+  /** P14-08 — chain truth for the refund, reconciled from `escrow_refunded`. */
+  refundTxHash?: string;
+  refundAmount?: string;
   createdAt: Date;
   updatedAt: Date;
   deletedAt?: Date;
@@ -92,6 +96,8 @@ const PaymentSchema = new Schema<IPayment>(
     stellarTxLedger: { type: Number },
     confirmations: { type: Number, default: 0 },
     escrowRelease: { type: EscrowReleaseSchema },
+    refundTxHash: { type: String },
+    refundAmount: { type: String },
     deletedAt: { type: Date, default: null },
   },
   { timestamps: true }

@@ -47,6 +47,8 @@ const ShipmentSchema = new Schema(
     offChainMetadata: { type: Schema.Types.Mixed },
     stellarTokenId: { type: String },
     stellarTxHash: { type: String },
+    /** P13-08 — anchor hash from the indexed `shipment_created` event. */
+    chainDataHash: { type: String },
     deliveryProof: {
       url: { type: String },
       recipientSignatureName: { type: String },

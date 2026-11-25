@@ -42,6 +42,12 @@ export function createFakeChainAdapter(
         shipmentId: input.shipment_id,
       };
     }),
+    refundEscrow: jest.fn(async input => ({
+      txHash: 'e'.repeat(64),
+      ledger: 3,
+      simulated: true,
+      shipmentId: input.shipment_id,
+    })),
     updateStatus: jest.fn(async input => ({
       txHash: 'd'.repeat(64),
       ledger: 4,

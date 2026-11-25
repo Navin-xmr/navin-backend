@@ -110,6 +110,7 @@ export type SocketIoMock = { [K in keyof typeof socketIo]: MockFn };
 export type ChainAdapterMock = {
   anchorEvent: MockFn;
   releaseEscrow: MockFn;
+  refundEscrow: MockFn;
   updateStatus: MockFn;
   streamEvents: MockFn;
   getConfirmationCount: MockFn;
@@ -156,6 +157,12 @@ export function createChainAdapterMock(
       simulated: true,
       shipmentId: (input as { shipment_id: string }).shipment_id,
       ...script.releaseResult,
+    })),
+    refundEscrow: jest.fn(async (input: unknown) => ({
+      txHash: MOCK_TX_HASH,
+      ledger: 2,
+      simulated: true,
+      shipmentId: (input as { shipment_id: string }).shipment_id,
     })),
     updateStatus: jest.fn(async (input: unknown) => ({
       txHash: MOCK_TX_HASH,

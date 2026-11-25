@@ -11,6 +11,7 @@ import {
   CHAIN_FUNCTION_AUTH,
   CHAIN_FUNCTIONS,
   CHAIN_SPEC_VERSION,
+  NAVIN_ERRORS,
   ChainContractErrorSchema,
   ChainEventSchema,
   ChainEventVerificationSchema,
@@ -108,10 +109,10 @@ describe('v2 spec pin', () => {
 
   describe('simulation failure mapping', () => {
     it.each([
-      ['Error(Contract, #10)', ErrorCodes.CHAIN_MISSING_AUTH, 403],
-      ['Error(Contract, #11)', ErrorCodes.CHAIN_INSUFFICIENT_BUDGET, 402],
-      ['Error(Contract, #12)', ErrorCodes.CHAIN_MISSING_TRUSTLINE, 422],
-    ])('maps %s distinctly', (rawError, code, status) => {
+      ['Error(Contract, #10)', ErrorCodes.CHAIN_CONTRACT_REJECTED, 409],
+      ['Error(Contract, #11)', ErrorCodes.CHAIN_CONTRACT_REJECTED, 409],
+      ['Error(Contract, #14)', ErrorCodes.CHAIN_INVALID_AMOUNT, 422],
+    ])('decodes real NavinError codes distinctly: %s', (rawError, code, status) => {
       const error = simulationErrorToAppError(rawError);
       expect(error).toMatchObject({ code, statusCode: status });
       expect(error.details).toMatchObject({ contractCode: expect.any(Number), rawError });
@@ -232,7 +233,7 @@ describe('v2 error schemas — round trip and mutations', () => {
       code: ErrorCodes.CHAIN_INVALID_STATUS,
       statusCode: 409,
     });
-    expect(chainErrorToAppError(CHAIN_CONTRACT_ERRORS.NotAuthorized)).toMatchObject({
+    expect(chainErrorToAppError(NAVIN_ERRORS.Unauthorized)).toMatchObject({
       code: ErrorCodes.CHAIN_UNAUTHORIZED,
       statusCode: 403,
     });

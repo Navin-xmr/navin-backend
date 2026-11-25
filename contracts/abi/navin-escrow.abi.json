@@ -107,6 +107,19 @@
           "type": "BytesN<32>"
         }
       ]
+    },
+    "refund_escrow": {
+      "auth": "caller",
+      "inputs": [
+        {
+          "name": "caller",
+          "type": "Address"
+        },
+        {
+          "name": "shipment_id",
+          "type": "Symbol"
+        }
+      ]
     }
   },
   "enums": {

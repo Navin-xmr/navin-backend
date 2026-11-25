@@ -7,6 +7,10 @@ import { config } from '../config/index.js';
 import { getBullMQConnection } from '../infra/redis/connection.js';
 import { LedgerBlock } from '../modules/ledger/ledger.model.js';
 import { PaymentModel, PaymentStatus } from '../modules/payments/payments.model.js';
+import { reconcileEscrowRefundService } from '../modules/payments/payments.service.js';
+import { ChainShipmentMapping } from '../modules/shipments/chainShipmentMapping.model.js';
+import { resolveShipmentCreatedMapping } from '../modules/shipments/chainShipmentMapping.js';
+import { Shipment } from '../modules/shipments/shipments.model.js';
 import { Telemetry, TelemetryAnchorStatus } from '../modules/telemetry/telemetry.model.js';
 import { emitPaymentStatusChange } from '../infra/socket/io.js';
 import { MilestoneEvent } from '../shared/types/shipment.js';
@@ -14,7 +18,11 @@ import { CHAIN_EVENT_NAMES, CHAIN_SPEC_VERSION } from '../shared/types/chain.js'
 import type { ChainAdapter } from '../services/chain/types.js';
 import { getChainAdapter } from '../services/chain/factory.js';
 import { isChainEventDecodeFailure, parseChainEvent } from '../shared/types/chain.js';
-import type { ChainEvent, ChainEventDecodeFailure } from '../shared/types/chain.js';
+import type {
+  ChainEvent,
+  ChainEventDecodeFailure,
+  ShipmentCreatedEvent,
+} from '../shared/types/chain.js';
 import { confirmAnchoredTelemetry } from '../modules/telemetry/telemetry.confirmation.js';
 import {
   observeConfirmationLag,
@@ -298,6 +306,50 @@ async function updatePendingConfirmations(adapter: ChainAdapter): Promise<void> 
   }
 }
 
+/**
+ * P13-08 / #1028 — idempotent chain→DB id mapping. When the outbox write has
+ * not landed yet the event is quarantined (still persisted), never dropped;
+ * replay resolves it without changing shipment status (status_updated owns it).
+ */
+async function indexShipmentCreated(event: ShipmentCreatedEvent): Promise<void> {
+  const byId = mongoose.isValidObjectId(event.topic[1]) ? { _id: event.topic[1] } : null;
+  const shipment = await Shipment.findOne({
+    $or: [
+      { stellarTokenId: event.topic[1] },
+      { trackingNumber: event.topic[1] },
+      ...(byId ? [byId] : []),
+    ],
+  }).lean<{ _id: { toString(): string } }>();
+
+  const mapping = resolveShipmentCreatedMapping(
+    event,
+    shipment ? { id: shipment._id.toString() } : null
+  );
+
+  await ChainShipmentMapping.updateOne(
+    { chainShipmentId: mapping.chainShipmentId },
+    {
+      $setOnInsert: {
+        chainShipmentId: mapping.chainShipmentId,
+        sender: mapping.sender,
+        receiver: mapping.receiver,
+        dataHash: mapping.dataHash,
+        txHash: event.tx_hash,
+        ledger: event.ledger,
+        status: 'QUARANTINED',
+      },
+      $set: mapping.shipmentId
+        ? { shipmentId: new mongoose.Types.ObjectId(mapping.shipmentId), status: 'MAPPED' }
+        : {},
+    },
+    { upsert: true }
+  );
+
+  if (shipment) {
+    await Shipment.updateOne({ _id: shipment._id }, { $set: { chainDataHash: mapping.dataHash } });
+  }
+}
+
 async function indexChainEvent(adapter: ChainAdapter, event: ChainEvent): Promise<boolean> {
   let milestoneEvent: MilestoneEvent;
   let shipmentId: string;
@@ -330,6 +382,18 @@ async function indexChainEvent(adapter: ChainAdapter, event: ChainEvent): Promis
     metadata.proofHash = event.data[0];
     metadata.payee = event.data[1];
     metadata.amount = event.data[2];
+  } else if (event.name === CHAIN_EVENT_NAMES.SHIPMENT_CREATED) {
+    milestoneEvent = MilestoneEvent.CREATED;
+    shipmentId = event.topic[1];
+    dataHash = event.data[2];
+    metadata.dataHash = dataHash;
+    metadata.sender = event.data[0];
+    metadata.receiver = event.data[1];
+  } else if (event.name === CHAIN_EVENT_NAMES.ESCROW_REFUND) {
+    milestoneEvent = MilestoneEvent.SETTLEMENT_COMPLETED;
+    shipmentId = event.topic[1];
+    metadata.amount = event.data[0];
+    metadata.caller = event.data[1];
   } else if (event.name === CHAIN_EVENT_NAMES.DISPUTE_RAISED) {
     milestoneEvent = MilestoneEvent.DISPUTED;
     shipmentId = event.data[0];
@@ -376,6 +440,19 @@ async function indexChainEvent(adapter: ChainAdapter, event: ChainEvent): Promis
     await recordTelemetryConfirmation(adapter, event.tx_hash, event.ledger);
   } else if (event.name === CHAIN_EVENT_NAMES.ESCROW_RELEASE) {
     await recordPaymentConfirmation(adapter, event.tx_hash, event.ledger);
+  } else if (event.name === CHAIN_EVENT_NAMES.ESCROW_REFUND) {
+    // P14-08 — status becomes REFUNDED only here, from the chain truth.
+    try {
+      await reconcileEscrowRefundService({
+        shipmentId: event.topic[1],
+        amount: event.data[0],
+        txHash: event.tx_hash,
+      });
+    } catch (err) {
+      logger.error({ err, txHash: event.tx_hash }, 'Failed to reconcile escrow refund');
+    }
+  } else if (event.name === CHAIN_EVENT_NAMES.SHIPMENT_CREATED) {
+    await indexShipmentCreated(event);
   }
 
   return Boolean((result as { upsertedCount?: number }).upsertedCount);

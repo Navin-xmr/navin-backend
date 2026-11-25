@@ -80,6 +80,19 @@ function releaseEscrowOnDelivery(shipment: { _id: { toString(): string } }): Pro
   });
 }
 
+/**
+ * P14-08 — refund escrow on cancellation through the ChainAdapter port. The
+ * payment record stays unchanged until `escrow_refunded` is indexed.
+ */
+function refundEscrowOnCancel(shipment: { _id: { toString(): string } }) {
+  const adapter = getChainAdapter();
+  if (!adapter.refundEscrow) return null;
+  return adapter.refundEscrow({
+    caller: getChainActorAddress(),
+    shipment_id: shipment._id.toString(),
+  });
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
@@ -658,6 +671,22 @@ export const updateShipmentStatusService = async (
       { err: ledgerErr, shipmentId: id, status },
       'Failed to create ledger block for status change'
     );
+  }
+
+  // P14-08 — trigger escrow refund on cancellation (payment becomes REFUNDED
+  // only when the indexer observes the escrow_refunded event).
+  if (status === ShipmentStatus.CANCELLED) {
+    try {
+      const refunded = await refundEscrowOnCancel(shipment);
+      if (refunded) {
+        logger.info(
+          { shipmentId: id, transactionHash: refunded.txHash, simulated: refunded.simulated },
+          'Escrow refund submitted for cancelled shipment'
+        );
+      }
+    } catch (refundErr) {
+      logger.error({ err: refundErr, shipmentId: id }, 'Failed to refund escrow on cancellation');
+    }
   }
 
   // Trigger escrow release on delivery

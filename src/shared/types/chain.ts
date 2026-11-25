@@ -164,6 +164,18 @@ export const ConfirmDeliveryArgsSchema = z
   .strict();
 
 /**
+ * `refund_escrow(caller, shipment_id)` — P14-08 / #1032. Refunds a cancelled or
+ * expired shipment's escrow. The amount is not an argument: it is read from the
+ * `escrow_refunded` event and reconciled against the payment record off-chain.
+ */
+export const RefundEscrowArgsSchema = z
+  .object({
+    caller: AddressSchema,
+    shipment_id: SymbolSchema,
+  })
+  .strict();
+
+/**
  * `ShipmentStatus` contract enum, in the EXACT declaration order of
  * Navin-xmr/navin-contracts `contracts/shipment/src/types.rs`. The variant name
  * is the on-chain identity: a `#[contracttype]` unit-variant enum is encoded as
@@ -218,6 +230,7 @@ export const CHAIN_FUNCTIONS = [
   'init_escrow',
   'release_escrow',
   'confirm_delivery',
+  'refund_escrow',
   'update_status',
 ] as const;
 export type ChainFunctionName = (typeof CHAIN_FUNCTIONS)[number];
@@ -230,6 +243,7 @@ export const CHAIN_FUNCTION_AUTH: Readonly<
   init_escrow: 'payer',
   release_escrow: 'caller',
   confirm_delivery: 'receiver',
+  refund_escrow: 'caller',
   update_status: 'caller',
 };
 
@@ -238,6 +252,7 @@ export const ChainFunctionArgsSchemas = {
   init_escrow: InitEscrowArgsSchema,
   release_escrow: ReleaseEscrowArgsSchema,
   confirm_delivery: ConfirmDeliveryArgsSchema,
+  refund_escrow: RefundEscrowArgsSchema,
   update_status: UpdateStatusArgsSchema,
 } as const satisfies Record<ChainFunctionName, z.ZodTypeAny>;
 
@@ -245,6 +260,7 @@ export type AnchorArgs = z.infer<typeof AnchorArgsSchema>;
 export type InitEscrowArgs = z.infer<typeof InitEscrowArgsSchema>;
 export type ReleaseEscrowArgs = z.infer<typeof ReleaseEscrowArgsSchema>;
 export type ConfirmDeliveryArgs = z.infer<typeof ConfirmDeliveryArgsSchema>;
+export type RefundEscrowArgs = z.infer<typeof RefundEscrowArgsSchema>;
 export type UpdateStatusArgs = z.infer<typeof UpdateStatusArgsSchema>;
 export type ChainTxResult = z.infer<typeof ChainTxResultSchema>;
 
@@ -260,6 +276,10 @@ export const CHAIN_EVENT_NAMES = {
   DISPUTE_RESOLVED: 'dispute_resolved',
   /** v2.2 (#1053) — escrow blocked by a dispute/safety control (freeze). */
   ESCROW_FROZEN: 'escrow_frozen',
+  /** P14-08 / #1032 — emitted when a cancelled shipment's escrow is refunded. */
+  ESCROW_REFUND: 'escrow_refunded',
+  /** P13-08 / #1028 — emitted when a shipment is created on-chain. */
+  SHIPMENT_CREATED: 'shipment_created',
 } as const;
 export type ChainEventName = (typeof CHAIN_EVENT_NAMES)[keyof typeof CHAIN_EVENT_NAMES];
 
@@ -402,6 +422,26 @@ export const EscrowFrozenEventSchema = z
   })
   .strict();
 
+/** topic `["escrow_refunded", shipment_id]` · data `(amount, caller)` */
+export const EscrowRefundEventSchema = z
+  .object({
+    ...eventEnvelope,
+    name: z.literal(CHAIN_EVENT_NAMES.ESCROW_REFUND),
+    topic: z.tuple([z.literal(CHAIN_EVENT_NAMES.ESCROW_REFUND), SymbolSchema]),
+    data: z.tuple([PositiveI128Schema, AddressSchema]),
+  })
+  .strict();
+
+/** topic `["shipment_created", shipment_id]` · data `(sender, receiver, data_hash)` */
+export const ShipmentCreatedEventSchema = z
+  .object({
+    ...eventEnvelope,
+    name: z.literal(CHAIN_EVENT_NAMES.SHIPMENT_CREATED),
+    topic: z.tuple([z.literal(CHAIN_EVENT_NAMES.SHIPMENT_CREATED), SymbolSchema]),
+    data: z.tuple([AddressSchema, AddressSchema, Bytes32HexSchema]),
+  })
+  .strict();
+
 /** Runtime validator for the indexer and golden fixtures. */
 export const ChainEventSchema = z.discriminatedUnion('name', [
   AnchorEventSchema,
@@ -410,6 +450,8 @@ export const ChainEventSchema = z.discriminatedUnion('name', [
   DisputeRaisedEventSchema,
   DisputeResolvedEventSchema,
   EscrowFrozenEventSchema,
+  EscrowRefundEventSchema,
+  ShipmentCreatedEventSchema,
 ]);
 
 export type AnchorEvent = z.infer<typeof AnchorEventSchema>;
@@ -418,6 +460,8 @@ export type EscrowReleaseEvent = z.infer<typeof EscrowReleaseEventSchema>;
 export type DisputeRaisedEvent = z.infer<typeof DisputeRaisedEventSchema>;
 export type DisputeResolvedEvent = z.infer<typeof DisputeResolvedEventSchema>;
 export type EscrowFrozenEvent = z.infer<typeof EscrowFrozenEventSchema>;
+export type EscrowRefundEvent = z.infer<typeof EscrowRefundEventSchema>;
+export type ShipmentCreatedEvent = z.infer<typeof ShipmentCreatedEventSchema>;
 export type ChainEvent = z.infer<typeof ChainEventSchema>;
 
 /** An RPC event that could not be decoded, retained for indexing and replay. */
@@ -473,7 +517,11 @@ export function verifyAnchoredLedger(
 
 // ─── Errors ──────────────────────────────────────────────────────────────────
 
-/** `#[contracterror]` u32 discriminants emitted by the contract. */
+/**
+ * Legacy v1 spec surface (`#[contracterror]` u32 discriminants) retained only
+ * for the versioned golden fixtures. Decoding uses the real `NavinError` table
+ * below — see `NAVIN_ERRORS`.
+ */
 export const CHAIN_CONTRACT_ERRORS = {
   NotAuthorized: 1,
   InvalidHash: 2,
@@ -519,19 +567,136 @@ export const CHAIN_ERROR_MAP: Readonly<
   MissingTrustline: { code: ErrorCodes.CHAIN_MISSING_TRUSTLINE, status: 422 },
 };
 
-const errorNameByCode = new Map<number, ChainContractErrorName>(
-  (Object.entries(CHAIN_CONTRACT_ERRORS) as [ChainContractErrorName, number][]).map(([n, c]) => [
-    c,
-    n,
+/**
+ * P11-08 / #1030 — authoritative `NavinError` discriminants, transcribed from
+ * Navin-xmr/navin-contracts `contracts/shipment/src/errors.rs` (`get_error_info`).
+ * Codes 12, 13 and 71 are intentionally absent (commented out / reserved upstream):
+ * reusing them would misreport a different error. This table, not the legacy v1
+ * `CHAIN_CONTRACT_ERRORS` above, is what `chainErrorToAppError()` decodes.
+ */
+export const NAVIN_ERRORS = {
+  AlreadyInitialized: 1,
+  NotInitialized: 2,
+  Unauthorized: 3,
+  ShipmentNotFound: 4,
+  InvalidStatus: 5,
+  InvalidHash: 6,
+  EscrowLocked: 7,
+  InsufficientFunds: 8,
+  ShipmentAlreadyCompleted: 9,
+  InvalidTimestamp: 10,
+  CounterOverflow: 11,
+  InvalidAmount: 14,
+  ReentrancyDetected: 15,
+  BatchTooLarge: 16,
+  InvalidShipmentInput: 17,
+  MilestoneSumInvalid: 18,
+  MilestoneAlreadyPaid: 19,
+  MetadataLimitExceeded: 20,
+  RateLimitExceeded: 21,
+  ProposalNotFound: 22,
+  ProposalAlreadyExecuted: 23,
+  ProposalExpired: 24,
+  AlreadyApproved: 25,
+  InsufficientApprovals: 26,
+  NotAnAdmin: 27,
+  InvalidMultiSigConfig: 28,
+  NotExpired: 29,
+  ShipmentLimitReached: 30,
+  InvalidConfig: 31,
+  CannotSelfRevoke: 32,
+  CarrierSuspended: 33,
+  ForceCancelReasonHashMissing: 34,
+  ArithmeticError: 35,
+  DisputeReasonHashMissing: 36,
+  CompanySuspended: 37,
+  ShipmentFinalized: 38,
+  TokenTransferFailed: 39,
+  TokenMintFailed: 40,
+  DuplicateAction: 41,
+  ShipmentUnavailable: 42,
+  ContractPaused: 43,
+  StatusHashNotFound: 44,
+  DataHashMismatch: 45,
+  CircuitBreakerOpen: 46,
+  InvalidMigrationEdge: 47,
+  MilestoneLimitExceeded: 48,
+  NoteLimitExceeded: 49,
+  EvidenceLimitExceeded: 50,
+  BreachLimitExceeded: 51,
+  InvalidTokenDecimals: 52,
+  CreationQuotaExceeded: 53,
+  DependenciesNotMet: 54,
+  CircularDependency: 55,
+  ProposalSaltReused: 56,
+  InvalidShipmentParticipants: 57,
+  InvalidShipmentDeadline: 58,
+  InvalidPaymentMilestones: 59,
+  DuplicatePaymentMilestone: 60,
+  InvalidTokenAddress: 61,
+  InvalidPaymentMilestoneName: 62,
+  MetadataSymbolCollision: 63,
+  ExternalIntegrationFailed: 64,
+  InvalidSymbol: 65,
+  NoteNotFound: 66,
+  EvidenceNotFound: 67,
+  RoleAlreadyAssigned: 68,
+  CarrierNotWhitelisted: 69,
+  InvalidAddress: 70,
+  RoleMismatch: 72,
+  InvalidSymbolEncoding: 73,
+  MultiSigProposalPending: 74,
+  CarrierAlreadyWhitelisted: 75,
+  AuditLogLimitExceeded: 76,
+  NftMintFailed: 77,
+  NftConfigurationFailed: 78,
+  SettlementNotFound: 79,
+} as const;
+export type NavinErrorName = keyof typeof NAVIN_ERRORS;
+export type NavinErrorCode = (typeof NAVIN_ERRORS)[NavinErrorName];
+
+type ErrorOutcome = { code: ErrorCode; status: number };
+
+/** Dedicated outcomes — every other variant falls back to ERR_CHAIN_CONTRACT_REJECTED (409). */
+const NAVIN_ERROR_OUTCOMES: Readonly<Partial<Record<NavinErrorName, ErrorOutcome>>> = {
+  AlreadyInitialized: { code: ErrorCodes.CHAIN_ALREADY_ANCHORED, status: 409 },
+  NotInitialized: { code: ErrorCodes.CHAIN_NOT_INITIALIZED, status: 503 },
+  Unauthorized: { code: ErrorCodes.CHAIN_UNAUTHORIZED, status: 403 },
+  NotAnAdmin: { code: ErrorCodes.CHAIN_UNAUTHORIZED, status: 403 },
+  ShipmentNotFound: { code: ErrorCodes.CHAIN_SHIPMENT_NOT_FOUND, status: 404 },
+  SettlementNotFound: { code: ErrorCodes.CHAIN_ESCROW_NOT_FOUND, status: 404 },
+  NoteNotFound: { code: ErrorCodes.CHAIN_ESCROW_NOT_FOUND, status: 404 },
+  EvidenceNotFound: { code: ErrorCodes.CHAIN_ESCROW_NOT_FOUND, status: 404 },
+  StatusHashNotFound: { code: ErrorCodes.CHAIN_INVALID_HASH, status: 422 },
+  InvalidHash: { code: ErrorCodes.CHAIN_INVALID_HASH, status: 422 },
+  DataHashMismatch: { code: ErrorCodes.CHAIN_INVALID_HASH, status: 422 },
+  InvalidAmount: { code: ErrorCodes.CHAIN_INVALID_AMOUNT, status: 422 },
+  InvalidStatus: { code: ErrorCodes.CHAIN_INVALID_STATUS, status: 409 },
+  ShipmentFinalized: { code: ErrorCodes.CHAIN_INVALID_STATUS, status: 409 },
+  ShipmentAlreadyCompleted: { code: ErrorCodes.CHAIN_INVALID_STATUS, status: 409 },
+  DuplicateAction: { code: ErrorCodes.CHAIN_DUPLICATE_ACTION, status: 409 },
+};
+
+/** Full discriminant → backend outcome table, one entry per `NavinError` variant. */
+export const NAVIN_ERROR_MAP: Readonly<Record<NavinErrorName, ErrorOutcome>> = Object.fromEntries(
+  (Object.keys(NAVIN_ERRORS) as NavinErrorName[]).map(name => [
+    name,
+    NAVIN_ERROR_OUTCOMES[name] ?? { code: ErrorCodes.CHAIN_CONTRACT_REJECTED, status: 409 },
   ])
+) as Record<NavinErrorName, ErrorOutcome>;
+
+const navinErrorNameByCode = new Map<number, NavinErrorName>(
+  (Object.entries(NAVIN_ERRORS) as [NavinErrorName, number][]).map(([n, c]) => [c, n])
 );
 
 /**
- * Translate a raw contract error discriminant into an AppError.
- * Codes outside the spec map to ERR_CHAIN_UNKNOWN (502) — a signal of drift.
+ * Translate a raw contract error discriminant into an AppError using the real
+ * `NavinError` table. Variants without a dedicated backend code still resolve,
+ * as ERR_CHAIN_CONTRACT_REJECTED with the variant name in `details`. Only codes
+ * absent from `NAVIN_ERRORS` become ERR_CHAIN_UNKNOWN (502) — a signal of drift.
  */
-export function chainErrorToAppError(contractCode: number): AppError {
-  const name = errorNameByCode.get(contractCode);
+export function navinErrorToAppError(contractCode: number): AppError {
+  const name = navinErrorNameByCode.get(contractCode);
   if (!name) {
     return new AppError(
       502,
@@ -540,8 +705,15 @@ export function chainErrorToAppError(contractCode: number): AppError {
       { contractCode }
     );
   }
-  const { code, status } = CHAIN_ERROR_MAP[name];
-  return new AppError(status, `Chain contract error: ${name}`, code, { contractCode });
+  const { code, status } = NAVIN_ERROR_MAP[name];
+  return new AppError(status, `Chain contract error: ${name}`, code, {
+    contractCode,
+    variant: name,
+  });
+}
+
+export function chainErrorToAppError(contractCode: number): AppError {
+  return navinErrorToAppError(contractCode);
 }
 
 /**

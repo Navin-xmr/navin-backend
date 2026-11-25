@@ -62,6 +62,8 @@ import type {
   ReadShipmentStatusInput,
   ReadShipmentStatusResult,
   ReleaseEscrowInput,
+  RefundEscrowInput,
+  RefundResult,
   UpdateStatusInput,
   UpdateStatusResult,
 } from './types.js';
@@ -71,6 +73,7 @@ const SIMULATED_CONTRACT_ID = StrKey.encodeContract(Buffer.alloc(32));
 
 const ANCHOR_KEY_PREFIX = 'telemetry:';
 const RELEASE_KEY_PREFIX = 'release:';
+const REFUND_KEY_PREFIX = 'refund:';
 const STATUS_KEY_PREFIX = 'status:';
 const PAGE_SIZE = 200;
 const MAX_BAD_SEQ_RETRIES = 2;
@@ -216,6 +219,33 @@ export class SimulatedAdapter implements ChainAdapter {
       receiver: input.receiver,
       shipmentId: input.shipment_id,
     };
+  }
+
+  refundEscrow(input: RefundEscrowInput): Promise<RefundResult> {
+    return instrumentSubmission('refund_escrow', () => this.doRefundEscrow(input));
+  }
+
+  private async doRefundEscrow(input: RefundEscrowInput): Promise<RefundResult> {
+    if (!AddressSchema.safeParse(input.caller).success) {
+      throw chainError(
+        422,
+        'caller must be a valid Stellar address',
+        ErrorCodes.CHAIN_UNAUTHORIZED
+      );
+    }
+    if (!SymbolSchema.safeParse(input.shipment_id).success) {
+      throw chainError(422, 'shipment_id must be a valid Soroban Symbol', ErrorCodes.CHAIN_UNKNOWN);
+    }
+    const refundDigest = generateDataHash({
+      caller: input.caller,
+      shipment_id: input.shipment_id,
+      kind: 'refund_escrow',
+    });
+    const { hash, ledger } = await this.submitManageData(
+      `${REFUND_KEY_PREFIX}${input.shipment_id}`,
+      refundDigest
+    );
+    return { txHash: hash, ledger, simulated: true, shipmentId: input.shipment_id };
   }
 
   async updateStatus(input: UpdateStatusInput): Promise<UpdateStatusResult> {
