@@ -135,6 +135,12 @@ export interface ChainAdapter {
   releaseEscrow(input: ReleaseEscrowInput, options?: ChainSubmitOptions): Promise<EscrowResult>;
 
   /**
+   * Update a shipment's on-chain status (`update_status`).
+   * @throws {AppError} `ChainErrorCode` on rejection.
+   */
+  updateStatus(input: UpdateStatusInput): Promise<UpdateStatusResult>;
+
+  /**
    * Confirm delivery of a shipment — co-emits `delivery_success` and `escrow_released` events.
    * Only the `receiver` (auth precondition) may call this.
    * @throws {AppError} `ChainErrorCode` on rejection (e.g. ERR_CHAIN_UNAUTHORIZED).

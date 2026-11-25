@@ -106,6 +106,13 @@ export const literalAdapter = {
     shipmentId: i.shipment_id,
     newStatus: i.new_status,
   }),
+  confirmDelivery: async (i: ConfirmDeliveryInput) => ({
+    txHash: HASH,
+    ledger: 1,
+    simulated: false,
+    receiver: i.receiver,
+    shipmentId: i.shipment_id,
+  }),
   async *streamEvents() {
     yield* [] as ChainEvent[];
   },
