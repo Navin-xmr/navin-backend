@@ -8,6 +8,7 @@ import {
   markTelemetryAnchorFailed,
 } from '../modules/telemetry/telemetry.service.js';
 import { AppError, ErrorCodes } from '../shared/http/errors.js';
+import { startMetricsServer } from '../infra/metrics/metricsServer.js';
 import { logger } from '../shared/logger/logger.js';
 
 interface AnchorTelemetryJob {
@@ -65,6 +66,8 @@ async function processStellarAnchor(job: Job<AnchorTelemetryJob>) {
 async function startWorker() {
   // Fail fast on a misconfigured SOROBAN_ADAPTER instead of failing every job
   getChainAdapter();
+
+  startMetricsServer();
 
   // Connect to MongoDB
   await connectMongo(config.mongoUri);

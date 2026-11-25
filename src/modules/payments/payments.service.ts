@@ -8,7 +8,7 @@ import type {
   DisputeSettlementInput,
   ResolveDisputeInput,
 } from './payments.validation.js';
-import { getStellarExplorerUrl } from '../../services/stellar.service.js';
+import { getStellarExplorerUrl } from '../../services/chain/explorer.js';
 import { emitPaymentStatusChange } from '../../infra/socket/io.js';
 import type { SettlementStatusPayload } from '../../shared/types/socketEvents.js';
 import { auditLog } from '../../shared/utils/auditLog.js';

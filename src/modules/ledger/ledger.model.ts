@@ -20,7 +20,22 @@ export interface ILedgerBlock {
    * Persisted alongside every dataHash so verifiers never re-guess bytes.
    */
   canonicalPayload?: Record<string, unknown>;
+  /** #994 — v2 chain event spec version. Legacy rows default to 1. */
+  schemaVersion: number;
+  /** #994 — monotonically increasing event counter within the shipment/contract. */
+  eventCounter: number;
+  /** #994 — contract event topic name (e.g. `create_shipment`). */
+  eventTopic?: string;
   transactionHash?: string;
+  /**
+   * #1046 — deployment the block was written under (`testnet` | `public`). Persisted at write
+   * time so verification never depends on the server's *current* config. Absent on legacy rows.
+   */
+  network?: 'testnet' | 'public';
+  /** #994 / #1046 — Soroban contract the transaction targeted, when known at write time. */
+  contractId?: string;
+  /** #994 / #1046 — stable idempotency key for deduplicating requests and replayed v2 events. */
+  idempotencyKey?: string;
   ledger: number;
   /** #1058 — ledgers closed strictly after `ledger`; recomputed idempotently. */
   confirmations: number;
@@ -58,8 +73,14 @@ const LedgerBlockSchema = new Schema(
       required: true,
     },
     transactionHash: { type: String },
+    network: { type: String, enum: ['testnet', 'public'] },
+    contractId: { type: String },
+    idempotencyKey: { type: String },
     dataHash: { type: String },
     canonicalPayload: { type: Schema.Types.Mixed },
+    schemaVersion: { type: Number, required: true, default: 1 },
+    eventCounter: { type: Number, required: true, default: 0 },
+    eventTopic: { type: String },
     ledger: {
       type: Number,
       required: true,
@@ -96,6 +117,13 @@ LedgerBlockSchema.index({ dataHash: 1 }, { sparse: true });
 
 // #1058 — supports idempotent re-verification scans of not-yet-confirmed blocks.
 LedgerBlockSchema.index({ verified: 1, ledger: 1 });
+
+// P13-02 — DB-enforced deduplication on idempotencyKey.
+// Partial index excludes legacy rows without a key so they remain unaffected.
+LedgerBlockSchema.index(
+  { idempotencyKey: 1 },
+  { unique: true, partialFilterExpression: { idempotencyKey: { $type: 'string' } } }
+);
 
 // Soft delete middleware
 LedgerBlockSchema.pre(['find', 'findOne', 'findOneAndUpdate', 'countDocuments'], function () {

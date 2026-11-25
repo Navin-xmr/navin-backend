@@ -37,7 +37,7 @@ describe('SorobanAdapter.preflightRole', () => {
 
   it('reports the exact ERR_CHAIN_* for an unprovisioned/unauthorized caller — no tx is sent', async () => {
     const adapter = adapterWithSim(async () => ({
-      error: 'HostError: Error(Contract, #10)',
+      error: 'HostError: Error(Contract, #13)',
     }));
     // isSimulationError checks for an `error` string — stub it minimally via rpc.Api.
     const { rpc } = await import('@stellar/stellar-sdk');

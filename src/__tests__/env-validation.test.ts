@@ -106,6 +106,60 @@ describe('env validation', () => {
     const { code } = await runWithEnv({ HORIZON_URL: 'not-a-url' });
     expect(code).not.toBe(0);
   });
+
+  // ---------------------------------------------------------------------------
+  // P12-02: Three-state SOROBAN_ADAPTER validation tests
+  // ---------------------------------------------------------------------------
+  describe('P12-02: SOROBAN_ADAPTER conditional requirements', () => {
+    it('state 1 (simulated): boots without Soroban credentials when adapter is simulated or omitted', async () => {
+      // Explicit simulated
+      const explicit = await runWithEnv({ SOROBAN_ADAPTER: 'simulated' });
+      expect(explicit.code).toBe(0);
+
+      // Default (omitted)
+      const defaulted = await runWithEnv();
+      expect(defaulted.code).toBe(0);
+    });
+
+    it('state 2 (soroban-complete): boots successfully when SOROBAN_ADAPTER=soroban and required credentials are set', async () => {
+      const { code } = await runWithEnv({
+        SOROBAN_ADAPTER: 'soroban',
+        SOROBAN_RPC_URL: 'https://soroban-rpc.example.com',
+        ESCROW_CONTRACT_ID: 'CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2B',
+      });
+      expect(code).toBe(0);
+    });
+
+    it('state 3 (soroban-incomplete): fails fast naming the missing variable and selected adapter', async () => {
+      // Both missing
+      const bothMissing = await runWithEnv({ SOROBAN_ADAPTER: 'soroban' });
+      expect(bothMissing.code).not.toBe(0);
+      expect(bothMissing.output).toMatch(
+        /SOROBAN_RPC_URL is required when SOROBAN_ADAPTER=soroban/
+      );
+      expect(bothMissing.output).toMatch(
+        /ESCROW_CONTRACT_ID is required when SOROBAN_ADAPTER=soroban/
+      );
+
+      // Missing contract ID only
+      const missingContract = await runWithEnv({
+        SOROBAN_ADAPTER: 'soroban',
+        SOROBAN_RPC_URL: 'https://soroban-rpc.example.com',
+      });
+      expect(missingContract.code).not.toBe(0);
+      expect(missingContract.output).toMatch(
+        /ESCROW_CONTRACT_ID is required when SOROBAN_ADAPTER=soroban/
+      );
+
+      // Missing RPC URL only
+      const missingRpc = await runWithEnv({
+        SOROBAN_ADAPTER: 'soroban',
+        ESCROW_CONTRACT_ID: 'CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2B',
+      });
+      expect(missingRpc.code).not.toBe(0);
+      expect(missingRpc.output).toMatch(/SOROBAN_RPC_URL is required when SOROBAN_ADAPTER=soroban/);
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------

@@ -1,0 +1,197 @@
+{
+  "title": "Navin chain",
+  "uid": "navin-chain",
+  "schemaVersion": 39,
+  "version": 1,
+  "tags": ["navin", "chain"],
+  "templating": {
+    "list": [
+      {
+        "name": "DS_PROMETHEUS",
+        "type": "datasource",
+        "query": "prometheus",
+        "label": "Datasource"
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Submissions / s by outcome",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "sum by (operation, outcome) (rate(navin_chain_submissions_total[5m]))",
+          "legendFormat": "{{operation}} {{outcome}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Failures by normalized error code",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "sum by (error_code) (rate(navin_chain_submission_failures_total[5m]))",
+          "legendFormat": "{{error_code}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Submission latency p50 / p95",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, operation) (rate(navin_chain_submission_duration_seconds_bucket[5m])))",
+          "legendFormat": "p95 {{operation}}",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.5, sum by (le, operation) (rate(navin_chain_submission_duration_seconds_bucket[5m])))",
+          "legendFormat": "p50 {{operation}}",
+          "refId": "B"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Queue depth",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "sum by (queue, state) (navin_chain_queue_depth)",
+          "legendFormat": "{{queue}} {{state}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Confirmation lag p95",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 16
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, event) (rate(navin_chain_confirmation_lag_seconds_bucket[15m])))",
+          "legendFormat": "{{event}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Indexer cursor age",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 16
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "navin_indexer_cursor_age_seconds",
+          "legendFormat": "cursor age",
+          "refId": "A"
+        },
+        {
+          "expr": "time() - navin_indexer_last_poll_timestamp_seconds",
+          "legendFormat": "since last poll",
+          "refId": "B"
+        }
+      ]
+    }
+  ]
+}

@@ -34,6 +34,7 @@ import {
 import type { Account, Transaction } from '@stellar/stellar-sdk';
 
 import { config } from '../../config/index.js';
+import { instrumentSubmission } from '../../infra/metrics/chainMetrics.js';
 import { AppError, ErrorCodes } from '../../shared/http/errors.js';
 import {
   AddCarrierArgsSchema,
@@ -46,6 +47,7 @@ import {
   RaiseDisputeArgsSchema,
   ResolveDisputeArgsSchema,
   SymbolSchema,
+  UpdateStatusArgsSchema,
   parseChainEvent,
 } from '../../shared/types/chain.js';
 import type { ChainEvent } from '../../shared/types/chain.js';
@@ -61,15 +63,24 @@ import type {
   ChainErrorCode,
   ChainEventCursor,
   ChainTxReceipt,
+  ConfirmDeliveryInput,
+  ConfirmDeliveryResult,
   CreateShipmentInput,
   CreateShipmentResult,
   EscrowResult,
   RaiseDisputeInput,
+  ReadContractVersionResult,
+  ReadEscrowBalanceInput,
+  ReadEscrowBalanceResult,
+  ReadShipmentStatusInput,
+  ReadShipmentStatusResult,
   ReleaseEscrowInput,
   ResolveDisputeInput,
   RoleProvisionAction,
   RolePreflightResult,
   RoleProvisionResult,
+  UpdateStatusInput,
+  UpdateStatusResult,
 } from './types.js';
 
 /** Sentinel contract id for simulated events (all-zero contract strkey) — no contract exists. */
@@ -81,6 +92,7 @@ const SHIPMENT_KEY_PREFIX = 'shipment:';
 const DISPUTE_KEY_PREFIX = 'dispute:';
 const RESOLVE_KEY_PREFIX = 'resolve:';
 const ROLE_KEY_PREFIX = 'role:';
+const STATUS_KEY_PREFIX = 'status:';
 const PAGE_SIZE = 200;
 const MAX_BAD_SEQ_RETRIES = 2;
 
@@ -164,7 +176,11 @@ export class SimulatedAdapter implements ChainAdapter {
       (config.stellarNetwork === 'public' ? Networks.PUBLIC : Networks.TESTNET);
   }
 
-  async anchorEvent(input: AnchorEventInput): Promise<AnchorResult> {
+  anchorEvent(input: AnchorEventInput): Promise<AnchorResult> {
+    return instrumentSubmission('anchor_event', () => this.doAnchorEvent(input));
+  }
+
+  private async doAnchorEvent(input: AnchorEventInput): Promise<AnchorResult> {
     assertBytes32(input.data_hash, 'data_hash', ErrorCodes.CHAIN_INVALID_HASH);
     const { hash, ledger } = await this.submitManageData(
       `${ANCHOR_KEY_PREFIX}${input.shipment_id}`,
@@ -173,7 +189,11 @@ export class SimulatedAdapter implements ChainAdapter {
     return { txHash: hash, ledger, simulated: true };
   }
 
-  async releaseEscrow(input: ReleaseEscrowInput): Promise<EscrowResult> {
+  releaseEscrow(input: ReleaseEscrowInput): Promise<EscrowResult> {
+    return instrumentSubmission('release_escrow', () => this.doReleaseEscrow(input));
+  }
+
+  private async doReleaseEscrow(input: ReleaseEscrowInput): Promise<EscrowResult> {
     if (!AddressSchema.safeParse(input.caller).success) {
       throw chainError(
         422,
@@ -274,6 +294,76 @@ export class SimulatedAdapter implements ChainAdapter {
       digest
     );
     return { txHash: hash, ledger, simulated: true };
+  }
+
+  async confirmDelivery(input: ConfirmDeliveryInput): Promise<ConfirmDeliveryResult> {
+    assertBytes32(input.proof_hash, 'proof_hash', ErrorCodes.CHAIN_INVALID_PROOF);
+
+    // Auth precondition: only the receiver (signing key) may confirm delivery.
+    const signer = this.signer();
+    if (signer.publicKey() !== input.receiver) {
+      throw chainError(
+        403,
+        'Only the delivery receiver can confirm delivery',
+        ErrorCodes.CHAIN_UNAUTHORIZED
+      );
+    }
+
+    // Simulated: no contract call or funds moved. Record as a manage-data write so the
+    // indexer can observe delivery_success / escrow_released via streamEvents.
+    const { hash, ledger } = await this.submitManageData(
+      `confirm:${input.shipment_id}`,
+      input.proof_hash
+    );
+    return {
+      txHash: hash,
+      ledger,
+      simulated: true,
+      receiver: input.receiver,
+      shipmentId: input.shipment_id,
+    };
+  }
+
+  async updateStatus(input: UpdateStatusInput): Promise<UpdateStatusResult> {
+    const parsed = UpdateStatusArgsSchema.safeParse(input);
+    if (!parsed.success) {
+      const hashIssue = parsed.error.issues.some(i => i.path[0] === 'data_hash');
+      throw chainError(
+        422,
+        'update_status arguments do not match the contract ABI',
+        hashIssue ? ErrorCodes.CHAIN_INVALID_HASH : ErrorCodes.CHAIN_UNKNOWN,
+        parsed.error.issues
+      );
+    }
+    const { shipment_id, new_status, data_hash } = parsed.data;
+    // Manage-data holds the caller-supplied data_hash verbatim (never recomputed).
+    // The status name lives in the key so the latest status is discoverable per shipment.
+    const { hash, ledger } = await this.submitManageData(
+      `${STATUS_KEY_PREFIX}${shipment_id}:${new_status}`, // ≤ 45 bytes (u64 ≤ 20 digits)
+      data_hash
+    );
+    return {
+      txHash: hash,
+      ledger,
+      simulated: true,
+      shipmentId: shipment_id,
+      newStatus: new_status,
+    };
+  }
+
+  async readEscrowBalance(_input: ReadEscrowBalanceInput): Promise<ReadEscrowBalanceResult> {
+    // Simulated mode does not track real balances: no contract holds funds.
+    return { balance: '0', simulated: true };
+  }
+
+  async readShipmentStatus(_input: ReadShipmentStatusInput): Promise<ReadShipmentStatusResult> {
+    // Simulated mode does not track real on-chain state: no contract holds
+    // escrow, so the status is UNKNOWN until a real adapter is configured.
+    return { status: 'UNKNOWN', simulated: true };
+  }
+
+  async readContractVersion(): Promise<ReadContractVersionResult> {
+    return { version: '1.2.0-draft-simulated', simulated: true };
   }
 
   async *streamEvents(cursor?: ChainEventCursor): AsyncIterable<ChainEvent> {

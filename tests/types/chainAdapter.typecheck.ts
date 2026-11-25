@@ -14,15 +14,24 @@ import type {
   ChainErrorCode,
   ChainEventCursor,
   ChainTxReceipt,
+  ConfirmDeliveryInput,
+  ConfirmDeliveryResult,
   CreateShipmentInput,
   CreateShipmentResult,
   EscrowResult,
   RaiseDisputeInput,
-  ResolveDisputeInput,
+  ReadContractVersionResult,
+  ReadEscrowBalanceInput,
+  ReadEscrowBalanceResult,
+  ReadShipmentStatusInput,
+  ReadShipmentStatusResult,
   ReleaseEscrowInput,
+  ResolveDisputeInput,
   RoleProvisionAction,
   RolePreflightResult,
   RoleProvisionResult,
+  UpdateStatusInput,
+  UpdateStatusResult,
 } from '../../src/services/chain/types.js';
 import type { AnchorArgs, ChainEvent, ReleaseEscrowArgs } from '../../src/shared/types/chain.js';
 
@@ -68,6 +77,26 @@ export class MockChainAdapter implements ChainAdapter {
     return { txHash: HASH, ledger: 2, simulated: true, shipmentId: input.shipment_id };
   }
 
+  async updateStatus(input: UpdateStatusInput): Promise<UpdateStatusResult> {
+    return {
+      txHash: HASH,
+      ledger: 3,
+      simulated: true,
+      shipmentId: input.shipment_id,
+      newStatus: input.new_status,
+    };
+  }
+
+  async confirmDelivery(input: ConfirmDeliveryInput): Promise<ConfirmDeliveryResult> {
+    return {
+      txHash: HASH,
+      ledger: 4,
+      simulated: true,
+      receiver: input.receiver,
+      shipmentId: input.shipment_id,
+    };
+  }
+
   async *streamEvents(cursor?: ChainEventCursor): AsyncIterable<ChainEvent> {
     const start = cursor ? this.events.findIndex(e => e.id === cursor) + 1 : 0;
     yield* this.events.slice(start);
@@ -110,7 +139,7 @@ export class MockChainAdapter implements ChainAdapter {
 }
 
 export const literalAdapter = {
-  anchorEvent: async () => ({ txHash: HASH, ledger: 1, simulated: false }),
+  anchorEvent: async () => ({ txHash: HASH, ledger: 1, simulated: true }),
   releaseEscrow: async (i: ReleaseEscrowInput) => ({
     txHash: HASH,
     ledger: 1,
@@ -124,6 +153,20 @@ export const literalAdapter = {
   addCarrier: async () => ({ txHash: HASH, ledger: 1, simulated: false }),
   addCarrierToWhitelist: async () => ({ txHash: HASH, ledger: 1, simulated: false }),
   preflightRole: async () => ({ allowed: true }),
+  updateStatus: async (i: UpdateStatusInput) => ({
+    txHash: HASH,
+    ledger: 1,
+    simulated: false,
+    shipmentId: i.shipment_id,
+    newStatus: i.new_status,
+  }),
+  confirmDelivery: async (i: ConfirmDeliveryInput) => ({
+    txHash: HASH,
+    ledger: 1,
+    simulated: false,
+    receiver: i.receiver,
+    shipmentId: i.shipment_id,
+  }),
   async *streamEvents() {
     yield* [] as ChainEvent[];
   },

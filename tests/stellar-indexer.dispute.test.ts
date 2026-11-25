@@ -36,6 +36,9 @@ await jest.unstable_mockModule('../src/modules/telemetry/telemetry.model.js', ()
   TelemetryAnchorStatus: { ANCHORED: 'ANCHORED', VERIFIED: 'VERIFIED' },
 }));
 await jest.unstable_mockModule('../src/infra/socket/io.js', () => createSocketIoMock());
+await jest.unstable_mockModule('../src/modules/webhooks/chainWebhook.service.js', () => ({
+  enqueueChainWebhookEvent: jest.fn<() => Promise<number>>().mockResolvedValue(0),
+}));
 
 const { indexStellarTransactions } = await import('../src/workers/stellar-indexer.worker.js');
 
@@ -72,6 +75,12 @@ function makeAdapter(events: ChainEvent[]): ChainAdapter {
     async preflightRole() {
       return { allowed: true };
     },
+    async updateStatus() {
+      throw new Error('not implemented');
+    },
+    async confirmDelivery() {
+      throw new Error('not implemented');
+    },
     async *streamEvents() {
       yield* events;
     },
@@ -81,7 +90,9 @@ function makeAdapter(events: ChainEvent[]): ChainAdapter {
   };
 }
 
-function disputeResolvedEvent(outcome: 'resolved' | 'rejected'): ChainEvent {
+function disputeResolvedEvent(
+  resolution: 'ReleaseToCarrier' | 'RefundToCompany' | 'PartialRefund'
+): ChainEvent {
   return {
     id: 'evt-dispute-resolved',
     contract_id: CONTRACT_ID,
@@ -89,8 +100,8 @@ function disputeResolvedEvent(outcome: 'resolved' | 'rejected'): ChainEvent {
     ledger: 900,
     ledger_closed_at: '2026-09-27T12:00:00.000Z',
     name: CHAIN_EVENT_NAMES.DISPUTE_RESOLVED,
-    topic: [CHAIN_EVENT_NAMES.DISPUTE_RESOLVED, SHIPMENT_ID],
-    data: [outcome, CALLER],
+    topic: [CHAIN_EVENT_NAMES.DISPUTE_RESOLVED],
+    data: [SHIPMENT_ID, resolution, 'bb'.repeat(32), CALLER],
   };
 }
 
@@ -100,8 +111,8 @@ describe('stellar indexer — dispute_resolved mirrors outcome from chain (#1036
     paymentUpdateOneMock.mockClear();
   });
 
-  it('releases escrow and unfreezes when the outcome is "resolved"', async () => {
-    await indexStellarTransactions(makeAdapter([disputeResolvedEvent('resolved')]));
+  it('releases escrow and unfreezes when the resolution is "ReleaseToCarrier"', async () => {
+    await indexStellarTransactions(makeAdapter([disputeResolvedEvent('ReleaseToCarrier')]));
 
     expect(paymentUpdateOneMock).toHaveBeenCalledWith(
       { shipmentId: expect.any(Types.ObjectId), status: 'Disputed' },
@@ -109,31 +120,31 @@ describe('stellar indexer — dispute_resolved mirrors outcome from chain (#1036
         $set: expect.objectContaining({
           status: 'Released',
           escrowFrozen: false,
-          'escrowRelease.disputeOutcome': 'resolved',
+          'escrowRelease.disputeOutcome': 'ReleaseToCarrier',
         }),
       }
     );
   });
 
-  it('unfreezes back to Escrowed when the outcome is "rejected"', async () => {
-    await indexStellarTransactions(makeAdapter([disputeResolvedEvent('rejected')]));
+  it('refunds escrow and unfreezes when the resolution is "RefundToCompany"', async () => {
+    await indexStellarTransactions(makeAdapter([disputeResolvedEvent('RefundToCompany')]));
 
     expect(paymentUpdateOneMock).toHaveBeenCalledWith(expect.anything(), {
       $set: expect.objectContaining({
-        status: 'Escrowed',
+        status: 'Refunded',
         escrowFrozen: false,
-        'escrowRelease.disputeOutcome': 'rejected',
+        'escrowRelease.disputeOutcome': 'RefundToCompany',
       }),
     });
   });
 
-  it('also upserts a DISPUTE_RESOLVED ledger block entry', async () => {
-    await indexStellarTransactions(makeAdapter([disputeResolvedEvent('resolved')]));
+  it('also upserts a RESOLVED ledger block entry', async () => {
+    await indexStellarTransactions(makeAdapter([disputeResolvedEvent('ReleaseToCarrier')]));
 
     expect(ledgerUpdateOneMock).toHaveBeenCalledWith(
       { transactionHash: 'aa'.repeat(32) },
       expect.objectContaining({
-        $setOnInsert: expect.objectContaining({ milestoneEvent: 'DISPUTE_RESOLVED' }),
+        $set: expect.objectContaining({ milestoneEvent: 'RESOLVED' }),
       }),
       { upsert: true }
     );
