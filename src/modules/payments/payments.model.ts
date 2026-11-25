@@ -7,6 +7,7 @@ export enum PaymentStatus {
   RELEASED = 'Released',
   FAILED = 'Failed',
   DISPUTED = 'Disputed',
+  REFUNDED = 'Refunded',
 }
 
 export interface IEscrowRelease {

@@ -10,7 +10,7 @@ Stack: TypeScript Strict · Express · MongoDB/Mongoose · Zod · JWT+Redis · J
 - **`TODO.md` is the canonical work tracker** (Parts 1–4). Check it before inventing tasks; several known-failing tests are tracked there with owners/plans.
 - **Tests gate CI** (TODO H4.2): `ci.yml` enforces deps-audit/typecheck/build/lint/docker **and** the full `npm test` suite (mongo + redis services). A red suite blocks merge.
 - **Auth policy (decided 2026-08-25):** signup always assigns `VIEWER` — never implement email-domain-based role elevation (#147 resolved Option A). Elevation is invitations-only.
-- **Chain direction:** Stellar integration moves behind a `ChainAdapter` port (simulated vs Soroban); current `stellar.service.ts` manage-data ops are placeholders, escrow moves no funds. See TODO Part 3 before touching chain code.
+- **Chain direction:** Stellar integration moves behind a `ChainAdapter` port (simulated vs Soroban); the legacy `stellar.service.ts` was removed (#1082), so chain code only touches the port and factory. The simulated adapter's manage-data ops are placeholders and escrow moves no funds. See TODO Part 3 before touching chain code.
 - **Realtime event names** come from `src/shared/types/socketEvents.ts` constants — never string literals (`telemetry_update`/`payment_status_changed` are dead names; live: `location:update`, `shipment:status`, `anomaly:detected`, `settlement:status`).
 
 ## 2. Architecture
@@ -101,7 +101,7 @@ Prefer domain events over direct service calls. Never import a sibling controlle
 - [ ] Zod schemas export inferred types · models use `isoDatePlugin` + soft-delete
 - [ ] Swagger updated · `npm run build` passes · full `npm test` passes (CI-blocking, see §4)
 - [ ] **AGENTS.md reviewed if conventions, boundaries, or module structure changed**
-- [ ] **Chain spec drift:** if `docs/chain-interface.md` changed, `src/shared/types/chain.ts` (+ `CHAIN_SPEC_VERSION`) and `tests/fixtures/chain/*.json` (`spec_version`) changed in the same PR — and vice versa. Chain shapes are imported only from `src/shared/types/chain.ts`.
+- [ ] **Chain spec drift:** if `docs/chain-interface.md` or the vendored contract ABI changed, then `src/shared/types/chain.ts` (+ `CHAIN_SPEC_VERSION`), `tests/fixtures/chain/*.json` (`spec_version`), ABI checksum, and contracts-repo commit must all change in the same PR — and vice versa. Sync all four with `npm run chain:sync`. Chain shapes are imported only from `src/shared/types/chain.ts`.
 
 ### Clean-Install Build Triage (hard rule)
 

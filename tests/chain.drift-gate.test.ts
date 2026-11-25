@@ -45,7 +45,7 @@ describe('chain drift gate (#1080)', () => {
       f,
       fs
         .readFileSync(f, 'utf8')
-        .replace("'release_escrow'] as const", "'release_escrow', 'refund'] as const")
+        .replace(/'update_status',[\r\n]+\s*\] as const/, "'update_status', 'refund'] as const")
     );
     expect(checkChainDrift(dir).join('\n')).toMatch(/"refund" is missing/);
   });
