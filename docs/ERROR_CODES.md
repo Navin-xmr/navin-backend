@@ -202,6 +202,10 @@ Mapped from Soroban contract errors by `chainErrorToAppError()` in `src/shared/t
 - `ERR_CHAIN_ESCROW_ALREADY_RELEASED` (409) — Contract `EscrowAlreadyReleased` (6)
 - `ERR_CHAIN_INVALID_AMOUNT` (422) — Contract `InvalidAmount` (7)
 - `ERR_CHAIN_INVALID_PROOF` (422) — Contract `InvalidProof` (8)
+- `ERR_CHAIN_INVALID_STATUS` (409) — Contract `InvalidStatus` (9)
+- `ERR_CHAIN_MISSING_AUTH` (403) — Contract `MissingAuth` (10), or an RPC simulation auth diagnostic
+- `ERR_CHAIN_INSUFFICIENT_BUDGET` (402) — Contract `InsufficientBudget` (11), or an RPC simulation resource/budget diagnostic
+- `ERR_CHAIN_MISSING_TRUSTLINE` (422) — Contract `MissingTrustline` (12), or an RPC simulation trustline diagnostic
 - `ERR_CHAIN_UNKNOWN` (502) — Contract error code not in the spec (spec drift)
 - `ERR_CHAIN_INVALID_EVENT` (502) — Indexed contract event failed spec validation
 - `ERR_CHAIN_FEE_BUDGET_EXCEEDED` (503) — Soroban simulation exceeded the configured fee or resource ceilings; retry only after reviewing congestion/resource usage

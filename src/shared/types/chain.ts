@@ -37,11 +37,63 @@ export const CHAIN_SPEC_VERSION = '2.2.0' as const;
 // ─── Soroban primitives ──────────────────────────────────────────────────────
 
 const I128_MAX = (BigInt(1) << BigInt(127)) - BigInt(1);
+const I128_MIN = -(BigInt(1) << BigInt(127));
 const U32_MAX = 0xffffffff;
 const U64_MAX = (BigInt(1) << BigInt(64)) - BigInt(1);
 
 /** Soroban `Symbol`: up to 32 chars of [a-zA-Z0-9_]. */
 export const SymbolSchema = z.string().regex(/^[A-Za-z0-9_]{1,32}$/, 'Invalid Soroban Symbol');
+
+/** Soroban `u64` represented in JSON as an unsigned decimal string. */
+export const U64Schema = z
+  .string()
+  .regex(/^(0|[1-9][0-9]*)$/, 'Expected unsigned decimal u64 string')
+  .refine(v => !/^(0|[1-9][0-9]*)$/.test(v) || BigInt(v) <= U64_MAX, 'Exceeds u64 range');
+
+/**
+ * Soroban `i128` represented in JSON as a signed decimal string.
+ * Contract amounts use 7 decimal places; the integer is stroops/base units.
+ */
+export const I128Schema = z
+  .string()
+  .regex(/^(0|[1-9][0-9]*|-[1-9][0-9]*)$/, 'Expected signed decimal i128 string')
+  .refine(
+    v =>
+      !/^(0|[1-9][0-9]*|-[1-9][0-9]*)$/.test(v) || (BigInt(v) >= I128_MIN && BigInt(v) <= I128_MAX),
+    'Outside i128 range'
+  );
+
+export const PositiveI128Schema = I128Schema.refine(
+  v => !/^(0|[1-9][0-9]*|-[1-9][0-9]*)$/.test(v) || BigInt(v) > 0,
+  'Expected positive i128 amount'
+);
+
+/** `u32` — ledger sequence numbers. */
+export const U32Schema = z.number().int().min(0).max(U32_MAX);
+
+/** `Vec<(Symbol, u32)>` milestone representation. */
+export const MilestoneVecSchema = z.array(z.tuple([SymbolSchema, U32Schema]));
+
+export const RoleSchema = z.enum([
+  'SUPER_ADMIN',
+  'ADMIN',
+  'MANAGER',
+  'DRIVER',
+  'VIEWER',
+  'CUSTOMER',
+]);
+
+export const SettlementStatusSchema = z.enum([
+  'PENDING',
+  'ESCROWED',
+  'RELEASED',
+  'FAILED',
+  'DISPUTED',
+]);
+
+export type Role = z.infer<typeof RoleSchema>;
+export type SettlementStatus = z.infer<typeof SettlementStatusSchema>;
+export type Milestone = z.infer<typeof MilestoneVecSchema>[number];
 
 /** `BytesN<32>` as lowercase hex (64 chars) — SHA-256 digests. */
 export const Bytes32HexSchema = z
@@ -57,16 +109,6 @@ export const AddressSchema = z
 export const ContractAddressSchema = z
   .string()
   .regex(/^C[A-Z2-7]{55}$/, 'Invalid Stellar contract address');
-
-/** Positive `i128` amount in base units (stroops), as a decimal string. */
-export const PositiveI128Schema = z
-  .string()
-  .regex(/^[1-9][0-9]*$/, 'Expected positive integer string')
-  // zod still runs refinements after a failed regex — guard so BigInt() never throws
-  .refine(v => !/^[1-9][0-9]*$/.test(v) || BigInt(v) <= I128_MAX, 'Exceeds i128 range');
-
-/** `u32` — ledger sequence numbers. */
-export const U32Schema = z.number().int().min(0).max(U32_MAX);
 
 export const TxHashSchema = z.string().regex(/^[0-9a-f]{64}$/, 'Invalid transaction hash');
 
@@ -443,6 +485,9 @@ export const CHAIN_CONTRACT_ERRORS = {
   InvalidProof: 8,
   /** v2 (#1056): escrow release attempted from a shipment in the wrong state. */
   InvalidStatus: 9,
+  MissingAuth: 10,
+  InsufficientBudget: 11,
+  MissingTrustline: 12,
 } as const;
 export type ChainContractErrorName = keyof typeof CHAIN_CONTRACT_ERRORS;
 export type ChainContractErrorCode = (typeof CHAIN_CONTRACT_ERRORS)[ChainContractErrorName];
@@ -469,6 +514,9 @@ export const CHAIN_ERROR_MAP: Readonly<
   InvalidAmount: { code: ErrorCodes.CHAIN_INVALID_AMOUNT, status: 422 },
   InvalidProof: { code: ErrorCodes.CHAIN_INVALID_PROOF, status: 422 },
   InvalidStatus: { code: ErrorCodes.CHAIN_INVALID_STATUS, status: 409 },
+  MissingAuth: { code: ErrorCodes.CHAIN_MISSING_AUTH, status: 403 },
+  InsufficientBudget: { code: ErrorCodes.CHAIN_INSUFFICIENT_BUDGET, status: 402 },
+  MissingTrustline: { code: ErrorCodes.CHAIN_MISSING_TRUSTLINE, status: 422 },
 };
 
 const errorNameByCode = new Map<number, ChainContractErrorName>(
@@ -494,6 +542,84 @@ export function chainErrorToAppError(contractCode: number): AppError {
   }
   const { code, status } = CHAIN_ERROR_MAP[name];
   return new AppError(status, `Chain contract error: ${name}`, code, { contractCode });
+}
+
+/**
+ * Translate an RPC simulation failure before transaction assembly.
+ * Host diagnostics and contract discriminants are kept in `details.rawError`;
+ * the raw contract code is always retained as `details.contractCode` when found.
+ */
+export function simulationErrorToAppError(
+  rawError: unknown,
+  decodeContractError: (code: number) => AppError = chainErrorToAppError
+): AppError {
+  const rawText =
+    typeof rawError === 'string'
+      ? rawError
+      : rawError instanceof Error
+        ? rawError.message
+        : JSON.stringify(rawError);
+
+  const contractCodeMatch =
+    rawText.match(/(?:Contract,\s*#|contract error(?: code)?[:\s]*#?)(\d+)/i) ??
+    rawText.match(/(?:Error\(Contract,\s*#)(\d+)/i);
+  const contractCode = contractCodeMatch ? parseInt(contractCodeMatch[1], 10) : undefined;
+
+  if (contractCode !== undefined) {
+    const mapped = decodeContractError(contractCode);
+    const mappedDetails =
+      mapped.details && typeof mapped.details === 'object'
+        ? (mapped.details as Record<string, unknown>)
+        : {};
+    if (mapped.code !== ErrorCodes.CHAIN_UNKNOWN || decodeContractError !== chainErrorToAppError) {
+      return new AppError(mapped.statusCode, mapped.message, mapped.code, {
+        ...mappedDetails,
+        contractCode,
+        rawError: rawText,
+      });
+    }
+  }
+
+  const normalized = rawText.toLowerCase();
+  if (
+    normalized.includes('missing auth') ||
+    normalized.includes('missing authentication') ||
+    normalized.includes('unauthorized') ||
+    normalized.includes('not authorized')
+  ) {
+    return new AppError(
+      403,
+      'Soroban simulation failed: missing authorization',
+      ErrorCodes.CHAIN_MISSING_AUTH,
+      { contractCode, rawError: rawText }
+    );
+  }
+  if (
+    normalized.includes('insufficient budget') ||
+    normalized.includes('resource limit') ||
+    normalized.includes('fee') ||
+    normalized.includes('budget exceeded')
+  ) {
+    return new AppError(
+      402,
+      'Soroban simulation failed: insufficient budget',
+      ErrorCodes.CHAIN_INSUFFICIENT_BUDGET,
+      { contractCode, rawError: rawText }
+    );
+  }
+  if (normalized.includes('trustline') || normalized.includes('trust line')) {
+    return new AppError(
+      422,
+      'Soroban simulation failed: missing trustline',
+      ErrorCodes.CHAIN_MISSING_TRUSTLINE,
+      { contractCode, rawError: rawText }
+    );
+  }
+
+  return new AppError(400, 'Soroban simulation failed', ErrorCodes.CHAIN_UNKNOWN, {
+    contractCode,
+    rawError: rawText,
+  });
 }
 
 /**

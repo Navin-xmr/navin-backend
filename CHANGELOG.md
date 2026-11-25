@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Soroban preflight simulation error mapping for contract failures, missing authorization,
+  insufficient resource budget and missing trustlines; failed simulations retain raw RPC
+  details and never call `sendTransaction` (#1016).
+- Strict Soroban primitive schemas for `u64`, `i128`, `Address`, `BytesN<32>`, `Symbol`,
+  milestone vectors and contract enums, including 7-decimal amount documentation (#1015).
+- A Stellar quickstart Compose harness and nightly workflow for adapter contract deployment
+  smoke tests from navin-contracts WASM (#1013).
+- Soroban `getEvents` topic and contract filtering for the event-stream indexer (#1014).
 - Soroban simulation fee/CPU/ledger-byte ceilings with a typed retryable error and observable over-budget metric (#1074).
 - Frontend chain verification v2 guide and deterministic fixture covering canonical payload hashing and idempotency keys (#1071, #1079).
 - Soroban submission operations runbook and per-network resource policy configuration (#1074).

@@ -1,0 +1,12 @@
+services:
+  quickstart:
+    image: stellar/quickstart:testing
+    command: --standalone --enable-soroban-rpc --enable-core --enable-horizon
+    ports:
+      - '127.0.0.1:8000:8000'
+      - '127.0.0.1:11626:11626'
+    healthcheck:
+      test: ['CMD-SHELL', 'curl -fsS http://127.0.0.1:8000 >/dev/null']
+      interval: 5s
+      timeout: 5s
+      retries: 30

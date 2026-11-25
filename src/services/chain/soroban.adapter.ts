@@ -20,6 +20,7 @@ import {
   Bytes32HexSchema,
   SymbolSchema,
   parseChainEvent,
+  simulationErrorToAppError,
   isChainEventDecodeFailure,
   UpdateStatusArgsSchema,
   chainErrorToAppError,
@@ -536,7 +537,13 @@ export class SorobanAdapter implements ChainAdapter {
     }
 
     try {
-      const filters: rpc.Api.EventFilter[] = [{ type: 'contract', contractIds: [this.contractId] }];
+      const filters: rpc.Api.EventFilter[] = [
+        {
+          type: 'contract',
+          contractIds: [this.contractId],
+          topics: [['anchor'], ['esc_init'], ['esc_rel']],
+        },
+      ];
       const request: rpc.Api.GetEventsRequest = cursor
         ? { cursor, filters }
         : { startLedger: startLedger ?? 0, filters };
@@ -620,11 +627,7 @@ export class SorobanAdapter implements ChainAdapter {
     // 1. Simulate
     const simRes = await this.server.simulateTransaction(tx);
     if (rpc.Api.isSimulationError(simRes)) {
-      const contractErrorMatch = String(simRes.error).match(/Error\(Contract, #(\d+)\)/);
-      if (contractErrorMatch?.[1]) {
-        throw decodeContractError(parseInt(contractErrorMatch[1], 10));
-      }
-      throw new AppError(400, 'Soroban simulation failed', ErrorCodes.CHAIN_UNKNOWN);
+      throw simulationErrorToAppError(simRes.error, decodeContractError);
     }
 
     const resources = simRes.transactionData.build().resources();
