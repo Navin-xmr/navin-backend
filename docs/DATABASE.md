@@ -87,6 +87,9 @@ Schema migrations are handled by [migrate-mongo](https://www.npmjs.com/package/m
 | Migration                                 | Purpose                                                                   |
 | ----------------------------------------- | ------------------------------------------------------------------------- |
 | `20240101000000-add-compound-indexes.js`  | Creates compound indexes on `shipments`, `anomalies`, `telemetries`, and `apikeys`, mirroring the schema-level declarations below. |
+| `20260927000000-add-ledger-datahash-index.js` | Sparse index on `ledgerblocks.dataHash` for fast lookup and deduplication by committed payload SHA-256. |
+| `20260927000001-ledger-canonical-milestone-event.js` | Unifies `eventType`/`milestoneEvent` fields on `ledgerblocks`. |
+| `20261124000000-add-ledger-idempotency-key-index.js` | Unique partial index on `ledgerblocks.idempotencyKey` enforcing database-layer deduplication (P13-02). |
 
 ---
 
@@ -118,7 +121,10 @@ Indexing is critical for high-performance retrieval, especially for real-time te
 | **ApiKey**      | `{ organizationId: 1 }`                                   | Listing an organization's API keys.                                          |
 | **ApiKey**      | `{ shipmentId: 1 }`                                       | Finding API keys scoped to a specific shipment.                              |
 | **LedgerBlock** | `{ shipmentId: 1, milestoneEvent: 1, createdAt: -1 }`     | Querying ledger blocks for a shipment, newest first.                         |
-| **LedgerBlock** | `{ eventType: 1, createdAt: -1 }`                         | Filtering ledger blocks by event type across shipments.                      |
+| **LedgerBlock** | `{ milestoneEvent: 1, createdAt: -1 }`                    | Filtering ledger blocks by event type across shipments.                      |
+| **LedgerBlock** | `{ dataHash: 1 }` (sparse)                                | Fast lookup and deduplication by committed on-chain dataHash.               |
+| **LedgerBlock** | `{ idempotencyKey: 1 }` (unique, partialFilterExpression) | Database-level deduplication; legacy rows without a key are excluded (P13-02). |
+| **LedgerBlock** | `{ verified: 1, ledger: 1 }`                              | Idempotent re-verification scans of pending blocks.                          |
 | **Payment**     | `{ organizationId: 1, createdAt: -1 }`                    | Financial ledger and invoicing lists for an organization.                    |
 
 > **Planned (K3):** once `dataHash` lands on `LedgerBlock` as part of the event-driven indexer, expect a `{ dataHash: 1 }` index (plus unique constraint) to support verification lookups.

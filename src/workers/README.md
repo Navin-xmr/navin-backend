@@ -39,7 +39,16 @@ node dist/src/workers/stellar.worker.js
 # Indexer worker (Horizon-backed poller, dedicated service)
 npm run worker:stellar-indexer
 node dist/src/workers/stellar-indexer.worker.js
+
+# Retry pending malformed indexer events after deploying a decoder fix
+npm run replay:indexer-dead-letters
 ```
+
+Malformed Soroban events are stored in the `IndexerDeadLetter` collection with
+their raw RPC payload, normalized candidate, error, contract ID, and stream cursor.
+Each failure also enters the alert queue. Replay leaves still-invalid records
+pending and records the latest replay error; successfully indexed records are
+marked `replayed`.
 
 ### Configuration
 
@@ -64,7 +73,7 @@ The worker uses the following environment variables:
 
 2. **Processing Steps**:
    - Fetch job from `transaction_queue`
-   - Call `anchorTelemetryHash()` to submit Stellar transaction
+   - Call `getChainAdapter().anchorEvent()` to submit the anchor transaction
    - Update MongoDB document with `stellarTxHash` and `ANCHORED` status
    - On failure: Mark as `ANCHOR_FAILED` and retry (up to 3 attempts)
 
