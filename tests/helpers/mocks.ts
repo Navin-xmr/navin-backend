@@ -285,6 +285,7 @@ export type PaymentModelMock = {
     find: MockFn;
     findById: MockFn;
     findOneAndUpdate: MockFn;
+    updateOne: MockFn;
   };
   PaymentStatus: Record<string, string>;
 };
@@ -300,12 +301,14 @@ export function createPaymentModelMock(
       find: jest.fn(() => createModelQuery([])),
       findById: jest.fn(() => createModelQuery(null)),
       findOneAndUpdate: jest.fn(),
+      updateOne: jest.fn(),
       ...(overrides.PaymentModel ?? {}),
     },
     PaymentStatus: {
       PENDING: 'Pending',
       ESCROWED: 'Escrowed',
       RELEASED: 'Released',
+      REFUNDED: 'Refunded',
       FAILED: 'Failed',
       DISPUTED: 'Disputed',
       ...(overrides.PaymentStatus ?? {}),
