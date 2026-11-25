@@ -5,10 +5,10 @@
  *
  * ```ts
  * jest.resetModules();
- * const adapter = createChainAdapterMock();
  * await jest.unstable_mockModule('../src/services/chain/factory.js', () =>
- *   createChainFactoryMock(adapter)
+ *   createChainFactoryMock(createChainAdapterMock())
  * );
+ * // Import the module under test *after* registering mocks
  * const mod = await import('../src/modules/shipments/shipments.service.js');
  * ```
  *
@@ -110,6 +110,7 @@ export type SocketIoMock = { [K in keyof typeof socketIo]: MockFn };
 export type ChainAdapterMock = {
   anchorEvent: MockFn;
   releaseEscrow: MockFn;
+  updateStatus: MockFn;
   streamEvents: MockFn;
   getConfirmationCount: MockFn;
 };
@@ -153,8 +154,15 @@ export function createChainAdapterMock(
       txHash: MOCK_TX_HASH,
       ledger: 1,
       simulated: true,
-      paymentId: (input as { payment_id: string }).payment_id,
+      shipmentId: (input as { shipment_id: string }).shipment_id,
       ...script.releaseResult,
+    })),
+    updateStatus: jest.fn(async (input: unknown) => ({
+      txHash: MOCK_TX_HASH,
+      ledger: 1,
+      simulated: true,
+      shipmentId: (input as { shipment_id: string }).shipment_id,
+      newStatus: (input as { new_status: string }).new_status,
     })),
     streamEvents: jest.fn(async function* () {
       yield* script.events ?? [];
@@ -259,6 +267,7 @@ export function createTelemetryModelMock(
 export type PaymentModelMock = {
   PaymentModel: {
     find: MockFn;
+    findById: MockFn;
     findOneAndUpdate: MockFn;
   };
   PaymentStatus: Record<string, string>;
@@ -273,6 +282,7 @@ export function createPaymentModelMock(
   return {
     PaymentModel: {
       find: jest.fn(() => createModelQuery([])),
+      findById: jest.fn(() => createModelQuery(null)),
       findOneAndUpdate: jest.fn(),
       ...(overrides.PaymentModel ?? {}),
     },

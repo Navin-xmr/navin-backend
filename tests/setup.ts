@@ -19,6 +19,20 @@ import { MongoMemoryServer } from 'mongodb-memory-server';
 let mongoServer: MongoMemoryServer | null = null;
 let mongoReady = false;
 
+/**
+ * Scope MONGO_URI to a per-worker database so parallel Jest workers sharing a
+ * single MongoDB instance do not wipe each other's collections in afterAll.
+ */
+function withWorkerDb(uri: string, workerId: string): string {
+  const parsed = new URL(uri);
+  const baseDb = parsed.pathname.replace(/^\//, '') || 'navin_test';
+  const suffix = `_w${workerId}`;
+  if (!baseDb.endsWith(suffix)) {
+    parsed.pathname = `/${baseDb}${suffix}`;
+  }
+  return parsed.toString();
+}
+
 beforeAll(async () => {
   try {
     // A shared MongoDB Memory Server is provided by tests/globalSetup.ts
@@ -38,6 +52,10 @@ beforeAll(async () => {
     if (process.env.SKIP_MONGO_MEMORY === '1') {
       mongoReady = false;
       return;
+    }
+
+    if (process.env.JEST_WORKER_ID && process.env.MONGO_URI) {
+      process.env.MONGO_URI = withWorkerDb(process.env.MONGO_URI, process.env.JEST_WORKER_ID);
     }
 
     if (mongoose.connection.readyState === 0) {

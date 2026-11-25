@@ -1,7 +1,6 @@
 import { jest, describe, it, beforeAll, expect } from '@jest/globals';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { AppError } from '../src/shared/http/errors.js';
 
 const findByIdAndUpdateMock = jest.fn<(id: unknown, update: unknown, opts?: unknown) => Promise<unknown>>();
 const anomalyUpdateManyMock = jest.fn<(query: unknown, update: unknown) => Promise<unknown>>();
@@ -56,6 +55,7 @@ await jest.unstable_mockModule('../src/modules/ledger/ledger.service.js', () => 
 }));
 
 const { uploadShipmentProofService, deleteShipmentService } = await import('../src/modules/shipments/shipments.service.js');
+const { AppError } = await import('../src/shared/http/errors.js');
 
 const { multerFile } = await import('./fixtures/factories.js');
 

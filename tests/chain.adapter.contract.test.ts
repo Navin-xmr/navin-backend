@@ -8,16 +8,13 @@ import type { ChainAdapter } from '../src/services/chain/types.js';
 import { ErrorCodes } from '../src/shared/http/errors.js';
 import { CHAIN_EVENT_NAMES, ChainEventSchema } from '../src/shared/types/chain.js';
 import type { ChainEvent } from '../src/shared/types/chain.js';
-import type {
-  HorizonTransactionRecordMock,
-  SimulatedHorizonClientMock,
-} from './helpers/mocks.js';
+import type { HorizonTransactionRecordMock, SimulatedHorizonClientMock } from './helpers/mocks.js';
 
 const signer = Keypair.random();
 const ACTOR = signer.publicKey();
 const CONTRACT_ID = 'CACAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAINCW';
 const ANCHOR_INPUT = { shipment_id: 'shipment_1', data_hash: 'a1'.repeat(32), actor: ACTOR };
-const RELEASE_INPUT = { payment_id: 'payment_1', proof_hash: 'b2'.repeat(32) };
+const RELEASE_INPUT = { caller: ACTOR, shipment_id: 'shipment_1' };
 const SOROBAN_TX = 'c3'.repeat(32);
 
 function createFakeHorizon() {
@@ -122,18 +119,18 @@ describe.each([['simulated'], ['soroban']])('%s ChainAdapter contract', () => {
     }
   });
 
-  it('rejects malformed proof hashes with the shared port error', async () => {
+  it('rejects a malformed caller with the Unauthorized port error (v2)', async () => {
     for (const [, adapter] of await createBindingAdapters()) {
       await expect(
-        adapter.releaseEscrow({ ...RELEASE_INPUT, proof_hash: 'not-a-hash' })
-      ).rejects.toMatchObject({ statusCode: 422, code: ErrorCodes.CHAIN_INVALID_PROOF });
+        adapter.releaseEscrow({ ...RELEASE_INPUT, caller: 'not-an-address' })
+      ).rejects.toMatchObject({ statusCode: 422, code: ErrorCodes.CHAIN_UNAUTHORIZED });
     }
   });
 });
 
 describe('ChainAdapter contract parity (simulated ↔ soroban)', () => {
   it('anchorEvent returns { txHash, ledger } on both adapters with the correct simulated flag', async () => {
-    for (const [name, adapter, simulated] of await createBindingAdapters()) {
+    for (const [, adapter, simulated] of await createBindingAdapters()) {
       const receipt = await adapter.anchorEvent({ ...ANCHOR_INPUT });
       expect(receipt.txHash).toMatch(/^[0-9a-f]{64}$/);
       expect(typeof receipt.ledger).toBe('number');
@@ -141,13 +138,13 @@ describe('ChainAdapter contract parity (simulated ↔ soroban)', () => {
     }
   });
 
-  it('releaseEscrow returns { txHash, ledger } with paymentId passthrough on both adapters', async () => {
+  it('releaseEscrow returns { txHash, ledger } with shipmentId passthrough on both adapters', async () => {
     for (const [, adapter, simulated] of await createBindingAdapters()) {
       const receipt = await adapter.releaseEscrow({ ...RELEASE_INPUT });
       expect(receipt.txHash).toMatch(/^[0-9a-f]{64}$/);
       expect(typeof receipt.ledger).toBe('number');
       expect(receipt.simulated).toBe(simulated);
-      expect(receipt.paymentId).toBe(RELEASE_INPUT.payment_id);
+      expect(receipt.shipmentId).toBe(RELEASE_INPUT.shipment_id);
     }
   });
 

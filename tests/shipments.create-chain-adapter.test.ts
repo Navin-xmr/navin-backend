@@ -2,7 +2,8 @@
  * P8-07 — createShipmentService anchors through the ChainAdapter port.
  *
  * Shipment creation must go through `getChainAdapter().anchorEvent(...)`
- * (AGENTS.md §7) and never call `stellar.service.js` directly.
+ * (AGENTS.md §7). The legacy `stellar.service.ts` was retired in #1082; the
+ * guard in tests/stellar.service.retired.test.ts keeps it from coming back.
  */
 import { jest, describe, it, expect, beforeEach } from '@jest/globals';
 import { Types } from 'mongoose';
