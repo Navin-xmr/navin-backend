@@ -1,9 +1,8 @@
 /**
- * P8-07 — createShipmentService anchors through the ChainAdapter port.
- *
- * Shipment creation must go through `getChainAdapter().anchorEvent(...)`
- * (AGENTS.md §7). The legacy `stellar.service.ts` was retired in #1082; the
- * guard in tests/stellar.service.retired.test.ts keeps it from coming back.
+ * #997 — createShipmentService writes shipment + outbox atomically and never
+ * calls the chain adapter on the request path. The worker owns submission.
+ * The legacy `stellar.service.ts` was retired in #1082; the guard in
+ * tests/stellar.service.retired.test.ts keeps it from coming back.
  */
 import { jest, describe, it, expect, beforeEach } from '@jest/globals';
 import { Types } from 'mongoose';
@@ -14,7 +13,6 @@ import {
 } from './helpers/mocks.js';
 
 const CREATED_AT = new Date('2026-10-01T12:00:00.000Z');
-const ACTOR_ADDRESS = 'GAAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQDZ7H';
 
 const saveMock = jest.fn<() => Promise<unknown>>();
 
@@ -26,6 +24,12 @@ class ShipmentDocMock {
   destination!: string;
   stellarTokenId?: string;
   stellarTxHash?: string;
+  chainOutbox?: {
+    status: string;
+    idempotencyKey: string;
+    attempts: number;
+    availableAt: Date;
+  };
   save = saveMock;
 
   constructor(data: Record<string, unknown>) {
@@ -88,7 +92,6 @@ const chainFactory = createChainFactoryMock(chainAdapter);
 await jest.unstable_mockModule('../src/services/chain/factory.js', () => chainFactory);
 
 const { createShipmentService } = await import('../src/modules/shipments/shipments.service.js');
-const { generateDataHash } = await import('../src/shared/utils/crypto.js');
 
 const input = {
   trackingNumber: 'NVN-123456',
@@ -97,7 +100,7 @@ const input = {
   actorUserId: new Types.ObjectId().toHexString(),
 };
 
-describe('createShipmentService — ChainAdapter anchoring (P8-07)', () => {
+describe('createShipmentService — transactional outbox (#997)', () => {
   beforeEach(() => {
     saveMock.mockReset();
     saveMock.mockResolvedValue(undefined);
@@ -105,44 +108,30 @@ describe('createShipmentService — ChainAdapter anchoring (P8-07)', () => {
     auditLogMock.mockClear();
   });
 
-  it('anchors the creation via getChainAdapter().anchorEvent and records the tx', async () => {
-    const txHash = 'b'.repeat(64);
-    chainAdapter.anchorEvent.mockResolvedValueOnce({ txHash, ledger: 7, simulated: true });
-
+  it('persists shipment and pending outbox in one atomic save, without a chain call', async () => {
     const shipment = (await createShipmentService(input)) as unknown as ShipmentDocMock;
-    const shipmentId = shipment._id.toString();
 
-    // data_hash inputs mirror createShipmentService on main: the persisted
-    // record's identity fields (no canonical envelope at creation time).
-    const expectedHash = generateDataHash({
-      shipmentId,
-      trackingNumber: input.trackingNumber,
-      origin: input.origin,
-      destination: input.destination,
+    expect(saveMock).toHaveBeenCalledTimes(1);
+    expect(chainFactory.getChainAdapter).not.toHaveBeenCalled();
+    expect(chainAdapter.anchorEvent).not.toHaveBeenCalled();
+    expect(shipment.chainOutbox).toMatchObject({
+      status: 'pending_chain',
+      attempts: 0,
     });
-
-    expect(chainFactory.getChainAdapter).toHaveBeenCalled();
-    expect(chainAdapter.anchorEvent).toHaveBeenCalledTimes(1);
-    expect(chainAdapter.anchorEvent).toHaveBeenCalledWith({
-      shipment_id: shipmentId,
-      data_hash: expectedHash,
-      actor: ACTOR_ADDRESS,
-    });
-    expect(shipment.stellarTxHash).toBe(txHash);
-    // main's implementation records only the tx hash (no stellarTokenId).
-    expect(shipment.stellarTokenId).toBeUndefined();
-    expect(saveMock).toHaveBeenCalledTimes(2);
+    expect(shipment.chainOutbox?.idempotencyKey).toMatch(/^[0-9a-f-]{36}$/);
+    expect(shipment.stellarTxHash).toBeUndefined();
   });
 
-  it('still returns the shipment when anchoring fails', async () => {
+  it('keeps the outbox durable when the chain is unavailable (no orphan row)', async () => {
     chainAdapter.anchorEvent.mockRejectedValueOnce(new Error('chain unavailable'));
 
     const shipment = (await createShipmentService(input)) as unknown as ShipmentDocMock;
 
+    // Chain adapter is not on the request path: a chain outage cannot leave a
+    // persisted shipment without its outbox entry.
+    expect(chainAdapter.anchorEvent).not.toHaveBeenCalled();
     expect(shipment.trackingNumber).toBe(input.trackingNumber);
-    expect(shipment.stellarTxHash).toBeUndefined();
-    expect(shipment.stellarTokenId).toBeUndefined();
-    // Only the initial persist — no second save without a receipt.
+    expect(shipment.chainOutbox?.status).toBe('pending_chain');
     expect(saveMock).toHaveBeenCalledTimes(1);
     expect(auditLogMock).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'SHIPMENT_CREATED', resourceId: shipment._id.toString() })

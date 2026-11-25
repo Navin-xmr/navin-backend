@@ -58,6 +58,17 @@ export interface IDispute {
   updatedAt: Date;
 }
 
+/** #997 — create_shipment outbox state, embedded for single-document atomicity. */
+export interface ShipmentChainOutbox {
+  status: 'pending_chain' | 'processing' | 'anchored' | 'failed';
+  idempotencyKey: string;
+  attempts: number;
+  availableAt: Date;
+  lastError?: string;
+  txHash?: string;
+  ledger?: number;
+}
+
 export interface IShipment {
   _id: string;
   trackingNumber: string;
@@ -70,6 +81,8 @@ export interface IShipment {
   offChainMetadata?: Record<string, unknown>;
   stellarTokenId?: string;
   stellarTxHash?: string;
+  /** #997 — pending_chain resolves to anchored once the worker submits create_shipment. */
+  chainOutbox?: ShipmentChainOutbox;
   /** On-chain `u64` shipment id (decimal string); links indexed contract events to this shipment (#1043). */
   chainShipmentId?: string;
   deliveryProof?: IDeliveryProof;

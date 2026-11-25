@@ -47,6 +47,23 @@ const ShipmentSchema = new Schema(
     offChainMetadata: { type: Schema.Types.Mixed },
     stellarTokenId: { type: String },
     stellarTxHash: { type: String },
+    // #997 — embedded outbox: shipment write + enqueue are one atomic document write.
+    chainOutbox: {
+      type: {
+        status: {
+          type: String,
+          enum: ['pending_chain', 'processing', 'anchored', 'failed'],
+          default: 'pending_chain',
+        },
+        idempotencyKey: { type: String, required: true },
+        attempts: { type: Number, default: 0 },
+        availableAt: { type: Date, default: Date.now },
+        lastError: { type: String },
+        txHash: { type: String },
+        ledger: { type: Number },
+      },
+      default: undefined,
+    },
     chainShipmentId: { type: String },
     deliveryProof: {
       url: { type: String },
