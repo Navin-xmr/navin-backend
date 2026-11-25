@@ -90,6 +90,23 @@
         "ShipmentFinalized": 38,
         "DuplicateAction": 41
       }
+    },
+    "confirm_delivery": {
+      "auth": "receiver",
+      "inputs": [
+        {
+          "name": "receiver",
+          "type": "Address"
+        },
+        {
+          "name": "shipment_id",
+          "type": "Symbol"
+        },
+        {
+          "name": "proof_hash",
+          "type": "BytesN<32>"
+        }
+      ]
     }
   },
   "enums": {

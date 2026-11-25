@@ -10,6 +10,8 @@ import type {
   ChainAdapter,
   ChainErrorCode,
   ChainEventCursor,
+  ConfirmDeliveryInput,
+  ConfirmDeliveryResult,
   EscrowResult,
   ReleaseEscrowInput,
   UpdateStatusInput,
@@ -69,6 +71,16 @@ export class MockChainAdapter implements ChainAdapter {
     };
   }
 
+  async confirmDelivery(input: ConfirmDeliveryInput): Promise<ConfirmDeliveryResult> {
+    return {
+      txHash: HASH,
+      ledger: 4,
+      simulated: true,
+      receiver: input.receiver,
+      shipmentId: input.shipment_id,
+    };
+  }
+
   async *streamEvents(cursor?: ChainEventCursor): AsyncIterable<ChainEvent> {
     const start = cursor ? this.events.findIndex(e => e.id === cursor) + 1 : 0;
     yield* this.events.slice(start);
@@ -93,6 +105,13 @@ export const literalAdapter = {
     simulated: false,
     shipmentId: i.shipment_id,
     newStatus: i.new_status,
+  }),
+  confirmDelivery: async (i: ConfirmDeliveryInput) => ({
+    txHash: HASH,
+    ledger: 1,
+    simulated: false,
+    receiver: i.receiver,
+    shipmentId: i.shipment_id,
   }),
   async *streamEvents() {
     yield* [] as ChainEvent[];

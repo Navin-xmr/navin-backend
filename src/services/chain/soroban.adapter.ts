@@ -49,6 +49,8 @@ import type {
   ChainShipmentStatus,
   ChainSubmitOptions,
   ChainTxReceipt,
+  ConfirmDeliveryInput,
+  ConfirmDeliveryResult,
   EscrowResult,
   ReleaseEscrowInput,
   UpdateStatusInput,
@@ -345,6 +347,46 @@ export class SorobanAdapter implements ChainAdapter {
       if (ledger !== null) return { txHash, ledger };
     }
     return undefined;
+  }
+
+  async confirmDelivery(input: ConfirmDeliveryInput): Promise<ConfirmDeliveryResult> {
+    if (!Bytes32HexSchema.safeParse(input.proof_hash).success) {
+      throw new AppError(
+        422,
+        'proof_hash must be 32 bytes of lowercase hex',
+        ErrorCodes.CHAIN_INVALID_PROOF
+      );
+    }
+
+    // Auth precondition: only the receiver (signing key) may confirm delivery.
+    // Check before submit so we never waste a transaction on an unauthorized caller.
+    const signer = this.signer();
+    if (signer.publicKey() !== input.receiver) {
+      throw new AppError(
+        403,
+        'Only the delivery receiver can confirm delivery',
+        ErrorCodes.CHAIN_UNAUTHORIZED
+      );
+    }
+
+    const contract = this.getContract();
+    const op = contract.call(
+      'confirm_delivery',
+      new Address(input.receiver).toScVal(),
+      nativeToScVal(input.shipment_id, { type: 'symbol' }),
+      nativeToScVal(Buffer.from(input.proof_hash, 'hex'), { type: 'bytes' })
+    );
+
+    const { txHash, ledger } = await serializeSubmission(this.signer().publicKey(), () =>
+      this.invokePipeline(op)
+    );
+    return {
+      txHash,
+      ledger,
+      simulated: false,
+      receiver: input.receiver,
+      shipmentId: input.shipment_id,
+    };
   }
 
   async updateStatus(input: UpdateStatusInput): Promise<UpdateStatusResult> {

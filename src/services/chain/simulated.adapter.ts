@@ -53,6 +53,8 @@ import type {
   ChainAdapter,
   ChainErrorCode,
   ChainEventCursor,
+  ConfirmDeliveryInput,
+  ConfirmDeliveryResult,
   EscrowResult,
   ReleaseEscrowInput,
   UpdateStatusInput,
@@ -181,6 +183,34 @@ export class SimulatedAdapter implements ChainAdapter {
       releaseDigest
     );
     return { txHash: hash, ledger, simulated: true, shipmentId: input.shipment_id };
+  }
+
+  async confirmDelivery(input: ConfirmDeliveryInput): Promise<ConfirmDeliveryResult> {
+    assertBytes32(input.proof_hash, 'proof_hash', ErrorCodes.CHAIN_INVALID_PROOF);
+
+    // Auth precondition: only the receiver (signing key) may confirm delivery.
+    const signer = this.signer();
+    if (signer.publicKey() !== input.receiver) {
+      throw chainError(
+        403,
+        'Only the delivery receiver can confirm delivery',
+        ErrorCodes.CHAIN_UNAUTHORIZED
+      );
+    }
+
+    // Simulated: no contract call or funds moved. Record as a manage-data write so the
+    // indexer can observe delivery_success / escrow_released via streamEvents.
+    const { hash, ledger } = await this.submitManageData(
+      `confirm:${input.shipment_id}`,
+      input.proof_hash
+    );
+    return {
+      txHash: hash,
+      ledger,
+      simulated: true,
+      receiver: input.receiver,
+      shipmentId: input.shipment_id,
+    };
   }
 
   async updateStatus(input: UpdateStatusInput): Promise<UpdateStatusResult> {
