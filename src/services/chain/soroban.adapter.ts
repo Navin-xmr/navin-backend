@@ -5,6 +5,7 @@ import {
   Address,
   contract as contractClient,
   nativeToScVal,
+  scValToNative,
   TransactionBuilder,
   Keypair,
   BASE_FEE,
@@ -16,8 +17,14 @@ import { stellarNetworkPassphrase } from '../../config/stellarNetwork.js';
 import { AppError, ErrorCodes } from '../../shared/http/errors.js';
 import { logger } from '../../shared/logger/logger.js';
 import {
+  AddCarrierArgsSchema,
+  AddCarrierToWhitelistArgsSchema,
+  AddCompanyArgsSchema,
   AddressSchema,
   Bytes32HexSchema,
+  CreateShipmentArgsSchema,
+  RaiseDisputeArgsSchema,
+  ResolveDisputeArgsSchema,
   SymbolSchema,
   parseChainEvent,
   simulationErrorToAppError,
@@ -42,6 +49,9 @@ import { retryWithBackoff } from './retry.js';
 import type { RetryPolicy } from './retry.js';
 import { SorobanStateReader } from './soroban.state-reader.js';
 import type {
+  AddCarrierInput,
+  AddCarrierToWhitelistInput,
+  AddCompanyInput,
   AnchorEventInput,
   AnchorResult,
   ChainAdapter,
@@ -53,13 +63,20 @@ import type {
   ChainTxReceipt,
   ConfirmDeliveryInput,
   ConfirmDeliveryResult,
+  CreateShipmentInput,
+  CreateShipmentResult,
   EscrowResult,
+  RaiseDisputeInput,
   ReadContractVersionResult,
   ReadEscrowBalanceInput,
   ReadEscrowBalanceResult,
   ReadShipmentStatusInput,
   ReadShipmentStatusResult,
   ReleaseEscrowInput,
+  ResolveDisputeInput,
+  RoleProvisionAction,
+  RolePreflightResult,
+  RoleProvisionResult,
   UpdateStatusInput,
   UpdateStatusResult,
 } from './types.js';
@@ -518,6 +535,182 @@ export class SorobanAdapter implements ChainAdapter {
     return { version, simulated: false };
   }
 
+  async createShipment(input: CreateShipmentInput): Promise<CreateShipmentResult> {
+    const parsed = CreateShipmentArgsSchema.safeParse(input);
+    if (!parsed.success) {
+      throw new AppError(
+        422,
+        `Invalid create_shipment arguments: ${parsed.error.message}`,
+        ErrorCodes.CHAIN_INVALID_AMOUNT
+      );
+    }
+
+    const contract = this.getContract();
+    const op = contract.call(
+      'create_shipment',
+      new Address(input.sender).toScVal(),
+      new Address(input.receiver).toScVal(),
+      new Address(input.carrier).toScVal(),
+      nativeToScVal(Buffer.from(input.data_hash, 'hex'), { type: 'bytes' }),
+      nativeToScVal(
+        input.payment_milestones.map(m => BigInt(m)),
+        { type: 'i128' }
+      ),
+      nativeToScVal(input.deadline, { type: 'u64' })
+    );
+
+    const { txHash, ledger, returnValue } = await this.invokePipeline(op);
+    const shipmentId = typeof returnValue === 'bigint' ? Number(returnValue) : returnValue;
+    if (typeof shipmentId !== 'number' || !Number.isFinite(shipmentId)) {
+      throw new AppError(
+        502,
+        'create_shipment did not return a numeric shipment id',
+        ErrorCodes.CHAIN_UNKNOWN
+      );
+    }
+    return { txHash, ledger, simulated: false, shipmentId };
+  }
+
+  async raiseDispute(input: RaiseDisputeInput): Promise<ChainTxReceipt> {
+    const parsed = RaiseDisputeArgsSchema.safeParse(input);
+    if (!parsed.success) {
+      throw new AppError(
+        422,
+        `Invalid raise_dispute arguments: ${parsed.error.message}`,
+        ErrorCodes.CHAIN_INVALID_HASH
+      );
+    }
+
+    const contract = this.getContract();
+    const op = contract.call(
+      'raise_dispute',
+      new Address(input.caller).toScVal(),
+      nativeToScVal(input.shipment_id, { type: 'symbol' }),
+      nativeToScVal(Buffer.from(input.reason_hash, 'hex'), { type: 'bytes' })
+    );
+
+    const { txHash, ledger } = await this.invokePipeline(op);
+    return { txHash, ledger, simulated: false };
+  }
+
+  async resolveDispute(input: ResolveDisputeInput): Promise<ChainTxReceipt> {
+    const parsed = ResolveDisputeArgsSchema.safeParse(input);
+    if (!parsed.success) {
+      throw new AppError(
+        422,
+        `Invalid resolve_dispute arguments: ${parsed.error.message}`,
+        ErrorCodes.CHAIN_INVALID_TRANSITION
+      );
+    }
+
+    const contract = this.getContract();
+    const op = contract.call(
+      'resolve_dispute',
+      new Address(input.admin).toScVal(),
+      nativeToScVal(input.shipment_id, { type: 'symbol' }),
+      nativeToScVal(input.outcome, { type: 'symbol' })
+    );
+
+    const { txHash, ledger } = await this.invokePipeline(op);
+    return { txHash, ledger, simulated: false };
+  }
+
+  async addCompany(input: AddCompanyInput): Promise<RoleProvisionResult> {
+    const parsed = AddCompanyArgsSchema.safeParse(input);
+    if (!parsed.success) {
+      throw new AppError(
+        422,
+        `Invalid add_company arguments: ${parsed.error.message}`,
+        ErrorCodes.CHAIN_ROLE_DENIED
+      );
+    }
+    const { txHash, ledger } = await this.invokePipeline(this.roleOp('add_company', input));
+    return { txHash, ledger, simulated: false };
+  }
+
+  async addCarrier(input: AddCarrierInput): Promise<RoleProvisionResult> {
+    const parsed = AddCarrierArgsSchema.safeParse(input);
+    if (!parsed.success) {
+      throw new AppError(
+        422,
+        `Invalid add_carrier arguments: ${parsed.error.message}`,
+        ErrorCodes.CHAIN_ROLE_DENIED
+      );
+    }
+    const { txHash, ledger } = await this.invokePipeline(this.roleOp('add_carrier', input));
+    return { txHash, ledger, simulated: false };
+  }
+
+  async addCarrierToWhitelist(input: AddCarrierToWhitelistInput): Promise<RoleProvisionResult> {
+    const parsed = AddCarrierToWhitelistArgsSchema.safeParse(input);
+    if (!parsed.success) {
+      throw new AppError(
+        422,
+        `Invalid add_carrier_to_whitelist arguments: ${parsed.error.message}`,
+        ErrorCodes.CHAIN_ROLE_DENIED
+      );
+    }
+    const { txHash, ledger } = await this.invokePipeline(
+      this.roleOp('add_carrier_to_whitelist', input)
+    );
+    return { txHash, ledger, simulated: false };
+  }
+
+  /**
+   * Dry-run an RBAC action through simulation only — never assembled, signed or
+   * sent. Reports the exact `ERR_CHAIN_*` the real submission would reject with,
+   * so callers can surface an actionable error before spending a transaction.
+   */
+  async preflightRole(
+    action: RoleProvisionAction,
+    input: AddCompanyInput | AddCarrierInput | AddCarrierToWhitelistInput
+  ): Promise<RolePreflightResult> {
+    const keypair = this.signer();
+    const sourceAccount = await this.server.getAccount(keypair.publicKey()).catch(() => {
+      throw new AppError(502, 'Failed to load account from Soroban RPC', ErrorCodes.CHAIN_UNKNOWN);
+    });
+    const tx = new TransactionBuilder(sourceAccount, {
+      fee: BASE_FEE,
+      networkPassphrase: this.networkPassphrase,
+    })
+      .addOperation(this.roleOp(action, input))
+      .setTimeout(30)
+      .build();
+
+    const simRes = await this.server.simulateTransaction(tx);
+    if (!rpc.Api.isSimulationError(simRes)) {
+      return { allowed: true };
+    }
+    const contractErrorMatch = String(simRes.error).match(/Error\(Contract, #(\d+)\)/);
+    if (!contractErrorMatch?.[1]) {
+      throw new AppError(400, 'Soroban simulation failed', ErrorCodes.CHAIN_UNKNOWN);
+    }
+    const err = chainErrorToAppError(parseInt(contractErrorMatch[1], 10));
+    return { allowed: false, reason: err.code as RolePreflightResult['reason'] };
+  }
+
+  private roleOp(
+    action: RoleProvisionAction,
+    input: AddCompanyInput | AddCarrierInput | AddCarrierToWhitelistInput
+  ): ReturnType<Contract['call']> {
+    const contract = this.getContract();
+    if (action === 'add_company') {
+      const args = input as AddCompanyInput;
+      return contract.call(
+        action,
+        new Address(args.admin).toScVal(),
+        new Address(args.company).toScVal()
+      );
+    }
+    const args = input as AddCarrierInput | AddCarrierToWhitelistInput;
+    return contract.call(
+      action,
+      new Address(args.admin).toScVal(),
+      new Address(args.company).toScVal(),
+      new Address(args.carrier).toScVal()
+    );
+  }
+
   async *streamEvents(cursor?: ChainEventCursor): AsyncIterable<ChainEvent> {
     for await (const event of this.streamEventsWithFailures(cursor)) {
       if (isChainEventDecodeFailure(event)) {
@@ -613,7 +806,7 @@ export class SorobanAdapter implements ChainAdapter {
     op: ReturnType<Contract['call']>,
     onSent?: (txHash: string) => void,
     decodeContractError: (code: number) => AppError = chainErrorToAppError
-  ): Promise<{ txHash: string; ledger: number }> {
+  ): Promise<{ txHash: string; ledger: number; returnValue?: unknown }> {
     const keypair = this.signer();
     const sourceAccount = await this.server.getAccount(keypair.publicKey()).catch(() => {
       throw new AppError(502, 'Failed to load account from Soroban RPC', ErrorCodes.CHAIN_UNKNOWN);
@@ -673,7 +866,10 @@ export class SorobanAdapter implements ChainAdapter {
     for (;;) {
       statusRes = await this.server.getTransaction(txHash);
       if (statusRes.status === 'SUCCESS') {
-        return { txHash, ledger: statusRes.ledger };
+        const returnValue = statusRes.returnValue
+          ? scValToNative(statusRes.returnValue)
+          : undefined;
+        return { txHash, ledger: statusRes.ledger, returnValue };
       }
       if (statusRes.status === 'FAILED') {
         throw new AppError(

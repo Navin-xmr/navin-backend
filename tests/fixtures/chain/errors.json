@@ -12,6 +12,17 @@
     { "code": 9, "function": "release_escrow" },
     { "code": 10, "function": "anchor" },
     { "code": 11, "function": "init_escrow" },
-    { "code": 12, "function": "release_escrow" }
+    { "code": 12, "function": "release_escrow" },
+    { "code": 13, "function": "add_carrier_to_whitelist" },
+    { "code": 14, "function": "raise_dispute" },
+    { "code": 15, "function": "resolve_dispute" },
+    { "code": 16, "function": "raise_dispute" },
+    { "code": 17, "function": "create_shipment" },
+    { "code": 18, "function": "create_shipment" },
+    { "code": 19, "function": "add_carrier" },
+    { "code": 20, "function": "create_shipment" },
+    { "code": 21, "function": "create_shipment" },
+    { "code": 22, "function": "create_shipment" },
+    { "code": 23, "function": "resolve_dispute" }
   ]
 }

@@ -17,6 +17,14 @@ export interface IEscrowRelease {
   disputedAt?: Date;
   disputeReason?: string;
   additionalNotes?: string;
+  /** #1036 — SHA-256 of the dispute reason, required by the contract's `raise_dispute`. */
+  disputeReasonHash?: string;
+  /** #1036 — tx hash of the on-chain `raise_dispute` call. */
+  disputeTxHash?: string;
+  /** #1036 — tx hash of the on-chain `resolve_dispute` call, once submitted. */
+  resolveTxHash?: string;
+  /** #1036 — set only from the indexed `dispute_resolved` event, never decided locally. */
+  disputeOutcome?: 'resolved' | 'rejected';
 }
 
 export interface IPayment {
@@ -33,6 +41,8 @@ export interface IPayment {
   stellarTxHash?: string;
   stellarTxLedger?: number;
   confirmations?: number;
+  /** #1036 — escrow is frozen on-chain while a dispute is open. */
+  escrowFrozen?: boolean;
   escrowRelease?: IEscrowRelease;
   createdAt: Date;
   updatedAt: Date;
@@ -47,6 +57,10 @@ const EscrowReleaseSchema = new Schema<IEscrowRelease>(
     disputedAt: { type: Date },
     disputeReason: { type: String },
     additionalNotes: { type: String },
+    disputeReasonHash: { type: String },
+    disputeTxHash: { type: String },
+    resolveTxHash: { type: String },
+    disputeOutcome: { type: String, enum: ['resolved', 'rejected'] },
   },
   { _id: false }
 );
@@ -91,6 +105,7 @@ const PaymentSchema = new Schema<IPayment>(
     stellarTxHash: { type: String },
     stellarTxLedger: { type: Number },
     confirmations: { type: Number, default: 0 },
+    escrowFrozen: { type: Boolean, default: false },
     escrowRelease: { type: EscrowReleaseSchema },
     deletedAt: { type: Date, default: null },
   },

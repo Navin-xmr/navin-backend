@@ -7,6 +7,8 @@ export interface IOrganization {
   name: string;
   type: OrganizationType;
   settings?: Record<string, unknown>;
+  /** On-chain company address (#1042) — set to provision the on-chain company role. */
+  walletAddress?: string;
   deletedAt?: Date;
   createdAt: Date;
   updatedAt: Date;

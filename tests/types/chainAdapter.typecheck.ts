@@ -5,20 +5,31 @@
  */
 import { AppError, ErrorCodes } from '../../src/shared/http/errors.js';
 import type {
+  AddCarrierInput,
+  AddCarrierToWhitelistInput,
+  AddCompanyInput,
   AnchorEventInput,
   AnchorResult,
   ChainAdapter,
   ChainErrorCode,
   ChainEventCursor,
+  ChainTxReceipt,
   ConfirmDeliveryInput,
   ConfirmDeliveryResult,
+  CreateShipmentInput,
+  CreateShipmentResult,
   EscrowResult,
+  RaiseDisputeInput,
   ReadContractVersionResult,
   ReadEscrowBalanceInput,
   ReadEscrowBalanceResult,
   ReadShipmentStatusInput,
   ReadShipmentStatusResult,
   ReleaseEscrowInput,
+  ResolveDisputeInput,
+  RoleProvisionAction,
+  RolePreflightResult,
+  RoleProvisionResult,
   UpdateStatusInput,
   UpdateStatusResult,
 } from '../../src/services/chain/types.js';
@@ -94,6 +105,37 @@ export class MockChainAdapter implements ChainAdapter {
   async getConfirmationCount(_ledger: number): Promise<number> {
     return 3;
   }
+
+  async createShipment(_input: CreateShipmentInput): Promise<CreateShipmentResult> {
+    return { txHash: HASH, ledger: 1, simulated: true, shipmentId: 1 };
+  }
+
+  async raiseDispute(_input: RaiseDisputeInput): Promise<ChainTxReceipt> {
+    return { txHash: HASH, ledger: 1, simulated: true };
+  }
+
+  async resolveDispute(_input: ResolveDisputeInput): Promise<ChainTxReceipt> {
+    return { txHash: HASH, ledger: 1, simulated: true };
+  }
+
+  async addCompany(_input: AddCompanyInput): Promise<RoleProvisionResult> {
+    return { txHash: HASH, ledger: 1, simulated: true };
+  }
+
+  async addCarrier(_input: AddCarrierInput): Promise<RoleProvisionResult> {
+    return { txHash: HASH, ledger: 1, simulated: true };
+  }
+
+  async addCarrierToWhitelist(_input: AddCarrierToWhitelistInput): Promise<RoleProvisionResult> {
+    return { txHash: HASH, ledger: 1, simulated: true };
+  }
+
+  async preflightRole(
+    _action: RoleProvisionAction,
+    _input: AddCompanyInput | AddCarrierInput | AddCarrierToWhitelistInput
+  ): Promise<RolePreflightResult> {
+    return { allowed: true };
+  }
 }
 
 export const literalAdapter = {
@@ -104,6 +146,13 @@ export const literalAdapter = {
     simulated: false,
     shipmentId: i.shipment_id,
   }),
+  createShipment: async () => ({ txHash: HASH, ledger: 1, simulated: false, shipmentId: 1 }),
+  raiseDispute: async () => ({ txHash: HASH, ledger: 1, simulated: false }),
+  resolveDispute: async () => ({ txHash: HASH, ledger: 1, simulated: false }),
+  addCompany: async () => ({ txHash: HASH, ledger: 1, simulated: false }),
+  addCarrier: async () => ({ txHash: HASH, ledger: 1, simulated: false }),
+  addCarrierToWhitelist: async () => ({ txHash: HASH, ledger: 1, simulated: false }),
+  preflightRole: async () => ({ allowed: true }),
   updateStatus: async (i: UpdateStatusInput) => ({
     txHash: HASH,
     ledger: 1,

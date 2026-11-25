@@ -145,8 +145,38 @@ export const getSettlementByIdController = asyncHandler(
  */
 export const disputeSettlementController = asyncHandler(
   async (req: Request, res: Response): Promise<void> => {
-    const settlement = await paymentsService.disputeSettlementService(req.params.id, req.body);
+    const settlement = await paymentsService.disputeSettlementService(
+      req.params.id,
+      req.body,
+      req.user?.userId
+    );
     sendResponse(res, 200, true, 'Settlement disputed successfully', settlement);
+  }
+);
+
+/**
+ * POST /api/settlements/:id/dispute/resolve — submit `resolve_dispute` on-chain (#1036).
+ * Restricted to ADMIN / MANAGER at route level. Does not itself change the
+ * settlement's status — the outcome is taken from the resulting
+ * `dispute_resolved` chain event, mirrored by the Stellar indexer.
+ *
+ * @param req.params.id - Settlement id.
+ * @param req.body.outcome - `"resolved"` or `"rejected"`.
+ * @returns HTTP 200 with envelope `{ success, message, data }` containing the settlement.
+ * @throws {AppError} 401 ERR_AUTH_INVALID — when JWT auth fails.
+ * @throws {AppError} 403 ERR_PERMISSION_DENIED — when the caller lacks ADMIN / MANAGER.
+ * @throws {AppError} 404 ERR_PAYMENT_NOT_FOUND — when the settlement does not exist.
+ * @throws {AppError} 409 ERR_SHIPMENT_INVALID_TRANSITION — when there is no open dispute.
+ * @throws {AppError} 400 VALIDATION_ERROR — when params/body validation fails.
+ */
+export const resolveDisputeController = asyncHandler(
+  async (req: Request, res: Response): Promise<void> => {
+    const settlement = await paymentsService.resolveSettlementDisputeService(
+      req.params.id,
+      req.body,
+      req.user?.userId
+    );
+    sendResponse(res, 200, true, 'Dispute resolution submitted', settlement);
   }
 );
 

@@ -27,4 +27,8 @@ export enum MilestoneEvent {
   /** #1053 — `escrow_frozen`: escrow is blocked until the dispute resolves. */
   ESCROW_FROZEN = 'ESCROW_FROZEN',
   CANCELLED = 'CANCELLED',
+  /** #1036 — mirrors the on-chain `dispute_raised` event. */
+  DISPUTE_RAISED = 'DISPUTE_RAISED',
+  /** #1036 — mirrors the on-chain `dispute_resolved` event. */
+  DISPUTE_RESOLVED = 'DISPUTE_RESOLVED',
 }
