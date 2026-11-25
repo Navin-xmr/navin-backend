@@ -295,8 +295,8 @@ describe('shipmentChainId.repo — Symbol bridge', () => {
     const { repo } = await loadRepo();
 
     // A legal Soroban Symbol, but a nonsense shipment id.
-    expect(() => repo.chainShipmentIdSymbol('0x1f')).toThrowError();
-    expect(() => repo.chainShipmentIdSymbol('184467440737095516150')).toThrowError();
-    expect(() => repo.chainShipmentIdSymbol('07')).toThrowError();
+    expect(() => repo.chainShipmentIdSymbol('0x1f')).toThrow();
+    expect(() => repo.chainShipmentIdSymbol('184467440737095516150')).toThrow();
+    expect(() => repo.chainShipmentIdSymbol('07')).toThrow();
   });
 });
