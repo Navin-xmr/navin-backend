@@ -16,6 +16,7 @@ const shipmentStore: Array<{
   offChainMetadata?: Record<string, unknown>;
 }> = [];
 
+jest.resetModules();
 await jest.unstable_mockModule('../src/modules/telemetry/telemetryThreshold.model.js', () => ({
   TelemetryThreshold: {
     findOne: (query: { organizationId: string; shipmentType: string }) => ({

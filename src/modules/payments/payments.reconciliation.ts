@@ -2,10 +2,9 @@
  * Escrow reconciliation (P13-12).
  *
  * Reconciles payment/settlement records against on-chain escrow events:
- *   - `esc_init`        -> escrow_deposited  -> PaymentStatus.ESCROWED
- *   - `esc_rel`         -> escrow_released   -> PaymentStatus.RELEASED (amount present)
- *   - `escrow_released` -> escrow_released   -> PaymentStatus.RELEASED (no amount on event)
- *   - `esc_resolve`     -> escrow_refunded   -> PaymentStatus.REFUNDED (outcome: refund_payer)
+ *   - `esc_init`         -> escrow_deposited  -> PaymentStatus.ESCROWED
+ *   - `esc_rel`          -> escrow_released   -> PaymentStatus.RELEASED (amount present)
+ *   - `dispute_resolved` -> escrow_refunded   -> PaymentStatus.REFUNDED (resolution: RefundToCompany | PartialRefund)
  *
  * Amounts are compared in stroops (integer) so reconciliation has no float
  * drift. Settlement status is driven by the chain event only. On amount
@@ -25,8 +24,8 @@ import { dispatchAlert } from '../../services/queue.service.js';
 /** 1 XLM = 10^7 stroops (Stellar native asset, 7 decimals). */
 const STROOPS_PER_XLM = 10_000_000n;
 
-/** Refund outcome emitted by `esc_resolve` when funds return to the payer. */
-const REFUND_OUTCOME = 'refund_payer';
+/** Refund resolutions emitted by `dispute_resolved` when funds return to the payer. */
+const REFUND_RESOLUTIONS = new Set(['RefundToCompany', 'PartialRefund']);
 
 /** Convert on-chain stroops to 7-decimal XLM without float drift. */
 export function stroopsTo7Decimal(stroops: string | bigint): number {
@@ -81,11 +80,8 @@ export function reconcileEscrowEvent(
       status = PaymentStatus.RELEASED;
       chainAmountStroops = event.data[2];
       break;
-    case CHAIN_EVENT_NAMES.ESCROW_RELEASED: // escrow_released (co-emitted, no amount)
-      status = PaymentStatus.RELEASED;
-      break;
-    case CHAIN_EVENT_NAMES.ESCROW_RESOLVE: // escrow_refunded
-      if (event.data[0] === REFUND_OUTCOME) {
+    case CHAIN_EVENT_NAMES.DISPUTE_RESOLVED: // escrow_refunded
+      if (REFUND_RESOLUTIONS.has(event.data[1])) {
         status = PaymentStatus.REFUNDED;
       } else {
         return { reconciled: false };

@@ -21,7 +21,8 @@ export function checkChainDrift(root = process.cwd()) {
   const abiRaw = readFileSync(path.join(root, abiPath));
   const abi = JSON.parse(abiRaw.toString('utf8'));
 
-  const actual = createHash('sha256').update(abiRaw).digest('hex');
+  const normalized = Buffer.from(abiRaw.toString('utf8').replace(/\r\n/g, '\n'));
+  const actual = createHash('sha256').update(normalized).digest('hex');
   const expected = read('contracts/abi/navin-escrow.abi.sha256').trim();
   if (actual !== expected) {
     errors.push(`ABI checksum drift: ${abiPath} is ${actual}, recorded ${expected}`);

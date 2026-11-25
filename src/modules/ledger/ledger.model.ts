@@ -21,6 +21,15 @@ export interface ILedgerBlock {
    */
   canonicalPayload?: Record<string, unknown>;
   transactionHash?: string;
+  /**
+   * #1046 — deployment the block was written under (`testnet` | `public`). Persisted at write
+   * time so verification never depends on the server's *current* config. Absent on legacy rows.
+   */
+  network?: 'testnet' | 'public';
+  /** #1046 — Soroban contract the transaction targeted, when known at write time. */
+  contractId?: string;
+  /** #1046 — client `Idempotency-Key` of the request that produced this block, when supplied. */
+  idempotencyKey?: string;
   ledger: number;
   /** #1058 — ledgers closed strictly after `ledger`; recomputed idempotently. */
   confirmations: number;
@@ -58,6 +67,9 @@ const LedgerBlockSchema = new Schema(
       required: true,
     },
     transactionHash: { type: String },
+    network: { type: String, enum: ['testnet', 'public'] },
+    contractId: { type: String },
+    idempotencyKey: { type: String },
     dataHash: { type: String },
     canonicalPayload: { type: Schema.Types.Mixed },
     ledger: {
@@ -96,6 +108,13 @@ LedgerBlockSchema.index({ dataHash: 1 }, { sparse: true });
 
 // #1058 — supports idempotent re-verification scans of not-yet-confirmed blocks.
 LedgerBlockSchema.index({ verified: 1, ledger: 1 });
+
+// P13-02 — DB-enforced deduplication on idempotencyKey.
+// Partial index excludes legacy rows without a key so they remain unaffected.
+LedgerBlockSchema.index(
+  { idempotencyKey: 1 },
+  { unique: true, partialFilterExpression: { idempotencyKey: { $type: 'string' } } }
+);
 
 // Soft delete middleware
 LedgerBlockSchema.pre(['find', 'findOne', 'findOneAndUpdate', 'countDocuments'], function () {

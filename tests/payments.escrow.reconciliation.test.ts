@@ -54,29 +54,19 @@ function escrowReleaseEvent(txHash: string, amountStroops: string): ChainEvent {
   };
 }
 
-function escrowReleasedEvent(txHash: string): ChainEvent {
-  return {
-    id: 'evt-released',
-    contract_id: CONTRACT_ID,
-    tx_hash: txHash,
-    ledger: 512600,
-    ledger_closed_at: '2026-09-27T11:00:00Z',
-    name: CHAIN_EVENT_NAMES.ESCROW_RELEASED,
-    topic: [CHAIN_EVENT_NAMES.ESCROW_RELEASED, SHIPMENT_ID],
-    data: [PROOF_HASH, PAYER],
-  };
-}
-
-function escrowRefundEvent(txHash: string): ChainEvent {
+function escrowRefundEvent(
+  txHash: string,
+  resolution: 'ReleaseToCarrier' | 'RefundToCompany' | 'PartialRefund' = 'RefundToCompany'
+): ChainEvent {
   return {
     id: 'evt-refund',
     contract_id: CONTRACT_ID,
     tx_hash: txHash,
     ledger: 512500,
     ledger_closed_at: '2026-09-27T10:30:00Z',
-    name: CHAIN_EVENT_NAMES.ESCROW_RESOLVE,
-    topic: [CHAIN_EVENT_NAMES.ESCROW_RESOLVE, 'payment-1'],
-    data: ['refund_payer'],
+    name: CHAIN_EVENT_NAMES.DISPUTE_RESOLVED,
+    topic: [CHAIN_EVENT_NAMES.DISPUTE_RESOLVED],
+    data: [SHIPMENT_ID, resolution, PROOF_HASH, PAYER],
   };
 }
 
@@ -135,7 +125,7 @@ describe('reconcileEscrowEvent — escrow_deposited (esc_init)', () => {
   });
 });
 
-describe('reconcileEscrowEvent — escrow_released (esc_rel / escrow_released)', () => {
+describe('reconcileEscrowEvent — escrow_released (esc_rel)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
@@ -152,19 +142,6 @@ describe('reconcileEscrowEvent — escrow_released (esc_rel / escrow_released)',
     expect(decision.stellarTxHash).toBe('22'.repeat(32));
   });
 
-  it('marks the payment RELEASED from escrow_released (no amount to compare)', () => {
-    const payment = createMockPayment({ amount: 150, status: PaymentStatus.ESCROWED });
-    const event = escrowReleasedEvent('33'.repeat(32));
-
-    const decision = reconcileEscrowEvent(payment, event);
-
-    expect(decision.reconciled).toBe(true);
-    expect(decision.status).toBe(PaymentStatus.RELEASED);
-    expect(decision.stellarTxHash).toBe('33'.repeat(32));
-    // escrow_released carries no amount, so none is asserted or overwritten.
-    expect(decision.amount).toBe(payment.amount);
-  });
-
   it('produces an alert and keeps the payment unreleased on release amount mismatch', () => {
     const payment = createMockPayment({ amount: 100, status: PaymentStatus.ESCROWED });
     const event = escrowReleaseEvent('22'.repeat(32), '1500000000');
@@ -179,14 +156,14 @@ describe('reconcileEscrowEvent — escrow_released (esc_rel / escrow_released)',
   });
 });
 
-describe('reconcileEscrowEvent — escrow_refunded (esc_resolve / refund_payer)', () => {
+describe('reconcileEscrowEvent — escrow_refunded (dispute_resolved / RefundToCompany)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
 
-  it('marks the payment REFUNDED on a refund_payer outcome', () => {
+  it('marks the payment REFUNDED on a RefundToCompany outcome', () => {
     const payment = createMockPayment({ amount: 150, status: PaymentStatus.ESCROWED });
-    const event = escrowRefundEvent('44'.repeat(32));
+    const event = escrowRefundEvent('44'.repeat(32), 'RefundToCompany');
 
     const decision = reconcileEscrowEvent(payment, event);
 
@@ -197,12 +174,9 @@ describe('reconcileEscrowEvent — escrow_refunded (esc_resolve / refund_payer)'
     expect(decision.amount).toBe(payment.amount);
   });
 
-  it('ignores esc_resolve outcomes that are not refunds', () => {
+  it('ignores dispute_resolved outcomes that are not refunds', () => {
     const payment = createMockPayment();
-    const event: ChainEvent = {
-      ...escrowRefundEvent('44'.repeat(32)),
-      data: ['release_payer'],
-    };
+    const event = escrowRefundEvent('44'.repeat(32), 'ReleaseToCarrier');
 
     const decision = reconcileEscrowEvent(payment, event);
 

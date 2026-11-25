@@ -565,14 +565,15 @@ export const patchShipmentService = async (id: string, offChainMetadata: unknown
  * Updates a shipment's status, records a milestone, and emits status events.
  * @param {string} id - Shipment ObjectId.
  * @param {ShipmentStatus} status - New shipment status.
- * @param {{userId?: string; walletAddress?: string}=} actor - Optional actor metadata.
+ * @param {{userId?: string; walletAddress?: string; idempotencyKey?: string}=} actor - Optional actor metadata;
+ *   `idempotencyKey` (already validated by the idempotency middleware) is persisted on the ledger block (#1046).
  * @returns {Promise<unknown>} Updated shipment document or null when not found.
  * @throws {AppError} 400 when the status transition is invalid.
  */
 export const updateShipmentStatusService = async (
   id: string,
   status: ShipmentStatus,
-  actor?: { userId?: string; walletAddress?: string }
+  actor?: { userId?: string; walletAddress?: string; idempotencyKey?: string }
 ) => {
   const shipment = await Shipment.findById(id);
   if (!shipment) return null;
@@ -648,6 +649,7 @@ export const updateShipmentStatusService = async (
       milestoneEvent: status as unknown as MilestoneEvent,
       actor: actor?.userId,
       canonicalPayload: canonical,
+      idempotencyKey: actor?.idempotencyKey,
       metadata: { previousStatus, simulated: true },
       dataHash: generateDataHash(canonical),
     });
