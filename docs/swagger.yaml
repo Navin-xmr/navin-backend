@@ -6619,7 +6619,7 @@ paths:
            (`getTransaction` + `getEvents`) for `txHash` on `network` (and `contractId`) and confirm the on-chain
            digest equals `dataHash`.
 
-        See `docs/blockchain.md` for the copy-pasteable browser implementation.
+        See `docs/chain-verification.md` for the copy-pasteable browser implementation.
       tags:
         - Ledger
       security:
@@ -8372,6 +8372,7 @@ components:
         network:
           type: string
           enum: [testnet, public]
+          example: testnet
           description: >
             Stellar network the block was written under (`public` = mainnet). Recorded at
             write time; legacy blocks without a recorded network report the server's

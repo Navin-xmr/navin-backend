@@ -7,7 +7,7 @@ This is the normative v2 surface of the deployed **Navin Shipment** Soroban cont
 - Function/argument/return table: [contract-schema.shipment.json](https://github.com/Navin-xmr/navin-contracts/blob/main/docs/contract-schema.shipment.json) (vendored at `contracts/abi/contract-schema.shipment.json`)
 - Event topics: `contracts/shipment/src/event_topics.rs`; payloads: `contracts/shipment/src/events.rs` and `docs/events.md`
 - Errors: `contracts/shipment/src/errors.rs` (discriminants verbatim below)
-- Single source of truth for shapes: `src/shared/types/chain.ts`. Cross-repo golden vectors: `tests/fixtures/chain/{functions,events,errors}.json` (`spec_version = 2.2.0`). Contracts repo: [Navin-xmr/navin-contracts](https://github.com/Navin-xmr/navin-contracts).
+- Single source of truth for shapes: `src/shared/types/chain.ts`. Cross-repo golden vectors: `tests/fixtures/chain/{functions,events,errors}.json` (`spec_version = 2.2.0`). Contracts repo: [Navin-xmr/navin-contracts](https://github.com/Navin-xmr/navin-contracts). For the client-side trustless flow that consumes the verification bundle, see [chain-verification.md](chain-verification.md).
 
 > **Drift rule (AGENTS.md §8):** doc ↔ `src/shared/types/chain.ts` (+ `CHAIN_SPEC_VERSION`) ↔ `tests/fixtures/chain/*.json` must change together. `npm run check:chain-interface` verifies that every function in the table below exists in the vendored schema JSON (zero mismatches).
 
