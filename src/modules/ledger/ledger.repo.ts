@@ -22,12 +22,18 @@ export interface LedgerBlockInput {
   dataHash?: string;
   /** Exact payload hashed into dataHash. Persisted alongside every dataHash. */
   canonicalPayload?: Record<string, unknown>;
+  /** #994 — defaults to 1 for legacy v1 events. */
+  schemaVersion?: number;
+  /** #994 — defaults to 0 for legacy v1 events. */
+  eventCounter?: number;
+  /** #994 — contract event topic name. */
+  eventTopic?: string;
   transactionHash?: string;
   /** Overrides the network recorded for the block; defaults to the configured network. */
   network?: 'testnet' | 'public';
   /** Contract the transaction targeted; defaults to the configured escrow contract. */
   contractId?: string;
-  /** Client `Idempotency-Key` of the originating request. */
+  /** Client `Idempotency-Key` / stable dedupe key for a replayed v2 event. */
   idempotencyKey?: string;
   ledger?: number;
   /** #1058 — confirmation depth; defaults to 0 until the head advances. */
@@ -53,11 +59,14 @@ export async function createLedgerBlock(input: LedgerBlockInput): Promise<ILedge
     ...(input.transactionHash && { transactionHash: input.transactionHash }),
     ...(input.dataHash && { dataHash: input.dataHash }),
     ...(input.canonicalPayload && { canonicalPayload: input.canonicalPayload }),
+    schemaVersion: input.schemaVersion ?? 1,
+    eventCounter: input.eventCounter ?? 0,
     network: input.network ?? config.stellarNetwork,
     ...((input.contractId ?? config.escrowContractId) && {
       contractId: input.contractId ?? config.escrowContractId,
     }),
     ...(input.idempotencyKey && { idempotencyKey: input.idempotencyKey }),
+    ...(input.eventTopic && { eventTopic: input.eventTopic }),
     ledger: input.ledger ?? input.blockNumber ?? 0,
     confirmations: input.confirmations ?? 0,
     verified: input.verified ?? false,

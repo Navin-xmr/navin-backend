@@ -1,5 +1,5 @@
 {
-  "spec_version": "2.1.0",
+  "spec_version": "2.2.0",
   "contract": "navin-escrow",
   "source": "https://github.com/Navin-xmr/navin-contracts",
   "functions": {
@@ -90,6 +90,74 @@
         "ShipmentFinalized": 38,
         "DuplicateAction": 41
       }
+    },
+    "confirm_delivery": {
+      "auth": "receiver",
+      "inputs": [
+        {
+          "name": "receiver",
+          "type": "Address"
+        },
+        {
+          "name": "shipment_id",
+          "type": "Symbol"
+        },
+        {
+          "name": "proof_hash",
+          "type": "BytesN<32>"
+        }
+      ]
+    },
+    "create_shipment": {
+      "auth": "sender",
+      "inputs": [
+        { "name": "sender", "type": "Address" },
+        { "name": "receiver", "type": "Address" },
+        { "name": "carrier", "type": "Address" },
+        { "name": "data_hash", "type": "BytesN<32>" },
+        { "name": "payment_milestones", "type": "Vec<i128>" },
+        { "name": "deadline", "type": "u64" }
+      ],
+      "returns": "u64"
+    },
+    "raise_dispute": {
+      "auth": "caller",
+      "inputs": [
+        { "name": "caller", "type": "Address" },
+        { "name": "shipment_id", "type": "Symbol" },
+        { "name": "reason_hash", "type": "BytesN<32>" }
+      ]
+    },
+    "resolve_dispute": {
+      "auth": "admin",
+      "inputs": [
+        { "name": "admin", "type": "Address" },
+        { "name": "shipment_id", "type": "Symbol" },
+        { "name": "outcome", "type": "Symbol" }
+      ]
+    },
+    "add_company": {
+      "auth": "admin",
+      "inputs": [
+        { "name": "admin", "type": "Address" },
+        { "name": "company", "type": "Address" }
+      ]
+    },
+    "add_carrier": {
+      "auth": "admin",
+      "inputs": [
+        { "name": "admin", "type": "Address" },
+        { "name": "company", "type": "Address" },
+        { "name": "carrier", "type": "Address" }
+      ]
+    },
+    "add_carrier_to_whitelist": {
+      "auth": "admin",
+      "inputs": [
+        { "name": "admin", "type": "Address" },
+        { "name": "company", "type": "Address" },
+        { "name": "carrier", "type": "Address" }
+      ]
     }
   },
   "enums": {

@@ -6,6 +6,11 @@
  * in env.ts.
  */
 import { z } from 'zod';
+import {
+  CHAIN_PREFLIGHT_CHECKS,
+  DEFAULT_CHAIN_PREFLIGHT_CHECKS,
+  parseChainPreflightChecks,
+} from './config/chainPreflight.js';
 
 const EnvShape = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -73,10 +78,58 @@ const EnvShape = z.object({
   //   soroban             — live Soroban RPC; requires SOROBAN_RPC_URL + ESCROW_CONTRACT_ID.
   SOROBAN_ADAPTER: z.enum(['simulated', 'soroban']).default('simulated'),
   SOROBAN_RPC_URL: z.string().url('SOROBAN_RPC_URL must be a valid URL').optional(),
+  // #995 — passphrase and deployed contract ids. Network defaults are resolved in
+  // src/config/index.ts; explicit values always win over the derived defaults.
+  SOROBAN_NETWORK_PASSPHRASE: z.string().min(1).optional(),
+  SHIPMENT_CONTRACT_ID: z.string().min(1).optional(),
+  TOKEN_CONTRACT_ID: z.string().min(1).optional(),
+  NFT_CONTRACT_ID: z.string().min(1).optional(),
   ESCROW_CONTRACT_ID: z.string().min(1).optional(),
+  SOROBAN_MAX_RESOURCE_FEE_TESTNET: z.coerce.number().int().positive().safe().default(10_000_000),
+  SOROBAN_MAX_RESOURCE_FEE_PUBLIC: z.coerce.number().int().positive().safe().default(1_000_000),
+  SOROBAN_MAX_CPU_INSTRUCTIONS: z.coerce.number().int().positive().safe().default(100_000_000),
+  SOROBAN_MAX_LEDGER_BYTES: z.coerce.number().int().positive().safe().default(40_000_000),
+  CHAIN_WEBHOOK_ENCRYPTION_KEY: z.preprocess(
+    value => (typeof value === 'string' && value.trim() === '' ? undefined : value),
+    z
+      .string()
+      .trim()
+      .regex(/^[0-9a-fA-F]{64}$/, 'CHAIN_WEBHOOK_ENCRYPTION_KEY must be 64 hex characters')
+      .optional()
+  ),
+  STELLAR_NETWORK_PASSPHRASE: z.string().min(1).optional(),
   // #1058 — ledger confirmation threshold per network for anchored events.
   CHAIN_CONFIRMATIONS_TESTNET: z.coerce.number().int().min(0).max(1000).default(3),
   CHAIN_CONFIRMATIONS_PUBLIC: z.coerce.number().int().min(0).max(1000).default(3),
+
+  // Chain preflight (#1081): read-only checks run before a submission is signed.
+  // Off by default because they call contract view functions the deployed contract may
+  // not expose yet. CHAIN_PREFLIGHT_CHECKS picks a subset of:
+  //   initialized, roles, whitelist, suspension, token_decimals
+  CHAIN_PREFLIGHT_ENABLED: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform(value => value === 'true'),
+  CHAIN_PREFLIGHT_CHECKS: z
+    .string()
+    .trim()
+    .default(DEFAULT_CHAIN_PREFLIGHT_CHECKS)
+    .transform((value, ctx) => {
+      const { checks, unknown } = parseChainPreflightChecks(value);
+      if (unknown.length > 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `CHAIN_PREFLIGHT_CHECKS has unknown checks: ${unknown.join(', ')}. Allowed: ${CHAIN_PREFLIGHT_CHECKS.join(', ')}`,
+        });
+        return z.NEVER;
+      }
+      return checks;
+    }),
+
+  // Submission retry (#1078): bounded attempts with exponential backoff for timeouts.
+  CHAIN_SUBMIT_MAX_ATTEMPTS: z.coerce.number().int().min(1).max(10).default(3),
+  CHAIN_SUBMIT_BACKOFF_MS: z.coerce.number().int().min(0).max(60_000).default(500),
+  CHAIN_SUBMIT_BACKOFF_MAX_MS: z.coerce.number().int().min(0).max(300_000).default(8_000),
 
   // Observability
   SENTRY_DSN: z.string().url('SENTRY_DSN must be a valid URL').optional(),
@@ -124,6 +177,14 @@ export const envSchema = EnvShape.superRefine((data, ctx) => {
         code: z.ZodIssueCode.custom,
         path: ['ESCROW_CONTRACT_ID'],
         message: 'ESCROW_CONTRACT_ID is required when SOROBAN_ADAPTER=soroban',
+      });
+    }
+    if (!data.STELLAR_NETWORK && !data.STELLAR_NETWORK_PASSPHRASE) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['STELLAR_NETWORK'],
+        message:
+          'STELLAR_NETWORK or STELLAR_NETWORK_PASSPHRASE is required when SOROBAN_ADAPTER=soroban',
       });
     }
   }

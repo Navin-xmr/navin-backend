@@ -2,10 +2,19 @@ import { Queue } from 'bullmq';
 import { Redis } from 'ioredis';
 import { config } from '../../config/index.js';
 import { getRedisClient as getSharedRedisClient } from './connection.js';
+import type {
+  ChainWebhookDeadLetterData,
+  ChainWebhookJobData,
+} from '../../shared/types/chainWebhook.js';
+import { CHAIN_WEBHOOK_RETRY_POLICY } from '../../shared/types/chainWebhook.js';
 
 let redisClient: Redis | null = null;
 type TransactionQueueLike = Pick<Queue, 'add' | 'close' | 'getJobCounts'>;
+type ChainWebhookQueueLike = Pick<Queue<ChainWebhookJobData>, 'add' | 'close'>;
+type ChainWebhookDeadLetterQueueLike = Pick<Queue<ChainWebhookDeadLetterData>, 'add' | 'close'>;
 let transactionQueue: TransactionQueueLike | null = null;
+let chainWebhookQueue: ChainWebhookQueueLike | null = null;
+let chainWebhookDeadLetterQueue: ChainWebhookDeadLetterQueueLike | null = null;
 
 function isTestEnv(): boolean {
   // See connection.ts — JEST_WORKER_ID survives suites that mutate NODE_ENV.
@@ -52,8 +61,83 @@ export function getTransactionQueue(): TransactionQueueLike {
   return transactionQueue;
 }
 
+export function getChainWebhookQueue(): ChainWebhookQueueLike {
+  if (!chainWebhookQueue) {
+    if (isTestEnv()) {
+      chainWebhookQueue = {
+        add: (async () => ({
+          id: 'test-chain-webhook-job',
+        })) as unknown as Queue<ChainWebhookJobData>['add'],
+        close: (async () => undefined) as unknown as Queue['close'],
+      };
+      return chainWebhookQueue;
+    }
+    chainWebhookQueue = new Queue<ChainWebhookJobData>('chain_webhook_queue', {
+      connection: {
+        host: new URL(config.redisUrl).hostname,
+        port: parseInt(new URL(config.redisUrl).port || '6379'),
+      },
+    });
+  }
+  return chainWebhookQueue;
+}
+
+function getChainWebhookDeadLetterQueue(): ChainWebhookDeadLetterQueueLike {
+  if (!chainWebhookDeadLetterQueue) {
+    if (isTestEnv()) {
+      chainWebhookDeadLetterQueue = {
+        add: (async () => ({
+          id: 'test-chain-webhook-dead-letter',
+        })) as unknown as Queue<ChainWebhookDeadLetterData>['add'],
+        close: (async () => undefined) as unknown as Queue['close'],
+      };
+      return chainWebhookDeadLetterQueue;
+    }
+    chainWebhookDeadLetterQueue = new Queue<ChainWebhookDeadLetterData>(
+      'chain_webhook_dead_letter_queue',
+      {
+        connection: {
+          host: new URL(config.redisUrl).hostname,
+          port: parseInt(new URL(config.redisUrl).port || '6379'),
+        },
+      }
+    );
+  }
+  return chainWebhookDeadLetterQueue;
+}
+
+export async function pushChainWebhookJob(data: ChainWebhookJobData): Promise<void> {
+  const eventKey = data.eventId.replace(/[^a-zA-Z0-9_-]/g, '-');
+  await getChainWebhookQueue().add('deliver_chain_webhook', data, {
+    jobId: `chain-${data.subscriptionId}-${eventKey}`,
+    ...CHAIN_WEBHOOK_RETRY_POLICY,
+    removeOnComplete: true,
+    removeOnFail: false,
+  });
+}
+
+export async function pushChainWebhookDeadLetter(data: ChainWebhookDeadLetterData): Promise<void> {
+  const eventKey = data.job.eventId.replace(/[^a-zA-Z0-9_-]/g, '-');
+  await getChainWebhookDeadLetterQueue().add('chain_webhook_dead_letter', data, {
+    jobId: `dead-${data.job.subscriptionId}-${eventKey}`,
+    removeOnComplete: false,
+    removeOnFail: false,
+  });
+}
+
 /** Quits queue clients/queues. Safe to call when nothing was created. */
 export async function disconnectQueueRedis(): Promise<void> {
+  for (const queue of [chainWebhookQueue, chainWebhookDeadLetterQueue]) {
+    if (queue) {
+      try {
+        await queue.close();
+      } catch {
+        // Ignore teardown errors.
+      }
+    }
+  }
+  chainWebhookQueue = null;
+  chainWebhookDeadLetterQueue = null;
   if (transactionQueue) {
     try {
       await transactionQueue.close();

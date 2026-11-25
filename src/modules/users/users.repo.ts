@@ -21,6 +21,7 @@ export async function createUser(input: {
   passwordHash?: string;
   role?: string;
   organizationId?: string;
+  walletAddress?: string;
 }) {
   return UserModel.create(input);
 }

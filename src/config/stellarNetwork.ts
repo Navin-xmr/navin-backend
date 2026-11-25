@@ -7,6 +7,12 @@ export interface StellarNetworkUrls {
   sorobanRpcUrl: string;
 }
 
+/** #995 — validated Soroban settings derived from the selected network. */
+export interface SorobanNetworkConfig {
+  rpcUrl: string;
+  networkPassphrase: string;
+}
+
 const STELLAR_NETWORK_DEFAULTS: Record<StellarNetwork, StellarNetworkUrls> = {
   testnet: {
     horizonUrl: 'https://horizon-testnet.stellar.org',
@@ -50,5 +56,22 @@ export function resolveStellarUrls(
   return {
     horizonUrl: overrides.horizonUrl ?? defaults.horizonUrl,
     sorobanRpcUrl: overrides.sorobanRpcUrl ?? defaults.sorobanRpcUrl,
+  };
+}
+
+/**
+ * #995 — resolves Soroban RPC URL and signing passphrase for a network.
+ * Explicit overrides (env vars) take precedence over network defaults.
+ *
+ * @throws {Error} When `network` isn't a known Stellar network.
+ */
+export function resolveSorobanConfig(
+  network: string,
+  overrides: { rpcUrl?: string; networkPassphrase?: string } = {}
+): SorobanNetworkConfig {
+  return {
+    rpcUrl: overrides.rpcUrl ?? resolveStellarUrls(network).sorobanRpcUrl,
+    networkPassphrase:
+      overrides.networkPassphrase ?? stellarNetworkPassphrase(network as StellarNetwork),
   };
 }

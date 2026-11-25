@@ -56,7 +56,7 @@ describe('errorMiddleware', () => {
         const { code, status } = entry[1];
         expect(code).toMatch(/^ERR_CHAIN_/);
         expect(registered.has(code)).toBe(true);
-        expect([400, 403, 404, 409, 422, 502].includes(status)).toBe(true);
+        expect([400, 402, 403, 404, 409, 422, 429, 502, 503].includes(status)).toBe(true);
         const err = new AppError(status, 'Chain contract error: ' + name, code, {
           contractCode: 1,
         });

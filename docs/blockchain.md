@@ -14,27 +14,29 @@ Related issues:
 
 ## Current state (Horizon-only fallback)
 
-All on-chain writes go through the Stellar **Horizon** HTTP API via
-`@stellar/stellar-sdk` in `src/services/stellar.service.ts`. There is **no**
-Soroban RPC client and **no** deployed escrow contract ID in the runtime path
-today (env placeholders exist; see below).
+All on-chain writes go through the `ChainAdapter` port
+(`src/services/chain/types.ts`), obtained from `getChainAdapter()`. The legacy
+`src/services/stellar.service.ts` was removed in #1082, so nothing calls Horizon
+`manageData` outside `SimulatedAdapter`. `SOROBAN_ADAPTER=soroban` selects the
+live `SorobanAdapter`; the default `simulated` adapter keeps the Horizon
+manage-data behaviour below (results carry `simulated: true`).
 
-| Operation         | Function              | Mechanism                                                                           | When                                  |
-| ----------------- | --------------------- | ----------------------------------------------------------------------------------- | ------------------------------------- |
-| Tokenize shipment | `tokenizeShipment`    | Horizon `Operation.manageData` for `tracking:{shipmentId}` and `route:{shipmentId}` | Shipment create                       |
-| Anchor telemetry  | `anchorTelemetryHash` | Horizon `manageData` + `Memo.hash`                                                  | Stellar worker after telemetry ingest |
-| Release escrow    | `releaseEscrow`       | Horizon `manageData` `release:{shipmentId}` + memo `escrow-release:…`               | Shipment reaches `DELIVERED`          |
+| Operation         | Port method                             | Simulated mechanism                                         | When                                  |
+| ----------------- | --------------------------------------- | ----------------------------------------------------------- | ------------------------------------- |
+| Tokenize shipment | `anchorEvent` (hash of shipment fields) | Horizon `manageData` + `Memo.hash`                          | Shipment create                       |
+| Anchor telemetry  | `anchorEvent`                           | Horizon `manageData` `telemetry:{shipmentId}` + `Memo.hash` | Stellar worker after telemetry ingest |
+| Release escrow    | `releaseEscrow`                         | Horizon `manageData` `release:{paymentId}` + `Memo.hash`    | Shipment reaches `DELIVERED`          |
 
 Config / network:
 
 - `STELLAR_SECRET_KEY` — signing key for the backend account
 - `STELLAR_NETWORK` — `testnet` | `public` (selects Horizon network passphrase)
-- Horizon server is currently hard-coded to `https://horizon-testnet.stellar.org` in code
-- Explorer links: `getStellarExplorerUrl(txHash)` → stellar.expert
+- `HORIZON_URL` — optional override; defaults from `STELLAR_NETWORK` (used by `SimulatedAdapter`)
+- Explorer links: `getStellarExplorerUrl(txHash)` in `src/services/chain/explorer.ts` → stellar.expert
 
 ### Error Handling Note
 
-In `src/services/stellar.service.ts:157–160`, `releaseEscrow` catches any submission or network errors and swallows them, returning `{ success: false }` instead of throwing an `AppError`. Callers handle unfulfilled settlements via payment retry status.
+Chain methods never resolve with a failure flag. Every `ChainAdapter` method rejects with an `AppError` carrying an `ERR_CHAIN_*` code, and a resolved promise means the transaction is confirmed. The old `{ success: false }` swallowing in `stellar.service.ts` `releaseEscrow()` is gone with that module (#1082).
 
 ### Event Indexing & Confirmation Tracking
 
@@ -530,6 +532,34 @@ export async function verifyLedgerBlock(
   documented shipment / payment / settlement schemas in `docs/swagger.yaml`.
 
 ---
+
+## Local standalone network (Stellar quickstart)
+
+For development and nightly CI, run a real standalone Stellar network with
+Soroban RPC using the official image (no public testnet / internet dependency
+for chain operations):
+
+```bash
+docker run --rm -d --name stellar-standalone \
+  -e NETWORK=standalone \
+  -e ENABLE_SOROBAN_RPC=true \
+  -e PROTOCOL_VERSION=22 \
+  -e ENABLE_CORE_ARTIFICIALLY_ADVANCE_LEDGERS=true \
+  -p 8000:8000 -p 11626:11626 \
+  stellar/quickstart:latest
+
+# Wait for the RPC to answer getLatestLedger, then point the backend at it:
+curl -sS -X POST -H 'Content-Type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"getLatestLedger"}' http://localhost:8000/
+export SOROBAN_RPC_URL=http://localhost:8000/
+export HORIZON_URL=http://localhost:11626
+```
+
+The container's ledger state is ephemeral. `/health` and the JSON-RPC
+`getLatestLedger` response are the readiness signals used by
+`.github/workflows/tests-nightly.yml` before any test executes. The same
+workflow starts MongoDB and Redis alongside quickstart so SorobanAdapter and
+stellar indexer integration suites run without network access.
 
 ## Acceptance scripts
 
