@@ -567,8 +567,13 @@ export function simulationErrorToAppError(
 
   if (contractCode !== undefined) {
     const mapped = decodeContractError(contractCode);
-    if (mapped.code !== ErrorCodes.CHAIN_UNKNOWN) {
+    const mappedDetails =
+      mapped.details && typeof mapped.details === 'object'
+        ? (mapped.details as Record<string, unknown>)
+        : {};
+    if (mapped.code !== ErrorCodes.CHAIN_UNKNOWN || decodeContractError !== chainErrorToAppError) {
       return new AppError(mapped.statusCode, mapped.message, mapped.code, {
+        ...mappedDetails,
         contractCode,
         rawError: rawText,
       });
