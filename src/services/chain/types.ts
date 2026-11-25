@@ -89,6 +89,42 @@ export interface ConfirmDeliveryResult extends ChainTxReceipt {
 /** Opaque resume position: the `id` of the last event processed. */
 export type ChainEventCursor = ChainEvent['id'];
 
+/** ─── Read-only chain state (simulation only, short-TTL cacheable) ─── */
+
+/** Input for reading an escrow balance. */
+export interface ReadEscrowBalanceInput {
+  payment_id: string;
+}
+
+/** Escrow balance read result. Balance is in stroops as a decimal string. */
+export interface ReadEscrowBalanceResult {
+  /** Balance in stroops (1 XLM = 10^7 stroops), as a decimal string. */
+  balance: string;
+  simulated: boolean;
+}
+
+/** Input for reading a shipment's on-chain status. */
+export interface ReadShipmentStatusInput {
+  shipment_id: string;
+}
+
+/** Shipment on-chain status read result. */
+export interface ReadShipmentStatusResult {
+  /** Derived on-chain milestone/status (e.g. ESCROWED, RELEASED, REFUNDED). */
+  status: string;
+  simulated: boolean;
+}
+
+/** Contract version read result. */
+export interface ReadContractVersionResult {
+  /** Contract / spec version string. */
+  version: string;
+  simulated: boolean;
+}
+
+/** Result shape shared by all read-only chain queries. */
+export type ChainReadResult<T> = T & { simulated: boolean };
+
 /**
  * On-chain shipment ID (`u64` in the shipment contract). How it maps to the
  * Mongo ObjectId is decided by P11-10; reads take the on-chain value.
@@ -192,4 +228,9 @@ export interface ChainAdapter {
   /** Admin `G…`/`C…` address. */
   getAdmin?(): Promise<string>;
   getExpectedTokenDecimals?(): Promise<number>;
+
+  /** Read-only chain state queries (P14-12, simulation only, short-TTL cacheable). */
+  readEscrowBalance?(input: ReadEscrowBalanceInput): Promise<ReadEscrowBalanceResult>;
+  readShipmentStatus?(input: ReadShipmentStatusInput): Promise<ReadShipmentStatusResult>;
+  readContractVersion?(): Promise<ReadContractVersionResult>;
 }

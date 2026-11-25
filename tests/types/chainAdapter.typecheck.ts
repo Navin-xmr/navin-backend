@@ -13,6 +13,11 @@ import type {
   ConfirmDeliveryInput,
   ConfirmDeliveryResult,
   EscrowResult,
+  ReadContractVersionResult,
+  ReadEscrowBalanceInput,
+  ReadEscrowBalanceResult,
+  ReadShipmentStatusInput,
+  ReadShipmentStatusResult,
   ReleaseEscrowInput,
   UpdateStatusInput,
   UpdateStatusResult,
@@ -92,7 +97,7 @@ export class MockChainAdapter implements ChainAdapter {
 }
 
 export const literalAdapter = {
-  anchorEvent: async () => ({ txHash: HASH, ledger: 1, simulated: false }),
+  anchorEvent: async () => ({ txHash: HASH, ledger: 1, simulated: true }),
   releaseEscrow: async (i: ReleaseEscrowInput) => ({
     txHash: HASH,
     ledger: 1,
