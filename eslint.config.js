@@ -70,9 +70,9 @@ export default [
       'no-console': 'off',
     },
   },
-  // P9-14 / #925: suites must drive the ChainAdapter port instead of reaching into
-  // the deprecated stellar.service internals. Keep `tests/stellar.service.test.ts`
-  // as the single suite that knowingly tests that module directly.
+  // #809 / P9-14: suites must drive the ChainAdapter port instead of reaching
+  // into deprecated stellar.service internals. Keep the dedicated service unit
+  // suite exempt because it tests that module itself.
   {
     files: ['tests/**/*.ts'],
     ignores: ['tests/stellar.service.test.ts'],
@@ -80,6 +80,13 @@ export default [
       'no-restricted-imports': [
         'error',
         {
+          paths: [
+            {
+              name: '../src/services/stellar.service.js',
+              message:
+                'Mock the ChainAdapter port (src/services/chain) instead of importing stellar.service directly.',
+            },
+          ],
           patterns: [
             {
               group: ['**/services/stellar.service.js', '**/services/stellar.service'],
@@ -87,6 +94,15 @@ export default [
                 'Mock the ChainAdapter port (src/services/chain) instead of importing stellar.service directly.',
             },
           ],
+        },
+      ],
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector:
+            "CallExpression[callee.object.name='jest'][callee.property.name='unstable_mockModule'][arguments.0.value='../src/services/stellar.service.js']",
+          message:
+            'Mock the ChainAdapter port (src/services/chain) instead of mocking stellar.service directly.',
         },
       ],
     },

@@ -2,12 +2,15 @@
  * Chain interface — typed mirror of docs/chain-interface.md (TODO I2).
  *
  * ┌──────────────────────────────────────────────────────────────────────┐
- * │ SPEC VERSION: 2.0.0  (see CHAIN_SPEC_VERSION below)                  │
+ * │ SPEC VERSION: 2.2.0  (see CHAIN_SPEC_VERSION below)                  │
  * │ Mirrors the v2 surface (v1 from P6-01/#649, evolved by #1056/#1058):  │
  * │   functions  anchor · init_escrow · release_escrow (+ authz)         │
+ * │              update_status (v2.1, #1047 — real contract ABI)         │
  * │              release_escrow = (caller, shipment_id), escrow is       │
  * │              per-shipment — there is no proof_hash argument.         │
  * │   events     anchor · esc_init · esc_rel (topic + data tuples)       │
+ * │              dispute_raised · dispute_resolved · escrow_frozen       │
+ * │              (v2.2, #1053 — real contract dispute surface)           │
  * │              every anchored event exposes confirmations + verified   │
  * │   errors     contract error codes → ERR_CHAIN_* backend codes        │
  * │              incl. InvalidStatus and Unauthorized/NotAuthorized      │
@@ -29,14 +32,14 @@ import { z } from 'zod';
 import { AppError, ErrorCodes } from '../http/errors.js';
 import type { ErrorCode } from '../http/errors.js';
 
-export const CHAIN_SPEC_VERSION = '2.0.0' as const;
+export const CHAIN_SPEC_VERSION = '2.2.0' as const;
 
 // ─── Soroban primitives ──────────────────────────────────────────────────────
 
 const I128_MAX = (BigInt(1) << BigInt(127)) - BigInt(1);
 const I128_MIN = -(BigInt(1) << BigInt(127));
-const U64_MAX = (BigInt(1) << BigInt(64)) - BigInt(1);
 const U32_MAX = 0xffffffff;
+const U64_MAX = (BigInt(1) << BigInt(64)) - BigInt(1);
 
 /** Soroban `Symbol`: up to 32 chars of [a-zA-Z0-9_]. */
 export const SymbolSchema = z.string().regex(/^[A-Za-z0-9_]{1,32}$/, 'Invalid Soroban Symbol');
@@ -45,7 +48,7 @@ export const SymbolSchema = z.string().regex(/^[A-Za-z0-9_]{1,32}$/, 'Invalid So
 export const U64Schema = z
   .string()
   .regex(/^(0|[1-9][0-9]*)$/, 'Expected unsigned decimal u64 string')
-  .refine(v => BigInt(v) <= U64_MAX, 'Exceeds u64 range');
+  .refine(v => !/^(0|[1-9][0-9]*)$/.test(v) || BigInt(v) <= U64_MAX, 'Exceeds u64 range');
 
 /**
  * Soroban `i128` represented in JSON as a signed decimal string.
@@ -54,10 +57,14 @@ export const U64Schema = z
 export const I128Schema = z
   .string()
   .regex(/^(0|[1-9][0-9]*|-[1-9][0-9]*)$/, 'Expected signed decimal i128 string')
-  .refine(v => BigInt(v) >= I128_MIN && BigInt(v) <= I128_MAX, 'Outside i128 range');
+  .refine(
+    v =>
+      !/^(0|[1-9][0-9]*|-[1-9][0-9]*)$/.test(v) || (BigInt(v) >= I128_MIN && BigInt(v) <= I128_MAX),
+    'Outside i128 range'
+  );
 
 export const PositiveI128Schema = I128Schema.refine(
-  v => BigInt(v) > 0,
+  v => !/^(0|[1-9][0-9]*|-[1-9][0-9]*)$/.test(v) || BigInt(v) > 0,
   'Expected positive i128 amount'
 );
 
@@ -66,18 +73,6 @@ export const U32Schema = z.number().int().min(0).max(U32_MAX);
 
 /** `Vec<(Symbol, u32)>` milestone representation. */
 export const MilestoneVecSchema = z.array(z.tuple([SymbolSchema, U32Schema]));
-
-export const ShipmentStatusSchema = z.enum([
-  'CREATED',
-  'PICKUP_CONFIRMED',
-  'IN_TRANSIT',
-  'CUSTOMS_CLEARED',
-  'OUT_FOR_DELIVERY',
-  'DELIVERED',
-  'SETTLEMENT_INITIATED',
-  'SETTLEMENT_COMPLETED',
-  'CANCELLED',
-]);
 
 export const RoleSchema = z.enum([
   'SUPER_ADMIN',
@@ -96,7 +91,6 @@ export const SettlementStatusSchema = z.enum([
   'DISPUTED',
 ]);
 
-export type ShipmentStatus = z.infer<typeof ShipmentStatusSchema>;
 export type Role = z.infer<typeof RoleSchema>;
 export type SettlementStatus = z.infer<typeof SettlementStatusSchema>;
 export type Milestone = z.infer<typeof MilestoneVecSchema>[number];
@@ -160,6 +154,57 @@ export const ReleaseEscrowArgsSchema = z
   })
   .strict();
 
+/** `confirm_delivery(receiver: Address, shipment_id: Symbol, proof_hash: BytesN<32>)` — auth: `receiver`. */
+export const ConfirmDeliveryArgsSchema = z
+  .object({
+    receiver: AddressSchema,
+    shipment_id: SymbolSchema,
+    proof_hash: Bytes32HexSchema,
+  })
+  .strict();
+
+/**
+ * `ShipmentStatus` contract enum, in the EXACT declaration order of
+ * Navin-xmr/navin-contracts `contracts/shipment/src/types.rs`. The variant name
+ * is the on-chain identity: a `#[contracttype]` unit-variant enum is encoded as
+ * the ScVal vec `[Symbol(<VariantName>)]`. Reordering/renaming is an ABI break.
+ */
+export const SHIPMENT_STATUSES = [
+  'Created',
+  'InTransit',
+  'AtCheckpoint',
+  'PartiallyDelivered',
+  'Delivered',
+  'Disputed',
+  'Cancelled',
+  'PartiallyRefunded',
+] as const;
+export type ShipmentStatusName = (typeof SHIPMENT_STATUSES)[number];
+export const ShipmentStatusSchema = z.enum(SHIPMENT_STATUSES);
+
+/** `u64` as an unsigned decimal string (no leading zeros) — the contract's shipment id type. */
+export const U64StringSchema = z
+  .string()
+  .regex(/^(0|[1-9][0-9]*)$/, 'Expected unsigned integer string')
+  .refine(v => !/^(0|[1-9][0-9]*)$/.test(v) || BigInt(v) <= U64_MAX, 'Exceeds u64 range');
+
+/**
+ * `update_status(caller: Address, shipment_id: u64, new_status: ShipmentStatus,
+ *  data_hash: BytesN<32>)` — auth: `caller` (shipment carrier or admin).
+ *
+ * `data_hash` is computed by the backend over the canonical status payload and
+ * passed through untouched by adapters. NOTE: unlike the legacy functions above,
+ * the contract's `shipment_id` here is a `u64`, not a `Symbol`.
+ */
+export const UpdateStatusArgsSchema = z
+  .object({
+    caller: AddressSchema,
+    shipment_id: U64StringSchema,
+    new_status: ShipmentStatusSchema,
+    data_hash: Bytes32HexSchema,
+  })
+  .strict();
+
 /** Result of any confirmed state-changing invocation. */
 export const ChainTxResultSchema = z
   .object({
@@ -168,27 +213,39 @@ export const ChainTxResultSchema = z
   })
   .strict();
 
-export const CHAIN_FUNCTIONS = ['anchor', 'init_escrow', 'release_escrow'] as const;
+export const CHAIN_FUNCTIONS = [
+  'anchor',
+  'init_escrow',
+  'release_escrow',
+  'confirm_delivery',
+  'update_status',
+] as const;
 export type ChainFunctionName = (typeof CHAIN_FUNCTIONS)[number];
 
 /** Who must `require_auth()` for each function, per spec. */
 export const CHAIN_FUNCTION_AUTH: Readonly<
-  Record<ChainFunctionName, 'actor' | 'payer' | 'caller' | 'admin'>
+  Record<ChainFunctionName, 'actor' | 'payer' | 'caller' | 'admin' | 'receiver'>
 > = {
   anchor: 'actor',
   init_escrow: 'payer',
   release_escrow: 'caller',
+  confirm_delivery: 'receiver',
+  update_status: 'caller',
 };
 
 export const ChainFunctionArgsSchemas = {
   anchor: AnchorArgsSchema,
   init_escrow: InitEscrowArgsSchema,
   release_escrow: ReleaseEscrowArgsSchema,
+  confirm_delivery: ConfirmDeliveryArgsSchema,
+  update_status: UpdateStatusArgsSchema,
 } as const satisfies Record<ChainFunctionName, z.ZodTypeAny>;
 
 export type AnchorArgs = z.infer<typeof AnchorArgsSchema>;
 export type InitEscrowArgs = z.infer<typeof InitEscrowArgsSchema>;
 export type ReleaseEscrowArgs = z.infer<typeof ReleaseEscrowArgsSchema>;
+export type ConfirmDeliveryArgs = z.infer<typeof ConfirmDeliveryArgsSchema>;
+export type UpdateStatusArgs = z.infer<typeof UpdateStatusArgsSchema>;
 export type ChainTxResult = z.infer<typeof ChainTxResultSchema>;
 
 // ─── Events ──────────────────────────────────────────────────────────────────
@@ -197,6 +254,12 @@ export const CHAIN_EVENT_NAMES = {
   ANCHOR: 'anchor',
   ESCROW_INIT: 'esc_init',
   ESCROW_RELEASE: 'esc_rel',
+  /** v2.2 (#1053) — `raise_dispute` emitted this before `escrow_frozen`. */
+  DISPUTE_RAISED: 'dispute_raised',
+  /** v2.2 (#1053) — `resolve_dispute`; carries the contract's resolution. */
+  DISPUTE_RESOLVED: 'dispute_resolved',
+  /** v2.2 (#1053) — escrow blocked by a dispute/safety control (freeze). */
+  ESCROW_FROZEN: 'escrow_frozen',
 } as const;
 export type ChainEventName = (typeof CHAIN_EVENT_NAMES)[keyof typeof CHAIN_EVENT_NAMES];
 
@@ -246,17 +309,132 @@ export const EscrowReleaseEventSchema = z
   })
   .strict();
 
+/**
+ * Shipment identifier carried by the dispute/escrow-freeze events.
+ *
+ * The deployed contract types `shipment_id` as `u64`; this backend identifies
+ * shipments by their Mongo ObjectId string and that is the identifier adapters
+ * put on-chain (same legacy convention as `anchor`/`esc_*` above). Modelling it
+ * as a Soroban `Symbol` is what lets the indexer resolve `LedgerBlock.shipmentId`
+ * without an id-mapping table; reconciling the numeric contract id is tracked in
+ * docs/chain-interface.md §1.1.
+ */
+const ShipmentEventIdSchema = SymbolSchema;
+
+/** `DisputeResolution` contract enum — variant names are the on-chain identity. */
+export const DISPUTE_RESOLUTIONS = [
+  'ReleaseToCarrier',
+  'RefundToCompany',
+  'PartialRefund',
+] as const;
+export type DisputeResolutionName = (typeof DISPUTE_RESOLUTIONS)[number];
+export const DisputeResolutionSchema = z.enum(DISPUTE_RESOLUTIONS);
+
+/** `EscrowFreezeReason` contract enum — variant names are the on-chain identity. */
+export const ESCROW_FREEZE_REASONS = [
+  'DisputeRaised',
+  'CarrierSuspended',
+  'CompanySuspended',
+  'ContractPaused',
+  'CircuitBreakerOpen',
+] as const;
+export type EscrowFreezeReasonName = (typeof ESCROW_FREEZE_REASONS)[number];
+export const EscrowFreezeReasonSchema = z.enum(ESCROW_FREEZE_REASONS);
+
+/**
+ * topic `["dispute_raised"]` · data `(shipment_id, raised_by, reason_hash)`
+ *
+ * Emitted by `raise_dispute` when a party opens a dispute. The full evidence
+ * (text, photos) stays off-chain; only its SHA-256 digest is published, so the
+ * indexer stores `reason_hash` verbatim and never treats it as free text.
+ * `raise_dispute` also emits `escrow_frozen` immediately after this event.
+ */
+export const DisputeRaisedEventSchema = z
+  .object({
+    ...eventEnvelope,
+    name: z.literal(CHAIN_EVENT_NAMES.DISPUTE_RAISED),
+    topic: z.tuple([z.literal(CHAIN_EVENT_NAMES.DISPUTE_RAISED)]),
+    data: z.tuple([ShipmentEventIdSchema, AddressSchema, Bytes32HexSchema]),
+  })
+  .strict();
+
+/**
+ * topic `["dispute_resolved"]` · data `(shipment_id, resolution, reason_hash, admin)`
+ *
+ * Emitted by `resolve_dispute` when an admin closes the dispute. `resolution` is
+ * the contract's `DisputeResolution` variant and is reflected verbatim — the
+ * projection must never re-derive it from the resulting shipment status. The
+ * contract refunds/releases escrow before this event, which clears the freeze.
+ */
+export const DisputeResolvedEventSchema = z
+  .object({
+    ...eventEnvelope,
+    name: z.literal(CHAIN_EVENT_NAMES.DISPUTE_RESOLVED),
+    topic: z.tuple([z.literal(CHAIN_EVENT_NAMES.DISPUTE_RESOLVED)]),
+    data: z.tuple([
+      ShipmentEventIdSchema,
+      DisputeResolutionSchema,
+      Bytes32HexSchema,
+      AddressSchema,
+    ]),
+  })
+  .strict();
+
+/**
+ * topic `["escrow_frozen"]` · data `(shipment_id, reason, caller, timestamp)`
+ *
+ * Emitted whenever escrow is blocked (dispute, suspension, pause, circuit
+ * breaker). Freeze is explicit on-chain state; the projection must not infer it.
+ * The matching unfreeze is the `dispute_resolved` event — the contract clears
+ * the freeze as part of resolution.
+ */
+export const EscrowFrozenEventSchema = z
+  .object({
+    ...eventEnvelope,
+    name: z.literal(CHAIN_EVENT_NAMES.ESCROW_FROZEN),
+    topic: z.tuple([z.literal(CHAIN_EVENT_NAMES.ESCROW_FROZEN)]),
+    data: z.tuple([
+      ShipmentEventIdSchema,
+      EscrowFreezeReasonSchema,
+      AddressSchema,
+      U64StringSchema,
+    ]),
+  })
+  .strict();
+
 /** Runtime validator for the indexer and golden fixtures. */
 export const ChainEventSchema = z.discriminatedUnion('name', [
   AnchorEventSchema,
   EscrowInitEventSchema,
   EscrowReleaseEventSchema,
+  DisputeRaisedEventSchema,
+  DisputeResolvedEventSchema,
+  EscrowFrozenEventSchema,
 ]);
 
 export type AnchorEvent = z.infer<typeof AnchorEventSchema>;
 export type EscrowInitEvent = z.infer<typeof EscrowInitEventSchema>;
 export type EscrowReleaseEvent = z.infer<typeof EscrowReleaseEventSchema>;
+export type DisputeRaisedEvent = z.infer<typeof DisputeRaisedEventSchema>;
+export type DisputeResolvedEvent = z.infer<typeof DisputeResolvedEventSchema>;
+export type EscrowFrozenEvent = z.infer<typeof EscrowFrozenEventSchema>;
 export type ChainEvent = z.infer<typeof ChainEventSchema>;
+
+/** An RPC event that could not be decoded, retained for indexing and replay. */
+export interface ChainEventDecodeFailure {
+  kind: 'decode_error';
+  cursor: string;
+  contract_id: string;
+  raw_payload: unknown;
+  candidate_payload: unknown;
+  error: string;
+}
+
+export function isChainEventDecodeFailure(
+  event: ChainEvent | ChainEventDecodeFailure
+): event is ChainEventDecodeFailure {
+  return 'kind' in event && event.kind === 'decode_error';
+}
 
 // ─── Event verification / confirmation depth (v2, #1058) ────────────────────
 
@@ -371,7 +549,10 @@ export function chainErrorToAppError(contractCode: number): AppError {
  * Host diagnostics and contract discriminants are kept in `details.rawError`;
  * the raw contract code is always retained as `details.contractCode` when found.
  */
-export function simulationErrorToAppError(rawError: unknown): AppError {
+export function simulationErrorToAppError(
+  rawError: unknown,
+  decodeContractError: (code: number) => AppError = chainErrorToAppError
+): AppError {
   const rawText =
     typeof rawError === 'string'
       ? rawError
@@ -385,7 +566,7 @@ export function simulationErrorToAppError(rawError: unknown): AppError {
   const contractCode = contractCodeMatch ? parseInt(contractCodeMatch[1], 10) : undefined;
 
   if (contractCode !== undefined) {
-    const mapped = chainErrorToAppError(contractCode);
+    const mapped = decodeContractError(contractCode);
     if (mapped.code !== ErrorCodes.CHAIN_UNKNOWN) {
       return new AppError(mapped.statusCode, mapped.message, mapped.code, {
         contractCode,
@@ -433,6 +614,61 @@ export function simulationErrorToAppError(rawError: unknown): AppError {
   return new AppError(400, 'Soroban simulation failed', ErrorCodes.CHAIN_UNKNOWN, {
     contractCode,
     rawError: rawText,
+  });
+}
+
+/**
+ * `NavinError` discriminants the REAL shipment contract can raise from
+ * `update_status` (Navin-xmr/navin-contracts `errors.rs`). The legacy table
+ * above predates the deployed contract and numbers errors differently
+ * (e.g. its `InvalidStatus` is 9, the contract's is 5), so update_status errors
+ * are decoded with this function-scoped table — never the legacy one.
+ */
+export const UPDATE_STATUS_CONTRACT_ERRORS = {
+  Unauthorized: 3,
+  ShipmentNotFound: 4,
+  InvalidStatus: 5,
+  InvalidHash: 6,
+  ShipmentFinalized: 38,
+  DuplicateAction: 41,
+} as const;
+export type UpdateStatusContractErrorName = keyof typeof UPDATE_STATUS_CONTRACT_ERRORS;
+
+export const UPDATE_STATUS_ERROR_MAP: Readonly<
+  Record<UpdateStatusContractErrorName, { code: ErrorCode; status: number }>
+> = {
+  Unauthorized: { code: ErrorCodes.CHAIN_UNAUTHORIZED, status: 403 },
+  ShipmentNotFound: { code: ErrorCodes.CHAIN_SHIPMENT_NOT_FOUND, status: 404 },
+  InvalidStatus: { code: ErrorCodes.CHAIN_INVALID_STATUS, status: 409 },
+  InvalidHash: { code: ErrorCodes.CHAIN_INVALID_HASH, status: 422 },
+  ShipmentFinalized: { code: ErrorCodes.CHAIN_INVALID_STATUS, status: 409 },
+  DuplicateAction: { code: ErrorCodes.CHAIN_DUPLICATE_ACTION, status: 409 },
+};
+
+const updateStatusErrorNameByCode = new Map<number, UpdateStatusContractErrorName>(
+  (Object.entries(UPDATE_STATUS_CONTRACT_ERRORS) as [UpdateStatusContractErrorName, number][]).map(
+    ([n, c]) => [c, n]
+  )
+);
+
+/**
+ * Decode a contract error raised by `update_status`. Unlisted codes become
+ * ERR_CHAIN_UNKNOWN (502) with the raw code preserved in `details`.
+ */
+export function updateStatusErrorToAppError(contractCode: number): AppError {
+  const name = updateStatusErrorNameByCode.get(contractCode);
+  if (!name) {
+    return new AppError(
+      502,
+      `Unmapped update_status contract error ${contractCode} (spec ${CHAIN_SPEC_VERSION})`,
+      ErrorCodes.CHAIN_UNKNOWN,
+      { contractCode, function: 'update_status' }
+    );
+  }
+  const { code, status } = UPDATE_STATUS_ERROR_MAP[name];
+  return new AppError(status, `Chain contract error: ${name}`, code, {
+    contractCode,
+    function: 'update_status',
   });
 }
 

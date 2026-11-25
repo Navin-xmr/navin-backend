@@ -60,7 +60,7 @@ describe('v2 spec pin', () => {
     ['errors.json', errors.spec_version],
   ])('%s matches CHAIN_SPEC_VERSION', (_file, version) => {
     expect(version).toBe(CHAIN_SPEC_VERSION);
-    expect(CHAIN_SPEC_VERSION).toBe('2.0.0');
+    expect(CHAIN_SPEC_VERSION).toBe('2.2.0');
   });
 
   describe('Soroban primitive schemas', () => {
@@ -97,7 +97,7 @@ describe('v2 spec pin', () => {
     });
 
     it('validates ShipmentStatus, Role and SettlementStatus enums', () => {
-      expect(ShipmentStatusSchema.parse('DELIVERED')).toBe('DELIVERED');
+      expect(ShipmentStatusSchema.parse('Delivered')).toBe('Delivered');
       expect(ShipmentStatusSchema.safeParse('delivered').success).toBe(false);
       expect(RoleSchema.parse('DRIVER')).toBe('DRIVER');
       expect(RoleSchema.safeParse('OWNER').success).toBe(false);

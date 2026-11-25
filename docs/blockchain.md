@@ -14,27 +14,29 @@ Related issues:
 
 ## Current state (Horizon-only fallback)
 
-All on-chain writes go through the Stellar **Horizon** HTTP API via
-`@stellar/stellar-sdk` in `src/services/stellar.service.ts`. There is **no**
-Soroban RPC client and **no** deployed escrow contract ID in the runtime path
-today (env placeholders exist; see below).
+All on-chain writes go through the `ChainAdapter` port
+(`src/services/chain/types.ts`), obtained from `getChainAdapter()`. The legacy
+`src/services/stellar.service.ts` was removed in #1082, so nothing calls Horizon
+`manageData` outside `SimulatedAdapter`. `SOROBAN_ADAPTER=soroban` selects the
+live `SorobanAdapter`; the default `simulated` adapter keeps the Horizon
+manage-data behaviour below (results carry `simulated: true`).
 
-| Operation         | Function              | Mechanism                                                                           | When                                  |
-| ----------------- | --------------------- | ----------------------------------------------------------------------------------- | ------------------------------------- |
-| Tokenize shipment | `tokenizeShipment`    | Horizon `Operation.manageData` for `tracking:{shipmentId}` and `route:{shipmentId}` | Shipment create                       |
-| Anchor telemetry  | `anchorTelemetryHash` | Horizon `manageData` + `Memo.hash`                                                  | Stellar worker after telemetry ingest |
-| Release escrow    | `releaseEscrow`       | Horizon `manageData` `release:{shipmentId}` + memo `escrow-release:…`               | Shipment reaches `DELIVERED`          |
+| Operation         | Port method                             | Simulated mechanism                                         | When                                  |
+| ----------------- | --------------------------------------- | ----------------------------------------------------------- | ------------------------------------- |
+| Tokenize shipment | `anchorEvent` (hash of shipment fields) | Horizon `manageData` + `Memo.hash`                          | Shipment create                       |
+| Anchor telemetry  | `anchorEvent`                           | Horizon `manageData` `telemetry:{shipmentId}` + `Memo.hash` | Stellar worker after telemetry ingest |
+| Release escrow    | `releaseEscrow`                         | Horizon `manageData` `release:{paymentId}` + `Memo.hash`    | Shipment reaches `DELIVERED`          |
 
 Config / network:
 
 - `STELLAR_SECRET_KEY` — signing key for the backend account
 - `STELLAR_NETWORK` — `testnet` | `public` (selects Horizon network passphrase)
-- Horizon server is currently hard-coded to `https://horizon-testnet.stellar.org` in code
-- Explorer links: `getStellarExplorerUrl(txHash)` → stellar.expert
+- `HORIZON_URL` — optional override; defaults from `STELLAR_NETWORK` (used by `SimulatedAdapter`)
+- Explorer links: `getStellarExplorerUrl(txHash)` in `src/services/chain/explorer.ts` → stellar.expert
 
 ### Error Handling Note
 
-In `src/services/stellar.service.ts:157–160`, `releaseEscrow` catches any submission or network errors and swallows them, returning `{ success: false }` instead of throwing an `AppError`. Callers handle unfulfilled settlements via payment retry status.
+Chain methods never resolve with a failure flag. Every `ChainAdapter` method rejects with an `AppError` carrying an `ERR_CHAIN_*` code, and a resolved promise means the transaction is confirmed. The old `{ success: false }` swallowing in `stellar.service.ts` `releaseEscrow()` is gone with that module (#1082).
 
 ### Event Indexing & Confirmation Tracking
 
@@ -215,7 +217,11 @@ considered verified when all three agree.
     "dataHash": "0371fc34550ee7a73ef610692adaa49c5f50aa917e85b9cebb9d1a11fa397c8a",
     "txHash": "3b1f0c…",
     "transactionHash": "3b1f0c…",
-    "ledger": 41234567
+    "ledger": 41234567,
+    "network": "testnet",
+    "contractId": "CACAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAINCW",
+    "schemaVersion": 1,
+    "idempotencyKey": "status-2026-08-01-0001"
   }
 }
 ```
@@ -229,6 +235,19 @@ re-guess which bytes were committed. `txHash` and `transactionHash` are aliases 
 value. Both `canonicalPayload` and `dataHash` may be `null` for legacy blocks written before
 migration #661; those blocks cannot be client-verified and should be shown as
 "unverifiable" rather than "failed".
+
+**Bundle v2 fields (#1046).** All are persisted when the block is written — never rebuilt from
+mutable shipment/payment state:
+
+| Field            | Meaning                                                                                                                                 |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `network`        | `testnet` or `public` (mainnet) — which network to query for `txHash`. Legacy blocks without it report the server's configured network. |
+| `contractId`     | Soroban contract the tx targeted: persisted value → indexed event metadata → configured `ESCROW_CONTRACT_ID`; `null` if none is known.  |
+| `schemaVersion`  | Canonical payload layout version, read from the payload's own `v` (covered by `dataHash`). `null` with no payload.                      |
+| `idempotencyKey` | Client `Idempotency-Key` that produced the block (shipment status changes); `null` if none was sent.                                    |
+
+A stored `canonicalPayload` that is not an object with an integer `v >= 1` yields `422 ERR_LEDGER_PAYLOAD_INVALID`
+instead of being served. The server does **not** vouch for `dataHash` — always recompute it yourself.
 
 ### Step 2 — Recompute `sha256(canonicalPayload)` in the browser
 

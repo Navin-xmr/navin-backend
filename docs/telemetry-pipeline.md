@@ -43,7 +43,7 @@ sequenceDiagram
     end
 
     Worker->>TQ: consume anchor_telemetry
-    Worker->>Stellar: anchorTelemetryHash(shipmentId, dataHash)
+    Worker->>Stellar: ChainAdapter.anchorEvent(shipment_id, data_hash, actor)
     alt anchor success
         Worker->>Mongo: updateTelemetryAnchor(stellarTxHash)<br/>anchorStatus=ANCHORED
     else anchor failure

@@ -9,11 +9,26 @@ const alertQueue = new Queue('alert_queue', {
   connection: getRedisConnection() as unknown as Record<string, unknown>,
 });
 
-export type AlertPayload = {
-  type: 'ANOMALY' | 'STATUS_CHANGE';
-  message: string;
-  shipmentId: string;
-};
+export type AlertPayload =
+  | {
+      type:
+        | 'ANOMALY'
+        | 'STATUS_CHANGE'
+        | 'CHAIN_SUBMISSION_FAILURES'
+        | 'CHAIN_SPEC_DRIFT'
+        | 'CHAIN_INDEXER_STALLED'
+        | 'CHAIN_RECONCILIATION_MISMATCH'
+        | 'CHAIN_LOW_BALANCE'
+        | 'CHAIN_DEAD_LETTER_GROWTH';
+      message: string;
+      shipmentId: string;
+    }
+  | {
+      type: 'INDEXER_MALFORMED_EVENT';
+      message: string;
+      cursor: string;
+      contractId: string;
+    };
 
 /**
  * Enqueues a job on the transaction queue.
