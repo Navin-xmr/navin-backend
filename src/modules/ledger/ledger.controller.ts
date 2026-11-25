@@ -1,7 +1,13 @@
 import type { Request, Response } from 'express';
 import * as ledgerService from './ledger.service.js';
-import type { GetLedgerBlocksQuery, LedgerBlockIdParam } from './ledger.validation.js';
+import type {
+  GetLedgerBlocksQuery,
+  LedgerBlockIdParam,
+  ChainShipmentStatusParam,
+  ChainPaymentIdParam,
+} from './ledger.validation.js';
 import { sendResponse } from '../../shared/http/sendResponse.js';
+import { asyncHandler } from '../../shared/http/asyncHandler.js';
 
 /**
  * Lists ledger blocks with optional filters and cursor pagination.
@@ -64,3 +70,73 @@ export const getLedgerBlockVerification = async (req: Request, res: Response) =>
   const verification = await ledgerService.getLedgerBlockVerificationService(params.id);
   return sendResponse(res, 200, true, 'Ledger block verification retrieved', verification);
 };
+
+/**
+ * Read the on-chain escrow balance for a payment (simulation only, cached).
+ * Requires auth and ADMIN / MANAGER / VIEWER.
+ *
+ * @param req.params.paymentId - Payment ObjectId.
+ * @returns HTTP 200 with `{ balance, simulated }`.
+ * @throws {AppError} 401 ERR_AUTH_INVALID — when JWT auth fails.
+ * @throws {AppError} 403 ERR_PERMISSION_DENIED — when the caller lacks an allowed role.
+ * @throws {AppError} 400 VALIDATION_ERROR — when the paymentId param is invalid.
+ */
+export const getEscrowBalanceController = asyncHandler(
+  async (req: Request, res: Response): Promise<void> => {
+    const params = req.params as unknown as ChainPaymentIdParam;
+    const balance = await ledgerService.getEscrowBalanceService(params.paymentId);
+    sendResponse(res, 200, true, 'Escrow balance retrieved', balance);
+  }
+);
+
+/**
+ * Read the on-chain shipment status for a shipment (simulation only, cached).
+ * Requires auth and ADMIN / MANAGER / VIEWER.
+ *
+ * @param req.params.shipmentId - Shipment ObjectId.
+ * @returns HTTP 200 with `{ status, simulated }`.
+ * @throws {AppError} 401 ERR_AUTH_INVALID — when JWT auth fails.
+ * @throws {AppError} 403 ERR_PERMISSION_DENIED — when the caller lacks an allowed role.
+ * @throws {AppError} 400 VALIDATION_ERROR — when the shipmentId param is invalid.
+ */
+export const getShipmentStatusController = asyncHandler(
+  async (req: Request, res: Response): Promise<void> => {
+    const params = req.params as unknown as ChainShipmentStatusParam;
+    const status = await ledgerService.getShipmentStatusService(params.shipmentId);
+    sendResponse(res, 200, true, 'Shipment status retrieved', status);
+  }
+);
+
+/**
+ * Read the settlement record for a payment (simulation only, cached).
+ * Combines the on-chain escrow balance and shipment status.
+ * Requires auth and ADMIN / MANAGER / VIEWER.
+ *
+ * @param req.params.paymentId - Payment ObjectId.
+ * @returns HTTP 200 with `{ paymentId, escrowBalance, shipmentStatus }`.
+ * @throws {AppError} 401 ERR_AUTH_INVALID — when JWT auth fails.
+ * @throws {AppError} 403 ERR_PERMISSION_DENIED — when the caller lacks an allowed role.
+ * @throws {AppError} 400 VALIDATION_ERROR — when the paymentId param is invalid.
+ */
+export const getSettlementRecordController = asyncHandler(
+  async (req: Request, res: Response): Promise<void> => {
+    const params = req.params as unknown as ChainPaymentIdParam;
+    const record = await ledgerService.getSettlementRecordService(params.paymentId);
+    sendResponse(res, 200, true, 'Settlement record retrieved', record);
+  }
+);
+
+/**
+ * Read the contract / spec version (simulation only, cached).
+ * Requires auth and ADMIN / MANAGER / VIEWER.
+ *
+ * @returns HTTP 200 with `{ version, simulated }`.
+ * @throws {AppError} 401 ERR_AUTH_INVALID — when JWT auth fails.
+ * @throws {AppError} 403 ERR_PERMISSION_DENIED — when the caller lacks an allowed role.
+ */
+export const getContractVersionController = asyncHandler(
+  async (_req: Request, res: Response): Promise<void> => {
+    const version = await ledgerService.getContractVersionService();
+    sendResponse(res, 200, true, 'Contract version retrieved', version);
+  }
+);

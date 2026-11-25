@@ -64,6 +64,7 @@ const ShipmentSchema = new Schema(
       },
       default: undefined,
     },
+    chainShipmentId: { type: String },
     deliveryProof: {
       url: { type: String },
       recipientSignatureName: { type: String },
@@ -137,6 +138,9 @@ ShipmentSchema.index({ createdAt: -1, _id: -1 });
 
 // Multi-field text index for unified search across tracking number and locations.
 ShipmentSchema.index({ trackingNumber: 'text', origin: 'text', destination: 'text' });
+
+// #1043 — resolves indexed delivery events to a shipment. Sparse: most shipments have no on-chain id.
+ShipmentSchema.index({ chainShipmentId: 1 }, { unique: true, sparse: true });
 
 // Soft delete middleware
 ShipmentSchema.pre(['find', 'findOne', 'findOneAndUpdate', 'countDocuments'], function () {

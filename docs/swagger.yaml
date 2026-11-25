@@ -221,6 +221,156 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+  /api/webhooks/chain/subscriptions:
+    post:
+      operationId: webhooks_create_chain_subscription
+      tags:
+        - Webhooks
+      summary: Create a chain webhook subscription
+      description: |
+        Registers an HTTPS endpoint for selected confirmed chain events belonging to the caller's
+        organization shipments. The generated signing secret is returned once and is encrypted at rest.
+      security:
+        - bearerAuth: []
+      x-required-role:
+        - ADMIN
+        - SUPER_ADMIN
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateChainWebhookSubscription'
+            example:
+              endpoint: https://integrator.example.com/navin/events
+              events: [anchor, esc_rel]
+      responses:
+        '201':
+          description: Subscription created; secret is returned once.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChainWebhookSubscriptionCreatedResponse'
+        '400':
+          description: Invalid endpoint or event list.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Missing or invalid bearer token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Caller is not an organization administrator.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: Chain webhook encryption key is not configured.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    get:
+      operationId: webhooks_list_chain_subscriptions
+      tags:
+        - Webhooks
+      summary: List chain webhook subscriptions
+      description: Lists active subscriptions for the authenticated user's organization. Signing secrets are never returned.
+      security:
+        - bearerAuth: []
+      x-required-role:
+        - ADMIN
+        - SUPER_ADMIN
+      responses:
+        '200':
+          description: Active subscriptions retrieved.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, message, data]
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ChainWebhookSubscription'
+        '401':
+          description: Missing or invalid bearer token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Caller is not an organization administrator.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/webhooks/chain/subscriptions/{subscriptionId}:
+    delete:
+      operationId: webhooks_revoke_chain_subscription
+      tags:
+        - Webhooks
+      summary: Revoke a chain webhook subscription
+      description: Deactivates a subscription owned by the authenticated user's organization.
+      security:
+        - bearerAuth: []
+      x-required-role:
+        - ADMIN
+        - SUPER_ADMIN
+      parameters:
+        - in: path
+          name: subscriptionId
+          required: true
+          description: Subscription MongoDB ObjectId.
+          schema:
+            $ref: '#/components/schemas/ChainWebhookSubscriptionId'
+      responses:
+        '200':
+          description: Subscription revoked.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [success, message, data]
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                  data:
+                    type: string
+                    nullable: true
+                    example: null
+        '401':
+          description: Missing or invalid bearer token.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '403':
+          description: Caller is not an organization administrator.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Subscription not found in the caller's organization.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   /api/health:
     get:
       operationId: health_get_health
@@ -6461,11 +6611,12 @@ paths:
         Returns everything a client needs to independently verify a ledger block
         without trusting the API, in three steps:
 
-        1. Fetch `canonicalPayload`, `dataHash` and `txHash` from this endpoint.
+        1. Fetch `canonicalPayload`, `dataHash`, `txHash`, `ledger`, `network`,
+           `contractId`, `schemaVersion` and `idempotencyKey` from this endpoint.
         2. Recompute `sha256(canonicalPayload)` client-side (Web Crypto) and compare
            it with `dataHash`.
         3. Query Horizon (`memo_hash` / `manageData` value) or Soroban RPC
-           (`getTransaction` + `getEvents`) for `txHash` and confirm the on-chain
+           (`getTransaction` + `getEvents`) for `txHash` on `network` (and `contractId`) and confirm the on-chain
            digest equals `dataHash`.
 
         See `docs/blockchain.md` for the copy-pasteable browser implementation.
@@ -6504,6 +6655,218 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: >
+            `ERR_LEDGER_PAYLOAD_INVALID` - the stored canonical payload is not a versioned
+            object, so the block cannot be verified.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/ledger/chain/shipment-status/{shipmentId}:
+    get:
+      operationId: ledger_get_chain_shipment_status
+      x-required-role: [ADMIN, MANAGER, VIEWER]
+      summary: Read on-chain shipment status (simulation only, cached)
+      description: >
+        Returns the on-chain shipment status derived from chain events.
+        Reads use simulation only and are safe to cache briefly (60s TTL).
+        Results are invalidated on escrow events.
+      tags:
+        - Ledger
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: shipmentId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Shipment ObjectId
+      responses:
+        '200':
+          description: Shipment status retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      status:
+                        type: string
+                        description: Derived on-chain milestone/status
+                      simulated:
+                        type: boolean
+                        description: True when read from simulated adapter
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden - insufficient role
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/ledger/chain/escrow-balance/{paymentId}:
+    get:
+      operationId: ledger_get_chain_escrow_balance
+      x-required-role: [ADMIN, MANAGER, VIEWER]
+      summary: Read on-chain escrow balance (simulation only, cached)
+      description: >
+        Returns the on-chain escrow balance for a payment in stroops.
+        Reads use simulation only and are safe to cache briefly (60s TTL).
+        Results are invalidated on escrow events.
+      tags:
+        - Ledger
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: paymentId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Payment ObjectId
+      responses:
+        '200':
+          description: Escrow balance retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      balance:
+                        type: string
+                        description: Balance in stroops (1 XLM = 10^7 stroops)
+                      simulated:
+                        type: boolean
+                        description: True when read from simulated adapter
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden - insufficient role
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/ledger/chain/settlement-record/{paymentId}:
+    get:
+      operationId: ledger_get_chain_settlement_record
+      x-required-role: [ADMIN, MANAGER, VIEWER]
+      summary: Read settlement record (simulation only, cached)
+      description: >
+        Returns the settlement record combining on-chain escrow balance
+        and shipment status. Reads use simulation only and are safe to
+        cache briefly (60s TTL).
+      tags:
+        - Ledger
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: paymentId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Payment ObjectId
+      responses:
+        '200':
+          description: Settlement record retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      paymentId:
+                        type: string
+                      escrowBalance:
+                        type: object
+                        properties:
+                          balance:
+                            type: string
+                          simulated:
+                            type: boolean
+                      shipmentStatus:
+                        type: object
+                        properties:
+                          status:
+                            type: string
+                          simulated:
+                            type: boolean
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden - insufficient role
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/ledger/chain/contract-version:
+    get:
+      operationId: ledger_get_chain_contract_version
+      x-required-role: [ADMIN, MANAGER, VIEWER]
+      summary: Read contract / spec version (simulation only, cached)
+      description: >
+        Returns the chain contract / spec version.
+        Reads use simulation only and are safe to cache briefly (60s TTL).
+      tags:
+        - Ledger
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Contract version retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      version:
+                        type: string
+                        description: Contract / spec version string
+                      simulated:
+                        type: boolean
+                        description: True when read from simulated adapter
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden - insufficient role
 
   /api/events/poll:
     get:
@@ -6598,6 +6961,89 @@ components:
         minLength: 8
         maxLength: 128
   schemas:
+    CreateChainWebhookSubscription:
+      type: object
+      additionalProperties: false
+      required: [endpoint, events]
+      properties:
+        endpoint:
+          type: string
+          format: uri
+          pattern: '^https://'
+          description: Public HTTPS subscriber endpoint; IP literals and embedded credentials are not accepted.
+        events:
+          type: array
+          minItems: 1
+          maxItems: 3
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/ChainWebhookEventName'
+    ChainWebhookEventName:
+      type: string
+      enum: [anchor, esc_init, esc_rel]
+    ChainWebhookSubscriptionId:
+      type: string
+      pattern: '^[0-9a-fA-F]{24}$'
+      description: MongoDB ObjectId of the webhook subscription.
+    ChainWebhookSubscription:
+      type: object
+      required: [id, endpoint, events, createdAt]
+      properties:
+        id:
+          $ref: '#/components/schemas/ChainWebhookSubscriptionId'
+        endpoint:
+          type: string
+          format: uri
+        events:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChainWebhookEventName'
+        createdAt:
+          type: string
+          format: date-time
+    ChainWebhookSubscriptionCreatedResponse:
+      type: object
+      required: [success, message, data]
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+        data:
+          allOf:
+            - $ref: '#/components/schemas/ChainWebhookSubscription'
+            - type: object
+              required: [secret]
+              properties:
+                secret:
+                  type: string
+                  description: Generated HMAC secret; shown only once.
+    ChainWebhookPayload:
+      type: object
+      required: [eventId, eventName, shipmentReference, txHash, ledger, schemaVersion, occurredAt]
+      properties:
+        eventId:
+          type: string
+        eventName:
+          $ref: '#/components/schemas/ChainWebhookEventName'
+        shipmentReference:
+          type: string
+        txHash:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
+        ledger:
+          type: integer
+          minimum: 0
+        schemaVersion:
+          type: integer
+          enum: [1]
+        occurredAt:
+          type: string
+          format: date-time
+        dataHash:
+          type: string
+          pattern: '^[0-9a-f]{64}$'
     Session:
       type: object
       description: A per-device session record created on login or signup.
@@ -7880,10 +8326,21 @@ components:
     LedgerVerificationBundle:
       type: object
       description: >
-        Off-chain / on-chain verification bundle for a ledger block, returned by
+        Verification bundle (v2) for a ledger block, returned by
         GET /api/ledger/blocks/{id}/verification. A verifier recomputes
         sha256(canonicalPayload) and compares it with dataHash, then confirms the
-        digest is committed on-chain via txHash.
+        digest is committed on-chain via txHash on the given network/contractId.
+        All values are those persisted when the block was written; none are rebuilt
+        from mutable shipment or payment state.
+      required:
+        - canonicalPayload
+        - dataHash
+        - txHash
+        - ledger
+        - network
+        - contractId
+        - schemaVersion
+        - idempotencyKey
       properties:
         canonicalPayload:
           type: object
@@ -7898,7 +8355,9 @@ components:
           nullable: true
           description: >
             Lowercase hex SHA-256 digest (64 chars) of the canonical payload,
-            committed on-chain by `txHash`.
+            committed on-chain by `txHash`. Computed over the payload serialized
+            with keys sorted recursively, `undefined` omitted, dates as ISO 8601 UTC,
+            and all whitespace stripped (see docs/blockchain.md).
         txHash:
           type: string
           nullable: true
@@ -7906,10 +8365,88 @@ components:
         transactionHash:
           type: string
           nullable: true
-          description: Alias of `txHash`.
+          description: Alias of `txHash` (backwards compatibility).
         ledger:
           type: integer
           description: Stellar ledger sequence the transaction landed in.
+        network:
+          type: string
+          enum: [testnet, public]
+          description: >
+            Stellar network the block was written under (`public` = mainnet). Recorded at
+            write time; legacy blocks without a recorded network report the server's
+            currently configured network.
+        contractId:
+          type: string
+          nullable: true
+          description: >
+            Soroban contract (C... strkey) the transaction targeted. Resolved from the value
+            persisted with the block, then indexed event metadata, then the configured
+            escrow contract. Null when none is known (e.g. simulated, un-configured deployments).
+        schemaVersion:
+          type: integer
+          minimum: 1
+          nullable: true
+          description: >
+            Version of the canonical payload layout, read from the payload's own `v` field
+            (which is covered by `dataHash`). Null when no payload was persisted.
+        idempotencyKey:
+          type: string
+          nullable: true
+          description: >
+            Client `Idempotency-Key` of the request that produced the block. Null when the
+            request carried none or the block predates persistence of this field.
+    ChainShipmentStatus:
+      type: object
+      description: On-chain shipment status read result (simulation only).
+      properties:
+        status:
+          type: string
+          description: Derived on-chain milestone/status (e.g. ESCROWED, RELEASED, REFUNDED).
+        simulated:
+          type: boolean
+          description: True when read from the simulated adapter.
+    ChainEscrowBalance:
+      type: object
+      description: On-chain escrow balance read result (simulation only).
+      properties:
+        balance:
+          type: string
+          description: Balance in stroops (1 XLM = 10^7 stroops), as a decimal string.
+        simulated:
+          type: boolean
+          description: True when read from the simulated adapter.
+    ChainSettlementRecord:
+      type: object
+      description: Settlement record combining on-chain escrow balance and shipment status.
+      properties:
+        paymentId:
+          type: string
+          description: Payment ObjectId.
+        escrowBalance:
+          type: object
+          properties:
+            balance:
+              type: string
+            simulated:
+              type: boolean
+        shipmentStatus:
+          type: object
+          properties:
+            status:
+              type: string
+            simulated:
+              type: boolean
+    ChainContractVersion:
+      type: object
+      description: Contract / spec version read result (simulation only).
+      properties:
+        version:
+          type: string
+          description: Contract / spec version string.
+        simulated:
+          type: boolean
+          description: True when read from the simulated adapter.
     Notification:
       type: object
       description: A notification entry for a user.

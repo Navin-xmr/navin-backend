@@ -4,6 +4,7 @@ import { redisMock } from './fixtures/factories.js';
 /** @see issue-#297 */
 
 const redisStore = new Map<string, string>();
+jest.resetModules();
 await jest.unstable_mockModule('../src/infra/redis/connection.js', () => redisMock(redisStore));
 // ─── Issue #297 — Anomaly stats ──────────────────────────────────────────────
 
