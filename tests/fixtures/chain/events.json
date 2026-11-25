@@ -1,5 +1,5 @@
 {
-  "spec_version": "2.1.0",
+  "spec_version": "2.2.0",
   "events": {
     "anchor": {
       "id": "0002200479567253504-0000000001",
@@ -39,6 +39,50 @@
         "3e23e8160039594a33894f6564e1b1348bbd7a0088d42c4acb73eeaed59c009d",
         "GABQGAYDAMBQGAYDAMBQGAYDAMBQGAYDAMBQGAYDAMBQGAYDAMBQHGPC",
         "1500000000"
+      ]
+    },
+    "dispute_raised": {
+      "id": "0002200479567253600-0000000001",
+      "contract_id": "CACAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAINCW",
+      "tx_hash": "7c1e5a2b9d4f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f9",
+      "ledger": 512500,
+      "ledger_closed_at": "2026-09-27T11:00:00Z",
+      "name": "dispute_raised",
+      "topic": ["dispute_raised"],
+      "data": [
+        "65f1a2b3c4d5e6f708192a3b",
+        "GABQGAYDAMBQGAYDAMBQGAYDAMBQGAYDAMBQGAYDAMBQGAYDAMBQHGPC",
+        "c3e23e8160039594a33894f6564e1b1348bbd7a0088d42c4acb73eeaed59c00d"
+      ]
+    },
+    "escrow_frozen": {
+      "id": "0002200479567253600-0000000002",
+      "contract_id": "CACAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAINCW",
+      "tx_hash": "7c1e5a2b9d4f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f9",
+      "ledger": 512500,
+      "ledger_closed_at": "2026-09-27T11:00:00Z",
+      "name": "escrow_frozen",
+      "topic": ["escrow_frozen"],
+      "data": [
+        "65f1a2b3c4d5e6f708192a3b",
+        "DisputeRaised",
+        "GABQGAYDAMBQGAYDAMBQGAYDAMBQGAYDAMBQGAYDAMBQGAYDAMBQHGPC",
+        "1790000000"
+      ]
+    },
+    "dispute_resolved": {
+      "id": "0002200479567253700-0000000001",
+      "contract_id": "CACAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAINCW",
+      "tx_hash": "a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293",
+      "ledger": 512530,
+      "ledger_closed_at": "2026-09-27T11:30:00Z",
+      "name": "dispute_resolved",
+      "topic": ["dispute_resolved"],
+      "data": [
+        "65f1a2b3c4d5e6f708192a3b",
+        "RefundToCompany",
+        "d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f809",
+        "GABQGAYDAMBQGAYDAMBQGAYDAMBQGAYDAMBQGAYDAMBQGAYDAMBQHGPC"
       ]
     }
   }

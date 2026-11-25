@@ -113,7 +113,7 @@ describe('T5 — hash substitution / event drift is rejected', () => {
   });
 
   it('pins the v2 spec version in error messages', () => {
-    expect(CHAIN_SPEC_VERSION).toBe('2.1.0');
+    expect(CHAIN_SPEC_VERSION).toBe('2.2.0');
   });
 });
 

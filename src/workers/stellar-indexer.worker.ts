@@ -52,6 +52,9 @@ export const IndexerStateModel =
   mongoose.model<IndexerStateDocument>('IndexerState', IndexerStateSchema);
 
 export async function getStoredCursor(key = 'stellar_indexer'): Promise<string | undefined> {
+  if (mongoose.connection.readyState !== 1) {
+    return undefined;
+  }
   try {
     const doc = await IndexerStateModel.findOne({ key }).lean<{ key: string; cursor: string }>();
     return doc?.cursor;
@@ -65,6 +68,9 @@ export async function saveStoredCursor(
   key = 'stellar_indexer',
   eventAt?: Date
 ): Promise<void> {
+  if (mongoose.connection.readyState !== 1) {
+    return;
+  }
   try {
     await IndexerStateModel.updateOne(
       { key },
@@ -317,13 +323,34 @@ async function indexChainEvent(adapter: ChainAdapter, event: ChainEvent): Promis
     metadata.payee = event.data[2];
     metadata.token = event.data[3];
     metadata.amount = event.data[4];
-  } else {
+  } else if (event.name === CHAIN_EVENT_NAMES.ESCROW_RELEASE) {
     milestoneEvent = MilestoneEvent.SETTLEMENT_COMPLETED;
     shipmentId = event.topic[1];
     metadata.paymentId = event.topic[1];
     metadata.proofHash = event.data[0];
     metadata.payee = event.data[1];
     metadata.amount = event.data[2];
+  } else if (event.name === CHAIN_EVENT_NAMES.DISPUTE_RAISED) {
+    milestoneEvent = MilestoneEvent.DISPUTED;
+    shipmentId = event.data[0];
+    metadata.disputeState = 'OPEN';
+    metadata.reasonHash = event.data[2];
+    metadata.raisedBy = event.data[1];
+  } else if (event.name === CHAIN_EVENT_NAMES.DISPUTE_RESOLVED) {
+    milestoneEvent = MilestoneEvent.RESOLVED;
+    shipmentId = event.data[0];
+    metadata.disputeState = 'CLOSED';
+    metadata.resolution = event.data[1];
+    metadata.reasonHash = event.data[2];
+    metadata.resolvedBy = event.data[3];
+    metadata.escrowFrozen = false;
+  } else {
+    milestoneEvent = MilestoneEvent.ESCROW_FROZEN;
+    shipmentId = event.data[0];
+    metadata.escrowFrozen = true;
+    metadata.escrowFreezeReason = event.data[1];
+    metadata.frozenBy = event.data[2];
+    metadata.frozenAt = event.data[3];
   }
 
   const result = await LedgerBlock.updateOne(
@@ -474,6 +501,85 @@ export async function indexStellarTransactions(
       metadata.proofHash = event.data[0];
       metadata.payee = event.data[1];
       metadata.amount = event.data[2];
+    } else if (event.name === CHAIN_EVENT_NAMES.DISPUTE_RAISED) {
+      // #1053 — open the dispute record. reason_hash is stored verbatim:
+      // only the SHA-256 digest is on-chain, never the free-text evidence.
+      milestoneEvent = MilestoneEvent.DISPUTED;
+      shipmentId = event.data[0];
+      metadata.disputeState = 'OPEN';
+      metadata.reasonHash = event.data[2];
+      metadata.raisedBy = event.data[1];
+    } else if (event.name === CHAIN_EVENT_NAMES.DISPUTE_RESOLVED) {
+      // #1053 — close the dispute record with the contract's own outcome.
+      // `resolution` is reflected verbatim, never inferred from the status.
+      milestoneEvent = MilestoneEvent.RESOLVED;
+      shipmentId = event.data[0];
+      metadata.disputeState = 'CLOSED';
+      metadata.resolution = event.data[1];
+      metadata.reasonHash = event.data[2];
+      metadata.resolvedBy = event.data[3];
+      // `resolve_dispute` clears the escrow balance and with it the freeze.
+      metadata.escrowFrozen = false;
+    } else if (event.name === CHAIN_EVENT_NAMES.ESCROW_FROZEN) {
+      // #1053 — freeze state is explicit on-chain state, never inferred.
+      // `raise_dispute` emits this in the SAME transaction as `dispute_raised`,
+      // so the freeze is merged into that row instead of replacing it.
+      const freezeMetadata: Record<string, unknown> = {
+        escrowFrozen: true,
+        escrowFreezeReason: event.data[1],
+        frozenBy: event.data[2],
+        frozenAt: event.data[3],
+      };
+
+      if (dryRun) {
+        const found = await LedgerBlock.exists({ transactionHash: event.tx_hash });
+        if (found) existing += 1;
+        else upserted += 1;
+        continue;
+      }
+
+      const merged = await LedgerBlock.updateOne(
+        { transactionHash: event.tx_hash },
+        {
+          $set: Object.fromEntries(
+            Object.entries(freezeMetadata).map(([key, value]) => [`metadata.${key}`, value])
+          ),
+        }
+      );
+      const matched = (merged as { matchedCount?: number } | undefined)?.matchedCount;
+      if (matched === 0) {
+        // Standalone freeze (suspension, pause, circuit breaker): no dispute
+        // row exists for this transaction, so create one.
+        const res = await LedgerBlock.updateOne(
+          { transactionHash: event.tx_hash },
+          {
+            $setOnInsert: {
+              shipmentId: event.data[0],
+              transactionHash: event.tx_hash,
+              actor: 'stellar-indexer',
+            },
+            $set: {
+              milestoneEvent: MilestoneEvent.ESCROW_FROZEN,
+              metadata: { ...metadata, ...freezeMetadata },
+              confirmations,
+              verified,
+            },
+          },
+          { upsert: true }
+        );
+        if ((res as { upsertedCount?: number } | undefined)?.upsertedCount) {
+          upserted += 1;
+          if (verified) observeConfirmationLag(event.name, event.ledger_closed_at);
+        }
+      } else {
+        existing += 1;
+      }
+
+      if (cursor && persistCursor) {
+        await saveStoredCursor(cursor, undefined, new Date(event.ledger_closed_at));
+        recordIndexerCursorEvent(event.ledger_closed_at);
+      }
+      continue;
     } else {
       continue;
     }

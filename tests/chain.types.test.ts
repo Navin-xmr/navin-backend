@@ -157,12 +157,9 @@ describe('chain events', () => {
     it('rejects data tuples with an extra or missing element', () => {
       const data = fixture.data as unknown[];
       expect(ChainEventSchema.safeParse({ ...fixture, data: [...data, 'x'] }).success).toBe(false);
-      // Empty-tuple events (esc_freeze/esc_unfreeze) cannot lose an element
-      if (data.length > 0) {
-        expect(ChainEventSchema.safeParse({ ...fixture, data: data.slice(0, -1) }).success).toBe(
-          false
-        );
-      }
+      expect(ChainEventSchema.safeParse({ ...fixture, data: data.slice(0, -1) }).success).toBe(
+        false
+      );
     });
 
     it('rejects a non-ISO ledger_closed_at', () => {
