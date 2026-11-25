@@ -11,7 +11,15 @@ const alertQueue = new Queue('alert_queue', {
 
 export type AlertPayload =
   | {
-      type: 'ANOMALY' | 'STATUS_CHANGE';
+      type:
+        | 'ANOMALY'
+        | 'STATUS_CHANGE'
+        | 'CHAIN_SUBMISSION_FAILURES'
+        | 'CHAIN_SPEC_DRIFT'
+        | 'CHAIN_INDEXER_STALLED'
+        | 'CHAIN_RECONCILIATION_MISMATCH'
+        | 'CHAIN_LOW_BALANCE'
+        | 'CHAIN_DEAD_LETTER_GROWTH';
       message: string;
       shipmentId: string;
     }
