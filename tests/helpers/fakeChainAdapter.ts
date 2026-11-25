@@ -42,6 +42,13 @@ export function createFakeChainAdapter(
         shipmentId: input.shipment_id,
       };
     }),
+    updateStatus: jest.fn(async input => ({
+      txHash: 'd'.repeat(64),
+      ledger: 4,
+      simulated: true,
+      shipmentId: input.shipment_id,
+      newStatus: input.new_status,
+    })),
     streamEvents: async function* (cursor) {
       let pastCursor = cursor === undefined;
       for (const event of [...(options.events ?? []), ...(options.malformedEvents ?? [])]) {

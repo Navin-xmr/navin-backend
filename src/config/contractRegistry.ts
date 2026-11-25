@@ -1,4 +1,5 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import path from 'node:path';
 
 /** Contract kinds tracked in the committed registry. */
 export type ContractKind = 'shipment' | 'token' | 'nft';
@@ -19,11 +20,14 @@ export interface ContractRegistry {
   networks: Record<RegistryNetwork, NetworkRegistry>;
 }
 
-const REGISTRY_PATH = new URL('../../config/contract-registry.json', import.meta.url);
+const REGISTRY_URL = new URL('../../config/contract-registry.json', import.meta.url);
 
 /** Load the committed registry (synchronous so it can gate startup). */
 export function loadContractRegistry(): ContractRegistry {
-  return JSON.parse(readFileSync(REGISTRY_PATH, 'utf8')) as ContractRegistry;
+  const target = existsSync(REGISTRY_URL)
+    ? REGISTRY_URL
+    : path.resolve(process.cwd(), 'config/contract-registry.json');
+  return JSON.parse(readFileSync(target, 'utf8')) as ContractRegistry;
 }
 
 /**
