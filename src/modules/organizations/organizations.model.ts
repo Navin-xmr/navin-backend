@@ -7,6 +7,8 @@ const OrganizationSchema = new mongoose.Schema(
     name: { type: String, required: true, unique: true },
     type: { type: String, enum: Object.values(OrganizationType), required: true },
     settings: { type: mongoose.Schema.Types.Mixed, default: {} },
+    /** On-chain company address (#1042) — set to provision the on-chain company role. */
+    walletAddress: { type: String },
     deletedAt: { type: Date, default: null },
   },
   { timestamps: true }

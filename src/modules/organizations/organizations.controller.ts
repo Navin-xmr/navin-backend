@@ -15,12 +15,16 @@ import { sendResponse } from '../../shared/http/sendResponse.js';
  * @throws {AppError} 400 VALIDATION_ERROR — when body validation fails.
  */
 export const createOrganizationController: RequestHandler = async (req, res) => {
-  const organization = await organizationsService.createOrganizationService({
-    name: req.body.name,
-    type: req.body.type,
-    settings: req.body.settings,
-    callerRole: req.user?.role ?? '',
-  });
+  const organization = await organizationsService.createOrganizationService(
+    {
+      name: req.body.name,
+      type: req.body.type,
+      settings: req.body.settings,
+      walletAddress: req.body.walletAddress,
+      callerRole: req.user?.role ?? '',
+    },
+    req.user?.userId
+  );
   sendResponse(res, 201, true, 'Organization created successfully', organization);
 };
 

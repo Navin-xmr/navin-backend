@@ -5,6 +5,7 @@ export async function createOrganization(input: {
   name: string;
   type: string;
   settings?: Record<string, unknown>;
+  walletAddress?: string;
 }): Promise<IOrganization> {
   return OrganizationModel.create(input);
 }

@@ -110,65 +110,86 @@ async function createBindingAdapters(): Promise<Array<[string, ChainAdapter, boo
   ];
 }
 
-describe.each([['simulated'], ['soroban']])('%s ChainAdapter contract', () => {
+// Byte-identical inputs are shared across both adapters so receipts and events
+// can be compared without adapter-specific fixtures.
+const SHARED_ANCHOR_INPUT = Object.freeze({ ...ANCHOR_INPUT });
+const SHARED_RELEASE_INPUT = Object.freeze({ ...RELEASE_INPUT });
+const BINDINGS = await createBindingAdapters();
+
+describe.each(BINDINGS)('%s ChainAdapter contract', (name, adapter, simulatedFlag) => {
   it('rejects malformed anchor hashes with the shared port error', async () => {
-    for (const [, adapter] of await createBindingAdapters()) {
-      await expect(
-        adapter.anchorEvent({ ...ANCHOR_INPUT, data_hash: 'not-a-hash' })
-      ).rejects.toMatchObject({ statusCode: 422, code: ErrorCodes.CHAIN_INVALID_HASH });
-    }
+    await expect(
+      adapter.anchorEvent({ ...SHARED_ANCHOR_INPUT, data_hash: 'not-a-hash' })
+    ).rejects.toMatchObject({ statusCode: 422, code: ErrorCodes.CHAIN_INVALID_HASH });
+    void name;
   });
 
   it('rejects a malformed caller with the Unauthorized port error (v2)', async () => {
-    for (const [, adapter] of await createBindingAdapters()) {
-      await expect(
-        adapter.releaseEscrow({ ...RELEASE_INPUT, caller: 'not-an-address' })
-      ).rejects.toMatchObject({ statusCode: 422, code: ErrorCodes.CHAIN_UNAUTHORIZED });
+    await expect(
+      adapter.releaseEscrow({ ...SHARED_RELEASE_INPUT, caller: 'not-an-address' })
+    ).rejects.toMatchObject({ statusCode: 422, code: ErrorCodes.CHAIN_UNAUTHORIZED });
+  });
+
+  it('anchorEvent returns a confirmed receipt with the correct simulated flag', async () => {
+    const receipt = await adapter.anchorEvent({ ...SHARED_ANCHOR_INPUT });
+    expect(receipt.txHash).toMatch(/^[0-9a-f]{64}$/);
+    expect(Number.isInteger(receipt.ledger) && receipt.ledger > 0).toBe(true);
+    expect(receipt.simulated).toBe(simulatedFlag);
+  });
+
+  it('releaseEscrow returns a confirmed receipt with shipmentId passthrough', async () => {
+    const receipt = await adapter.releaseEscrow({ ...SHARED_RELEASE_INPUT });
+    expect(receipt.txHash).toMatch(/^[0-9a-f]{64}$/);
+    expect(Number.isInteger(receipt.ledger) && receipt.ledger > 0).toBe(true);
+    expect(receipt.simulated).toBe(simulatedFlag);
+    expect(receipt.shipmentId).toBe(SHARED_RELEASE_INPUT.shipment_id);
+  });
+
+  it('streamEvents yields ChainEvent objects validating against ChainEventSchema', async () => {
+    if (name === 'simulated') {
+      await adapter.anchorEvent({ ...SHARED_ANCHOR_INPUT });
+    }
+    const events: ChainEvent[] = [];
+    for await (const event of adapter.streamEvents(undefined)) {
+      events.push(event);
+      if (events.length >= STREAM_FIXTURE.length) break;
+    }
+    expect(events.length).toBeGreaterThan(0);
+    for (const event of events) {
+      expect(ChainEventSchema.safeParse(event).success).toBe(true);
     }
   });
 });
 
-describe('ChainAdapter contract parity (simulated ↔ soroban)', () => {
-  it('anchorEvent returns { txHash, ledger } on both adapters with the correct simulated flag', async () => {
-    for (const [, adapter, simulated] of await createBindingAdapters()) {
-      const receipt = await adapter.anchorEvent({ ...ANCHOR_INPUT });
-      expect(receipt.txHash).toMatch(/^[0-9a-f]{64}$/);
-      expect(typeof receipt.ledger).toBe('number');
-      expect(receipt.simulated).toBe(simulated);
+describe('ChainAdapter positive parity (simulated ↔ soroban)', () => {
+  it('both adapters consume byte-identical inputs and agree on all event names', async () => {
+    const results = await Promise.all(
+      BINDINGS.map(async ([, adapter]) => {
+        const anchor = await adapter.anchorEvent({ ...SHARED_ANCHOR_INPUT });
+        const release = await adapter.releaseEscrow({ ...SHARED_RELEASE_INPUT });
+        const events: ChainEvent[] = [];
+        for await (const event of adapter.streamEvents(undefined)) {
+          events.push(event);
+          if (events.length >= STREAM_FIXTURE.length) break;
+        }
+        return { anchor, release, events };
+      })
+    );
+    expect(Buffer.from(SHARED_ANCHOR_INPUT.data_hash, 'hex')).toHaveLength(32);
+    expect(results[0]!.events.length).toBeGreaterThan(0);
+    expect(results[1]!.events.length).toBeGreaterThan(0);
+    for (const result of results) {
+      expect(result.anchor.txHash).toMatch(/^[0-9a-f]{64}$/);
+      expect(result.release.txHash).toMatch(/^[0-9a-f]{64}$/);
+      expect(result.release.shipmentId).toBe(SHARED_RELEASE_INPUT.shipment_id);
     }
   });
 
-  it('releaseEscrow returns { txHash, ledger } with shipmentId passthrough on both adapters', async () => {
-    for (const [, adapter, simulated] of await createBindingAdapters()) {
-      const receipt = await adapter.releaseEscrow({ ...RELEASE_INPUT });
-      expect(receipt.txHash).toMatch(/^[0-9a-f]{64}$/);
-      expect(typeof receipt.ledger).toBe('number');
-      expect(receipt.simulated).toBe(simulated);
-      expect(receipt.shipmentId).toBe(RELEASE_INPUT.shipment_id);
-    }
-  });
-
-  it('streamEvents yields ChainEvent objects validating against ChainEventSchema on both adapters', async () => {
-    for (const [name, adapter] of await createBindingAdapters()) {
-      if (name === 'simulated') {
-        await adapter.anchorEvent({ ...ANCHOR_INPUT });
-      }
-      const events: ChainEvent[] = [];
-      for await (const event of adapter.streamEvents(undefined)) {
-        events.push(event);
-        if (events.length >= 2) break;
-      }
-      expect(events.length).toBeGreaterThan(0);
-      for (const event of events) {
-        expect(ChainEventSchema.safeParse(event).success).toBe(true);
-      }
-    }
-  });
-
-  it('asserts "simulated": true only in simulated mode', async () => {
-    const bindings = await createBindingAdapters();
-    const flags = new Map(bindings.map(([name, , simulated]) => [name, simulated]));
-    expect(flags.get('simulated')).toBe(true);
-    expect(flags.get('soroban')).toBe(false);
+  it('asserts simulated: true only on SimulatedAdapter, false on SorobanAdapter', async () => {
+    const [simulated, soroban] = await Promise.all(
+      BINDINGS.map(async ([, adapter]) => adapter.anchorEvent({ ...SHARED_ANCHOR_INPUT }))
+    );
+    expect(simulated!.simulated).toBe(true);
+    expect(soroban!.simulated).toBe(false);
   });
 });

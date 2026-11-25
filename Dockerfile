@@ -44,6 +44,8 @@ COPY --from=builder /app/dist         ./dist
 # swagger.yaml is resolved at runtime as dist/docs/swagger.yaml
 # (src/app.ts uses new URL('../docs/swagger.yaml', import.meta.url) from dist/src/app.js)
 COPY docs ./dist/docs
+# contract-registry.json is resolved at runtime as dist/config/contract-registry.json
+COPY config ./dist/config
 
 COPY package.json ./
 

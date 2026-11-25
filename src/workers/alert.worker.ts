@@ -4,11 +4,9 @@ import { AlertPayload } from '../services/queue.service.js';
 import { logger } from '../shared/logger/logger.js';
 
 async function processAlert(job: Job<AlertPayload>): Promise<void> {
-  const { type, message, shipmentId } = job.data;
-
   await new Promise(resolve => setTimeout(resolve, 1000));
 
-  logger.info({ type, message, shipmentId }, 'Alert sent');
+  logger.info({ ...job.data }, 'Alert sent');
 }
 
 export function startAlertWorker(): Worker<AlertPayload> {

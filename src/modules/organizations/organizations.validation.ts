@@ -5,6 +5,8 @@ export const CreateOrganizationBodySchema = z.object({
   name: z.string().min(1, 'Name is required'),
   type: z.nativeEnum(OrganizationType),
   settings: z.record(z.unknown()).optional(),
+  /** On-chain company address (#1042) — set to provision the on-chain company role. */
+  walletAddress: z.string().optional(),
 });
 
 export type CreateOrganizationInput = z.infer<typeof CreateOrganizationBodySchema>;

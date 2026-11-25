@@ -4,14 +4,12 @@
  * ## ESM-safe pattern (required)
  *
  * ```ts
- * import { jest } from '@jest/globals';
- *
  * jest.resetModules();
- * await jest.unstable_mockModule('../src/services/stellar.service.js', () =>
- *   createStellarServiceMock()
+ * await jest.unstable_mockModule('../src/services/chain/factory.js', () =>
+ *   createChainFactoryMock(createChainAdapterMock())
  * );
  * // Import the module under test *after* registering mocks
- * const mod = await import('../src/services/stellar.service.js');
+ * const mod = await import('../src/modules/shipments/shipments.service.js');
  * ```
  *
  * Order matters: reset → mock → import. Factories return complete shapes so
@@ -70,13 +68,6 @@ export function createUsersRepoMock(overrides: Partial<UsersRepoMock> = {}): Use
   };
 }
 
-export type StellarServiceMock = {
-  tokenizeShipment: MockFn;
-  anchorTelemetryHash: MockFn;
-  releaseEscrow: MockFn;
-  getStellarExplorerUrl: (txHash: string) => string;
-};
-
 export type UsersModelMock = {
   UserModel: {
     create: MockFn;
@@ -116,24 +107,12 @@ export type TelemetryModelMock = {
 
 export type SocketIoMock = { [K in keyof typeof socketIo]: MockFn };
 
-/**
- * Full mock of `src/services/stellar.service.js` named exports.
- */
-export function createStellarServiceMock(
-  overrides: Partial<StellarServiceMock> = {}
-): StellarServiceMock {
-  return {
-    tokenizeShipment: jest.fn(),
-    anchorTelemetryHash: jest.fn(),
-    releaseEscrow: jest.fn(),
-    getStellarExplorerUrl: (hash: string) => `https://stellar.expert/explorer/testnet/tx/${hash}`,
-    ...overrides,
-  };
-}
-
 export type ChainAdapterMock = {
   anchorEvent: MockFn;
   releaseEscrow: MockFn;
+  raiseDispute: MockFn;
+  resolveDispute: MockFn;
+  updateStatus: MockFn;
   streamEvents: MockFn;
   getConfirmationCount: MockFn;
 };
@@ -155,6 +134,8 @@ const MOCK_TX_HASH = 'a'.repeat(64);
 export type ChainAdapterScript = {
   anchorResult?: Partial<AnchorResult>;
   releaseResult?: Partial<EscrowResult>;
+  raiseDisputeResult?: Partial<{ txHash: string; ledger: number }>;
+  resolveDisputeResult?: Partial<{ txHash: string; ledger: number }>;
   events?: ChainEvent[];
 };
 
@@ -179,6 +160,25 @@ export function createChainAdapterMock(
       simulated: true,
       shipmentId: (input as { shipment_id: string }).shipment_id,
       ...script.releaseResult,
+    })),
+    raiseDispute: jest.fn(async () => ({
+      txHash: MOCK_TX_HASH,
+      ledger: 1,
+      simulated: true,
+      ...script.raiseDisputeResult,
+    })),
+    resolveDispute: jest.fn(async () => ({
+      txHash: MOCK_TX_HASH,
+      ledger: 1,
+      simulated: true,
+      ...script.resolveDisputeResult,
+    })),
+    updateStatus: jest.fn(async (input: unknown) => ({
+      txHash: MOCK_TX_HASH,
+      ledger: 1,
+      simulated: true,
+      shipmentId: (input as { shipment_id: string }).shipment_id,
+      newStatus: (input as { new_status: string }).new_status,
     })),
     streamEvents: jest.fn(async function* () {
       yield* script.events ?? [];
@@ -283,7 +283,9 @@ export function createTelemetryModelMock(
 export type PaymentModelMock = {
   PaymentModel: {
     find: MockFn;
+    findById: MockFn;
     findOneAndUpdate: MockFn;
+    updateOne: MockFn;
   };
   PaymentStatus: Record<string, string>;
 };
@@ -297,13 +299,16 @@ export function createPaymentModelMock(
   return {
     PaymentModel: {
       find: jest.fn(() => createModelQuery([])),
+      findById: jest.fn(() => createModelQuery(null)),
       findOneAndUpdate: jest.fn(),
+      updateOne: jest.fn(),
       ...(overrides.PaymentModel ?? {}),
     },
     PaymentStatus: {
       PENDING: 'Pending',
       ESCROWED: 'Escrowed',
       RELEASED: 'Released',
+      REFUNDED: 'Refunded',
       FAILED: 'Failed',
       DISPUTED: 'Disputed',
       ...(overrides.PaymentStatus ?? {}),
