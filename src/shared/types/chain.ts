@@ -9,6 +9,7 @@
  * │              release_escrow = (caller, shipment_id), escrow is       │
  * │              per-shipment — there is no proof_hash argument.         │
  * │   events     anchor · esc_init · esc_rel (topic + data tuples)       │
+ * │              delivery_success · delivery_confirmed (v2.2, #1043)     │
  * │              dispute_raised · dispute_resolved · escrow_frozen       │
  * │              (v2.2, #1053 — real contract dispute surface)           │
  * │              every anchored event exposes confirmations + verified   │
@@ -254,6 +255,8 @@ export const CHAIN_EVENT_NAMES = {
   ANCHOR: 'anchor',
   ESCROW_INIT: 'esc_init',
   ESCROW_RELEASE: 'esc_rel',
+  DELIVERY_SUCCESS: 'delivery_success',
+  DELIVERY_CONFIRMED: 'delivery_confirmed',
   /** v2.2 (#1053) — `raise_dispute` emitted this before `escrow_frozen`. */
   DISPUTE_RAISED: 'dispute_raised',
   /** v2.2 (#1053) — `resolve_dispute`; carries the contract's resolution. */
@@ -306,6 +309,56 @@ export const EscrowReleaseEventSchema = z
     name: z.literal(CHAIN_EVENT_NAMES.ESCROW_RELEASE),
     topic: z.tuple([z.literal(CHAIN_EVENT_NAMES.ESCROW_RELEASE), SymbolSchema]),
     data: z.tuple([Bytes32HexSchema, AddressSchema, PositiveI128Schema]),
+  })
+  .strict();
+
+/** `u64` on-chain value (shipment id, unix-seconds timestamp) as an unsigned decimal string. */
+const EventU64Schema = z
+  .string()
+  .regex(/^(0|[1-9][0-9]*)$/, 'Expected unsigned integer string')
+  .refine(
+    v => !/^(0|[1-9][0-9]*)$/.test(v) || BigInt(v) <= (BigInt(1) << BigInt(64)) - BigInt(1),
+    'Exceeds u64 range'
+  );
+
+/**
+ * Real contract payload (navin-contracts `events.rs`, pinned by its own
+ * `test_snapshot_delivery_success_payload_shape`): a 5-tuple
+ * `(shipment_id: u64, status: ShipmentStatus, data_hash: BytesN<32>,
+ *   delivery_time: u64, actor: Address)`.
+ * The status is always `Delivered`. `delivery_time` is the contract's ledger
+ * timestamp in unix SECONDS — the only time source the indexer may use.
+ * NOTE: the contract's docs/events.md still describes an older
+ * `(carrier, shipment_id, delivery_time)` layout; the emitter code is authoritative.
+ */
+const deliveryEventData = z.tuple([
+  EventU64Schema,
+  z.literal('Delivered'),
+  Bytes32HexSchema,
+  EventU64Schema,
+  AddressSchema,
+]);
+
+/** topic `["delivery_success"]` · data `(shipment_id, "Delivered", data_hash, delivery_time, carrier)` */
+export const DeliverySuccessEventSchema = z
+  .object({
+    ...eventEnvelope,
+    name: z.literal(CHAIN_EVENT_NAMES.DELIVERY_SUCCESS),
+    topic: z.tuple([z.literal(CHAIN_EVENT_NAMES.DELIVERY_SUCCESS)]),
+    data: deliveryEventData,
+  })
+  .strict();
+
+/**
+ * topic `["delivery_confirmed"]` · data `(shipment_id, "Delivered", data_hash, delivery_time, receiver)`
+ * — the trailing address is the RECEIVER who confirmed, not the carrier.
+ */
+export const DeliveryConfirmedEventSchema = z
+  .object({
+    ...eventEnvelope,
+    name: z.literal(CHAIN_EVENT_NAMES.DELIVERY_CONFIRMED),
+    topic: z.tuple([z.literal(CHAIN_EVENT_NAMES.DELIVERY_CONFIRMED)]),
+    data: deliveryEventData,
   })
   .strict();
 
@@ -407,6 +460,8 @@ export const ChainEventSchema = z.discriminatedUnion('name', [
   AnchorEventSchema,
   EscrowInitEventSchema,
   EscrowReleaseEventSchema,
+  DeliverySuccessEventSchema,
+  DeliveryConfirmedEventSchema,
   DisputeRaisedEventSchema,
   DisputeResolvedEventSchema,
   EscrowFrozenEventSchema,
@@ -415,6 +470,8 @@ export const ChainEventSchema = z.discriminatedUnion('name', [
 export type AnchorEvent = z.infer<typeof AnchorEventSchema>;
 export type EscrowInitEvent = z.infer<typeof EscrowInitEventSchema>;
 export type EscrowReleaseEvent = z.infer<typeof EscrowReleaseEventSchema>;
+export type DeliverySuccessEvent = z.infer<typeof DeliverySuccessEventSchema>;
+export type DeliveryConfirmedEvent = z.infer<typeof DeliveryConfirmedEventSchema>;
 export type DisputeRaisedEvent = z.infer<typeof DisputeRaisedEventSchema>;
 export type DisputeResolvedEvent = z.infer<typeof DisputeResolvedEventSchema>;
 export type EscrowFrozenEvent = z.infer<typeof EscrowFrozenEventSchema>;

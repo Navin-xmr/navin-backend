@@ -17,6 +17,10 @@ import { isChainEventDecodeFailure, parseChainEvent } from '../shared/types/chai
 import type { ChainEvent, ChainEventDecodeFailure } from '../shared/types/chain.js';
 import { confirmAnchoredTelemetry } from '../modules/telemetry/telemetry.confirmation.js';
 import {
+  isDeliveryEventRecorded,
+  recordDeliveryEvent,
+} from '../modules/shipments/shipmentDelivery.service.js';
+import {
   observeConfirmationLag,
   recordIndexerCursorEvent,
   recordIndexerPoll,
@@ -442,6 +446,22 @@ export async function indexStellarTransactions(
     }
 
     cursor = event.id;
+
+    // #1043 — delivery events fold into a per-shipment ShipmentDelivery record (idempotent by
+    // event id). They bypass LedgerBlock: both topics share one tx hash, which keys LedgerBlock.
+    if (
+      event.name === CHAIN_EVENT_NAMES.DELIVERY_SUCCESS ||
+      event.name === CHAIN_EVENT_NAMES.DELIVERY_CONFIRMED
+    ) {
+      if (dryRun) {
+        if (await isDeliveryEventRecorded(event)) existing += 1;
+        else upserted += 1;
+        continue;
+      }
+      if ((await recordDeliveryEvent(event)) !== 'duplicate') upserted += 1;
+      if (cursor && persistCursor) await saveStoredCursor(cursor);
+      continue;
+    }
 
     // #1058 — confirmation depth is tracked for every event class, not just payments.
     const confirmations = await adapter.getConfirmationCount(event.ledger);

@@ -27,6 +27,7 @@ import {
   updateStatusErrorToAppError,
 } from '../../shared/types/chain.js';
 import type { ChainEvent, ChainEventDecodeFailure } from '../../shared/types/chain.js';
+import { decodeDeliveryEvent } from './eventDecoder.js';
 import {
   decodeAddress,
   decodeI128,
@@ -558,9 +559,11 @@ export class SorobanAdapter implements ChainAdapter {
             tx_hash: rawEvent.txHash,
             ledger: rawEvent.ledger,
             ledger_closed_at: rawEvent.ledgerClosedAt,
-            name: rawEvent.topic?.[0],
-            topic: rawEvent.topic,
-            data: rawEvent.value,
+            ...(decodeDeliveryEvent(rawEvent) ?? {
+              name: rawEvent.topic?.[0],
+              topic: rawEvent.topic,
+              data: rawEvent.value,
+            }),
           });
           yield parsed;
         } catch (err) {
