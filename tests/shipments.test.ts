@@ -21,6 +21,7 @@ type UserRecord = {
 const shipmentsData: ShipmentRecord[] = [];
 const usersData: UserRecord[] = [];
 
+jest.resetModules();
 await jest.unstable_mockModule('../src/modules/shipments/shipments.model.js', () => {
   type ShipmentInput = Record<string, unknown> & { milestones?: MilestoneRecord[] };
   type ShipmentQuery = { _id?: { $lt?: PrimitiveId }; status?: string };

@@ -33,6 +33,7 @@ const telemetryModelMock = createTelemetryModelMock({
 });
 const socketIoMock = createSocketIoMock();
 
+jest.resetModules();
 await jest.unstable_mockModule('../src/modules/ledger/ledger.model.js', () => ({
   LedgerBlock: {
     updateOne: ledgerUpdateOneMock,
@@ -44,6 +45,9 @@ await jest.unstable_mockModule(
   () => telemetryModelMock
 );
 await jest.unstable_mockModule('../src/infra/socket/io.js', () => socketIoMock);
+await jest.unstable_mockModule('../src/modules/webhooks/chainWebhook.service.js', () => ({
+  enqueueChainWebhookEvent: jest.fn<() => Promise<number>>().mockResolvedValue(0),
+}));
 
 const { indexStellarTransactions } = await import('../src/workers/stellar-indexer.worker.js');
 
@@ -70,6 +74,9 @@ describe('Event-driven indexer golden fixtures replay', () => {
       async releaseEscrow() {
         throw new Error('Not implemented');
       },
+      async updateStatus() {
+        throw new Error('Not implemented');
+      },
       async *streamEvents() {
         for (const ev of events) {
           yield ev;
@@ -93,7 +100,6 @@ describe('Event-driven indexer golden fixtures replay', () => {
       {
         $setOnInsert: {
           shipmentId: '65f1a2b3c4d5e6f708192a3b',
-          milestoneEvent: 'IN_TRANSIT',
           transactionHash: events[0].tx_hash,
           actor: 'stellar-indexer',
         },
@@ -107,6 +113,8 @@ describe('Event-driven indexer golden fixtures replay', () => {
             ledger: 512345,
             contractId: events[0].contract_id,
             eventId: events[0].id,
+            eventName: events[0].name,
+            ledgerClosedAt: events[0].ledger_closed_at,
             dataHash: events[0].data[0],
             indexedAt: expect.any(String),
           },
@@ -122,7 +130,6 @@ describe('Event-driven indexer golden fixtures replay', () => {
       {
         $setOnInsert: {
           shipmentId: '65f1a2b3c4d5e6f708192a3b',
-          milestoneEvent: 'SETTLEMENT_INITIATED',
           transactionHash: events[1].tx_hash,
           actor: 'stellar-indexer',
         },
@@ -135,6 +142,8 @@ describe('Event-driven indexer golden fixtures replay', () => {
             ledger: 512346,
             contractId: events[1].contract_id,
             eventId: events[1].id,
+            eventName: events[1].name,
+            ledgerClosedAt: events[1].ledger_closed_at,
             paymentId: '66a0b1c2d3e4f50617283940',
             payer: events[1].data[1],
             payee: events[1].data[2],
@@ -154,7 +163,6 @@ describe('Event-driven indexer golden fixtures replay', () => {
       {
         $setOnInsert: {
           shipmentId: '66a0b1c2d3e4f50617283940',
-          milestoneEvent: 'SETTLEMENT_COMPLETED',
           transactionHash: events[2].tx_hash,
           actor: 'stellar-indexer',
         },
@@ -167,6 +175,8 @@ describe('Event-driven indexer golden fixtures replay', () => {
             ledger: 512400,
             contractId: events[2].contract_id,
             eventId: events[2].id,
+            eventName: events[2].name,
+            ledgerClosedAt: events[2].ledger_closed_at,
             paymentId: '66a0b1c2d3e4f50617283940',
             proofHash: events[2].data[0],
             payee: events[2].data[1],
@@ -186,14 +196,15 @@ describe('Event-driven indexer golden fixtures replay', () => {
     expect(initBlock).not.toHaveProperty('dataHash');
     expect(releaseBlock).not.toHaveProperty('dataHash');
 
-    // Canonical field assertions (#970): milestoneEvent (never legacy eventType)
-    // in every $set/$setOnInsert, and the anchor's top-level dataHash equals the event hash.
+    // Canonical field assertions (#970): milestoneEvent (never legacy eventType) in every
+    // $set and never in $setOnInsert (MongoDB rejects a path in both), and the anchor's
+    // top-level dataHash equals the event hash.
     for (const [, update] of ledgerUpdateOneMock.mock.calls as Array<
       [unknown, { $set: Record<string, unknown>; $setOnInsert: Record<string, unknown> }]
     >) {
-      expect(update.$setOnInsert).toHaveProperty('milestoneEvent');
+      expect(update.$setOnInsert).not.toHaveProperty('milestoneEvent');
       expect(update.$setOnInsert).not.toHaveProperty('eventType');
-      expect(update.$set.milestoneEvent).toBe(update.$setOnInsert.milestoneEvent);
+      expect(update.$set.milestoneEvent).toBeDefined();
       expect(update.$set).not.toHaveProperty('eventType');
     }
     expect(anchorBlock.dataHash).toBe((events[0].data as unknown[])[0]);
