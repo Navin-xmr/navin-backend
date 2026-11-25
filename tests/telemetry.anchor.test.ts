@@ -12,8 +12,6 @@
  */
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import {
-  createChainAdapterMock,
-  createChainFactoryMock,
   createPaymentModelMock,
   createSocketIoMock,
   createTelemetryModelMock,
@@ -44,7 +42,18 @@ const telemetryModelMock = createTelemetryModelMock({
   },
 });
 
-const paymentModelMock = createPaymentModelMock();
+const paymentFindOneAndUpdateMock = jest.fn((): { lean: () => Promise<unknown> } => ({
+  lean: async () => null,
+}));
+const paymentFindMock = jest.fn((): { lean: () => Promise<unknown[]> } => ({
+  lean: async () => [],
+}));
+const paymentModelMock = createPaymentModelMock({
+  PaymentModel: {
+    findOneAndUpdate: paymentFindOneAndUpdateMock,
+    find: paymentFindMock,
+  },
+});
 const socketIoMock = createSocketIoMock();
 
 jest.resetModules();
@@ -58,6 +67,9 @@ await jest.unstable_mockModule(
 );
 await jest.unstable_mockModule('../src/modules/payments/payments.model.js', () => paymentModelMock);
 await jest.unstable_mockModule('../src/infra/socket/io.js', () => socketIoMock);
+await jest.unstable_mockModule('../src/modules/webhooks/chainWebhook.service.js', () => ({
+  enqueueChainWebhookEvent: jest.fn<() => Promise<number>>().mockResolvedValue(0),
+}));
 
 const { indexStellarTransactions } = await import('../src/workers/stellar-indexer.worker.js');
 
@@ -73,6 +85,12 @@ function makeAnchorAdapter(events: ChainEvent[], confirmations: number) {
       throw new Error('not implemented');
     },
     async releaseEscrow(): Promise<never> {
+      throw new Error('not implemented');
+    },
+    async updateStatus(): Promise<never> {
+      throw new Error('not implemented');
+    },
+    async confirmDelivery(): Promise<never> {
       throw new Error('not implemented');
     },
     async *streamEvents() {
