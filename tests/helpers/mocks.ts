@@ -4,8 +4,6 @@
  * ## ESM-safe pattern (required)
  *
  * ```ts
- * import { jest } from '@jest/globals';
- *
  * jest.resetModules();
  * await jest.unstable_mockModule('../src/services/chain/factory.js', () =>
  *   createChainFactoryMock(createChainAdapterMock())

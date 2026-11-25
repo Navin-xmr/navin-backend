@@ -17,6 +17,7 @@ type ShipmentRecord = {
 
 const shipmentsData: ShipmentRecord[] = [];
 
+jest.resetModules();
 await jest.unstable_mockModule('../src/modules/shipments/shipments.model.js', () => {
   type ShipmentQuery = {
     _id?: { $lt?: string };
