@@ -533,6 +533,34 @@ export async function verifyLedgerBlock(
 
 ---
 
+## Local standalone network (Stellar quickstart)
+
+For development and nightly CI, run a real standalone Stellar network with
+Soroban RPC using the official image (no public testnet / internet dependency
+for chain operations):
+
+```bash
+docker run --rm -d --name stellar-standalone \
+  -e NETWORK=standalone \
+  -e ENABLE_SOROBAN_RPC=true \
+  -e PROTOCOL_VERSION=22 \
+  -e ENABLE_CORE_ARTIFICIALLY_ADVANCE_LEDGERS=true \
+  -p 8000:8000 -p 11626:11626 \
+  stellar/quickstart:latest
+
+# Wait for the RPC to answer getLatestLedger, then point the backend at it:
+curl -sS -X POST -H 'Content-Type: application/json' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"getLatestLedger"}' http://localhost:8000/
+export SOROBAN_RPC_URL=http://localhost:8000/
+export HORIZON_URL=http://localhost:11626
+```
+
+The container's ledger state is ephemeral. `/health` and the JSON-RPC
+`getLatestLedger` response are the readiness signals used by
+`.github/workflows/tests-nightly.yml` before any test executes. The same
+workflow starts MongoDB and Redis alongside quickstart so SorobanAdapter and
+stellar indexer integration suites run without network access.
+
 ## Acceptance scripts
 
 Two runnable acceptance/demo scripts live under `scripts/acceptance/` and exercise the
