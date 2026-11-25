@@ -19,6 +19,7 @@ import type {
   AnchorArgs,
   ChainEvent,
   ChainEventDecodeFailure,
+  ConfirmDeliveryArgs,
   ReleaseEscrowArgs,
   UpdateStatusArgs,
 } from '../../shared/types/chain.js';
@@ -31,6 +32,9 @@ export type AnchorEventInput = AnchorArgs;
 
 /** Input for `release_escrow(caller, shipment_id)` — spec-validated shape (v2). */
 export type ReleaseEscrowInput = ReleaseEscrowArgs;
+
+/** Input for `confirm_delivery(receiver, shipment_id, proof_hash)` — spec-validated shape. */
+export type ConfirmDeliveryInput = ConfirmDeliveryArgs;
 
 /**
  * Optional identity of the logical event being submitted (#1078). When given,
@@ -75,6 +79,11 @@ export interface UpdateStatusResult extends ChainTxReceipt {
 export interface EscrowResult extends ChainTxReceipt {
   /** Escrow is per-shipment (#1056) — this is the released shipment, not a payment id. */
   shipmentId: ReleaseEscrowInput['shipment_id'];
+}
+
+export interface ConfirmDeliveryResult extends ChainTxReceipt {
+  receiver: ConfirmDeliveryInput['receiver'];
+  shipmentId: ConfirmDeliveryInput['shipment_id'];
 }
 
 /** Opaque resume position: the `id` of the last event processed. */
@@ -126,14 +135,17 @@ export interface ChainAdapter {
   releaseEscrow(input: ReleaseEscrowInput, options?: ChainSubmitOptions): Promise<EscrowResult>;
 
   /**
-   * Record a shipment status transition on-chain, authorized by `caller`.
-   * The caller supplies the canonical-payload `data_hash`; it is passed through unchanged.
-   * @throws {AppError} ERR_CHAIN_INVALID_STATUS (illegal transition / finalized shipment),
-   * ERR_CHAIN_DUPLICATE_ACTION (idempotency window), ERR_CHAIN_UNAUTHORIZED,
-   * ERR_CHAIN_SHIPMENT_NOT_FOUND, ERR_CHAIN_INVALID_HASH; other contract errors surface as
-   * ERR_CHAIN_UNKNOWN with the raw code in `details`.
+   * Update a shipment's on-chain status (`update_status`).
+   * @throws {AppError} `ChainErrorCode` on rejection.
    */
   updateStatus(input: UpdateStatusInput): Promise<UpdateStatusResult>;
+
+  /**
+   * Confirm delivery of a shipment — co-emits `delivery_success` and `escrow_released` events.
+   * Only the `receiver` (auth precondition) may call this.
+   * @throws {AppError} `ChainErrorCode` on rejection (e.g. ERR_CHAIN_UNAUTHORIZED).
+   */
+  confirmDelivery(input: ConfirmDeliveryInput): Promise<ConfirmDeliveryResult>;
 
   /**
    * Spec-validated contract events in ledger order, resuming strictly after

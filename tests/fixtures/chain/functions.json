@@ -23,6 +23,11 @@
       "shipment_id": "42",
       "new_status": "InTransit",
       "data_hash": "ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb"
+    },
+    "confirm_delivery": {
+      "receiver": "GAAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQDZ7H",
+      "shipment_id": "65f1a2b3c4d5e6f708192a3b",
+      "proof_hash": "ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb"
     }
   },
   "tx_result": {

@@ -112,6 +112,15 @@ export const ReleaseEscrowArgsSchema = z
   })
   .strict();
 
+/** `confirm_delivery(receiver: Address, shipment_id: Symbol, proof_hash: BytesN<32>)` — auth: `receiver`. */
+export const ConfirmDeliveryArgsSchema = z
+  .object({
+    receiver: AddressSchema,
+    shipment_id: SymbolSchema,
+    proof_hash: Bytes32HexSchema,
+  })
+  .strict();
+
 /**
  * `ShipmentStatus` contract enum, in the EXACT declaration order of
  * Navin-xmr/navin-contracts `contracts/shipment/src/types.rs`. The variant name
@@ -166,17 +175,19 @@ export const CHAIN_FUNCTIONS = [
   'anchor',
   'init_escrow',
   'release_escrow',
+  'confirm_delivery',
   'update_status',
 ] as const;
 export type ChainFunctionName = (typeof CHAIN_FUNCTIONS)[number];
 
 /** Who must `require_auth()` for each function, per spec. */
 export const CHAIN_FUNCTION_AUTH: Readonly<
-  Record<ChainFunctionName, 'actor' | 'payer' | 'caller' | 'admin'>
+  Record<ChainFunctionName, 'actor' | 'payer' | 'caller' | 'admin' | 'receiver'>
 > = {
   anchor: 'actor',
   init_escrow: 'payer',
   release_escrow: 'caller',
+  confirm_delivery: 'receiver',
   update_status: 'caller',
 };
 
@@ -184,12 +195,14 @@ export const ChainFunctionArgsSchemas = {
   anchor: AnchorArgsSchema,
   init_escrow: InitEscrowArgsSchema,
   release_escrow: ReleaseEscrowArgsSchema,
+  confirm_delivery: ConfirmDeliveryArgsSchema,
   update_status: UpdateStatusArgsSchema,
 } as const satisfies Record<ChainFunctionName, z.ZodTypeAny>;
 
 export type AnchorArgs = z.infer<typeof AnchorArgsSchema>;
 export type InitEscrowArgs = z.infer<typeof InitEscrowArgsSchema>;
 export type ReleaseEscrowArgs = z.infer<typeof ReleaseEscrowArgsSchema>;
+export type ConfirmDeliveryArgs = z.infer<typeof ConfirmDeliveryArgsSchema>;
 export type UpdateStatusArgs = z.infer<typeof UpdateStatusArgsSchema>;
 export type ChainTxResult = z.infer<typeof ChainTxResultSchema>;
 
