@@ -115,9 +115,6 @@ LedgerBlockSchema.index({ milestoneEvent: 1, createdAt: -1 });
 // Allows fast lookup / deduplication by on-chain data hash.
 LedgerBlockSchema.index({ dataHash: 1 }, { sparse: true });
 
-// #994 — v2 replay dedupe; sparse so all legacy rows (no key) remain valid.
-LedgerBlockSchema.index({ idempotencyKey: 1 }, { sparse: true, unique: true });
-
 // #1058 — supports idempotent re-verification scans of not-yet-confirmed blocks.
 LedgerBlockSchema.index({ verified: 1, ledger: 1 });
 

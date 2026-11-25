@@ -52,12 +52,15 @@ describe('LedgerBlockSchema — v2 event fields (issue #994)', () => {
     expect(doc.eventCounter).toBe(0);
   });
 
-  it('deduplicates v2 events with a sparse unique idempotencyKey index', () => {
+  it('deduplicates v2 events with a unique partial idempotencyKey index', () => {
     const match = LedgerBlock.schema
       .indexes()
       .find(([fields]: [Record<string, unknown>]) => fields.idempotencyKey === 1);
     expect(match).toBeDefined();
     const [, options] = match as [unknown, Record<string, unknown>];
-    expect(options).toMatchObject({ sparse: true, unique: true });
+    expect(options).toMatchObject({
+      unique: true,
+      partialFilterExpression: { idempotencyKey: { $type: 'string' } },
+    });
   });
 });
