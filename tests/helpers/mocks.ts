@@ -4,8 +4,6 @@
  * ## ESM-safe pattern (required)
  *
  * ```ts
- * import { jest } from '@jest/globals';
- *
  * jest.resetModules();
  * await jest.unstable_mockModule('../src/services/chain/factory.js', () =>
  *   createChainFactoryMock(createChainAdapterMock())
@@ -112,6 +110,8 @@ export type SocketIoMock = { [K in keyof typeof socketIo]: MockFn };
 export type ChainAdapterMock = {
   anchorEvent: MockFn;
   releaseEscrow: MockFn;
+  raiseDispute: MockFn;
+  resolveDispute: MockFn;
   updateStatus: MockFn;
   streamEvents: MockFn;
   getConfirmationCount: MockFn;
@@ -134,6 +134,8 @@ const MOCK_TX_HASH = 'a'.repeat(64);
 export type ChainAdapterScript = {
   anchorResult?: Partial<AnchorResult>;
   releaseResult?: Partial<EscrowResult>;
+  raiseDisputeResult?: Partial<{ txHash: string; ledger: number }>;
+  resolveDisputeResult?: Partial<{ txHash: string; ledger: number }>;
   events?: ChainEvent[];
 };
 
@@ -158,6 +160,18 @@ export function createChainAdapterMock(
       simulated: true,
       shipmentId: (input as { shipment_id: string }).shipment_id,
       ...script.releaseResult,
+    })),
+    raiseDispute: jest.fn(async () => ({
+      txHash: MOCK_TX_HASH,
+      ledger: 1,
+      simulated: true,
+      ...script.raiseDisputeResult,
+    })),
+    resolveDispute: jest.fn(async () => ({
+      txHash: MOCK_TX_HASH,
+      ledger: 1,
+      simulated: true,
+      ...script.resolveDisputeResult,
     })),
     updateStatus: jest.fn(async (input: unknown) => ({
       txHash: MOCK_TX_HASH,
@@ -271,6 +285,7 @@ export type PaymentModelMock = {
     find: MockFn;
     findById: MockFn;
     findOneAndUpdate: MockFn;
+    updateOne: MockFn;
   };
   PaymentStatus: Record<string, string>;
 };
@@ -286,12 +301,14 @@ export function createPaymentModelMock(
       find: jest.fn(() => createModelQuery([])),
       findById: jest.fn(() => createModelQuery(null)),
       findOneAndUpdate: jest.fn(),
+      updateOne: jest.fn(),
       ...(overrides.PaymentModel ?? {}),
     },
     PaymentStatus: {
       PENDING: 'Pending',
       ESCROWED: 'Escrowed',
       RELEASED: 'Released',
+      REFUNDED: 'Refunded',
       FAILED: 'Failed',
       DISPUTED: 'Disputed',
       ...(overrides.PaymentStatus ?? {}),

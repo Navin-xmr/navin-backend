@@ -10,12 +10,16 @@ import { PaymentModel, PaymentStatus } from '../modules/payments/payments.model.
 import { Telemetry, TelemetryAnchorStatus } from '../modules/telemetry/telemetry.model.js';
 import { emitPaymentStatusChange } from '../infra/socket/io.js';
 import { MilestoneEvent } from '../shared/types/shipment.js';
-import { CHAIN_EVENT_TOPICS, CHAIN_EVENT_NAMES, CHAIN_SPEC_VERSION } from '../shared/types/chain.js';
+import { CHAIN_EVENT_NAMES, CHAIN_SPEC_VERSION } from '../shared/types/chain.js';
 import type { ChainAdapter } from '../services/chain/types.js';
 import { getChainAdapter } from '../services/chain/factory.js';
 import { isChainEventDecodeFailure, parseChainEvent } from '../shared/types/chain.js';
 import type { ChainEvent, ChainEventDecodeFailure } from '../shared/types/chain.js';
 import { confirmAnchoredTelemetry } from '../modules/telemetry/telemetry.confirmation.js';
+import {
+  isDeliveryEventRecorded,
+  recordDeliveryEvent,
+} from '../modules/shipments/shipmentDelivery.service.js';
 import {
   observeConfirmationLag,
   recordIndexerCursorEvent,
@@ -52,6 +56,9 @@ export const IndexerStateModel =
   mongoose.model<IndexerStateDocument>('IndexerState', IndexerStateSchema);
 
 export async function getStoredCursor(key = 'stellar_indexer'): Promise<string | undefined> {
+  if (mongoose.connection.readyState !== 1) {
+    return undefined;
+  }
   try {
     const doc = await IndexerStateModel.findOne({ key }).lean<{ key: string; cursor: string }>();
     return doc?.cursor;
@@ -65,6 +72,9 @@ export async function saveStoredCursor(
   key = 'stellar_indexer',
   eventAt?: Date
 ): Promise<void> {
+  if (mongoose.connection.readyState !== 1) {
+    return;
+  }
   try {
     await IndexerStateModel.updateOne(
       { key },
@@ -263,6 +273,32 @@ async function recordPaymentConfirmation(
   }
 }
 
+/**
+ * #1036 — mirrors a `dispute_resolved` event's outcome into the Payment
+ * projection: `resolved` releases the frozen escrow, `rejected` unfreezes it
+ * back to Escrowed. The outcome always comes from here, never a service call.
+ */
+async function applyDisputeResolution(shipmentId: string, outcome: string): Promise<void> {
+  if (!mongoose.isValidObjectId(shipmentId)) return;
+
+  const nextStatus =
+    outcome === 'ReleaseToCarrier' || outcome === 'resolved'
+      ? PaymentStatus.RELEASED
+      : outcome === 'RefundToCompany' || outcome === 'PartialRefund'
+        ? PaymentStatus.REFUNDED
+        : PaymentStatus.ESCROWED;
+  await PaymentModel.updateOne(
+    { shipmentId: new mongoose.Types.ObjectId(shipmentId), status: PaymentStatus.DISPUTED },
+    {
+      $set: {
+        status: nextStatus,
+        escrowFrozen: false,
+        'escrowRelease.disputeOutcome': outcome,
+      },
+    }
+  );
+}
+
 async function updatePendingConfirmations(adapter: ChainAdapter): Promise<void> {
   const pendingPayments = await PaymentModel.find({
     status: PaymentStatus.RELEASED,
@@ -317,13 +353,34 @@ async function indexChainEvent(adapter: ChainAdapter, event: ChainEvent): Promis
     metadata.payee = event.data[2];
     metadata.token = event.data[3];
     metadata.amount = event.data[4];
-  } else {
+  } else if (event.name === CHAIN_EVENT_NAMES.ESCROW_RELEASE) {
     milestoneEvent = MilestoneEvent.SETTLEMENT_COMPLETED;
     shipmentId = event.topic[1];
     metadata.paymentId = event.topic[1];
     metadata.proofHash = event.data[0];
     metadata.payee = event.data[1];
     metadata.amount = event.data[2];
+  } else if (event.name === CHAIN_EVENT_NAMES.DISPUTE_RAISED) {
+    milestoneEvent = MilestoneEvent.DISPUTED;
+    shipmentId = event.data[0];
+    metadata.disputeState = 'OPEN';
+    metadata.reasonHash = event.data[2];
+    metadata.raisedBy = event.data[1];
+  } else if (event.name === CHAIN_EVENT_NAMES.DISPUTE_RESOLVED) {
+    milestoneEvent = MilestoneEvent.RESOLVED;
+    shipmentId = event.data[0];
+    metadata.disputeState = 'CLOSED';
+    metadata.resolution = event.data[1];
+    metadata.reasonHash = event.data[2];
+    metadata.resolvedBy = event.data[3];
+    metadata.escrowFrozen = false;
+  } else {
+    milestoneEvent = MilestoneEvent.ESCROW_FROZEN;
+    shipmentId = event.data[0];
+    metadata.escrowFrozen = true;
+    metadata.escrowFreezeReason = event.data[1];
+    metadata.frozenBy = event.data[2];
+    metadata.frozenAt = event.data[3];
   }
 
   const result = await LedgerBlock.updateOne(
@@ -416,6 +473,22 @@ export async function indexStellarTransactions(
 
     cursor = event.id;
 
+    // #1043 — delivery events fold into a per-shipment ShipmentDelivery record (idempotent by
+    // event id). They bypass LedgerBlock: both topics share one tx hash, which keys LedgerBlock.
+    if (
+      event.name === CHAIN_EVENT_NAMES.DELIVERY_SUCCESS ||
+      event.name === CHAIN_EVENT_NAMES.DELIVERY_CONFIRMED
+    ) {
+      if (dryRun) {
+        if (await isDeliveryEventRecorded(event)) existing += 1;
+        else upserted += 1;
+        continue;
+      }
+      if ((await recordDeliveryEvent(event)) !== 'duplicate') upserted += 1;
+      if (cursor && persistCursor) await saveStoredCursor(cursor);
+      continue;
+    }
+
     // #1058 — confirmation depth is tracked for every event class, not just payments.
     const confirmations = await adapter.getConfirmationCount(event.ledger);
     const verified = confirmations >= confirmationThreshold();
@@ -451,90 +524,109 @@ export async function indexStellarTransactions(
       continue;
     }
 
-    // P14-06: Use new contract event topics, with legacy support via CHAIN_EVENT_NAMES
-    // Shipment lifecycle events
-    if (event.name === CHAIN_EVENT_TOPICS.SHIPMENT_CREATED) {
-      milestoneEvent = MilestoneEvent.CREATED;
-      shipmentId = event.topic[1];
-      metadata.carrier = event.data[0];
-      metadata.origin = event.data[1];
-      metadata.destination = event.data[2];
-    } else if (
-      event.name === CHAIN_EVENT_TOPICS.STATUS_UPDATED ||
-      event.name === CHAIN_EVENT_NAMES.ANCHOR
-    ) {
+    if (event.name === CHAIN_EVENT_NAMES.ANCHOR) {
       milestoneEvent = MilestoneEvent.IN_TRANSIT;
       shipmentId = event.topic[1];
-      metadata.oldStatus = event.data[0];
-      metadata.newStatus = event.data[1];
-      metadata.updatedBy = event.data[2];
-    } else if (event.name === CHAIN_EVENT_TOPICS.MILESTONE_RECORDED) {
-      milestoneEvent = MilestoneEvent.CHECKPOINT;
-      shipmentId = event.topic[1];
-      metadata.milestoneType = event.data[0];
-      metadata.locationHash = event.data[2];
-    } else if (event.name === CHAIN_EVENT_TOPICS.DELIVERY_SUCCESS) {
-      milestoneEvent = MilestoneEvent.DELIVERED;
-      shipmentId = event.topic[1];
-      metadata.receiver = event.data[0];
-      metadata.proofHash = event.data[2];
-    } else if (event.name === CHAIN_EVENT_TOPICS.DELIVERY_CONFIRMED) {
-      // P12-12: delivery_confirmed co-emits escrow_released
-      milestoneEvent = MilestoneEvent.SETTLEMENT_COMPLETED;
-      shipmentId = event.topic[1];
-      metadata.receiver = event.data[0];
-      metadata.idempotencyKey = event.data[2];
-    } else if (
-      event.name === CHAIN_EVENT_TOPICS.ESCROW_DEPOSITED ||
-      event.name === CHAIN_EVENT_NAMES.ESCROW_INIT
-    ) {
+      dataHash = event.data[0];
+      metadata.dataHash = dataHash;
+    } else if (event.name === CHAIN_EVENT_NAMES.ESCROW_INIT) {
       milestoneEvent = MilestoneEvent.SETTLEMENT_INITIATED;
-      shipmentId = event.topic[1];
-      metadata.payer = event.data[0];
-      metadata.payee = event.data[1];
-      metadata.token = event.data[2];
-      metadata.amount = event.data[3];
-    } else if (
-      event.name === CHAIN_EVENT_TOPICS.ESCROW_RELEASED ||
-      event.name === CHAIN_EVENT_NAMES.ESCROW_RELEASE
-    ) {
+      shipmentId = event.data[0];
+      metadata.paymentId = event.topic[1];
+      metadata.payer = event.data[1];
+      metadata.payee = event.data[2];
+      metadata.token = event.data[3];
+      metadata.amount = event.data[4];
+    } else if (event.name === CHAIN_EVENT_NAMES.ESCROW_RELEASE) {
       milestoneEvent = MilestoneEvent.SETTLEMENT_COMPLETED;
-      shipmentId = event.topic[1];
-      metadata.payee = event.data[0];
-      metadata.amount = event.data[1];
-      metadata.idempotencyKey = event.data[3];
-    } else if (event.name === CHAIN_EVENT_TOPICS.ESCROW_REFUNDED) {
-      milestoneEvent = MilestoneEvent.SETTLEMENT_CANCELLED;
-      shipmentId = event.topic[1];
-      metadata.payer = event.data[0];
-      metadata.amount = event.data[1];
-    } else if (event.name === CHAIN_EVENT_TOPICS.DISPUTE_RAISED) {
-      milestoneEvent = MilestoneEvent.DISPUTE_RAISED;
-      shipmentId = event.topic[1];
-      metadata.raisedBy = event.data[0];
-      metadata.reasonHash = event.data[1];
-    } else if (event.name === CHAIN_EVENT_TOPICS.DISPUTE_RESOLVED) {
-      milestoneEvent = MilestoneEvent.DISPUTE_RESOLVED;
-      shipmentId = event.topic[1];
-      metadata.resolvedBy = event.data[0];
+      const payment = await PaymentModel.findById(event.topic[1])
+        .select('shipmentId')
+        .lean<{ shipmentId: { toString(): string } } | null>();
+      shipmentId = payment?.shipmentId.toString() ?? event.topic[1];
+      metadata.paymentId = event.topic[1];
+      metadata.proofHash = event.data[0];
+      metadata.payee = event.data[1];
+      metadata.amount = event.data[2];
+    } else if (event.name === CHAIN_EVENT_NAMES.DISPUTE_RAISED) {
+      // #1053 — open the dispute record. reason_hash is stored verbatim:
+      // only the SHA-256 digest is on-chain, never the free-text evidence.
+      milestoneEvent = MilestoneEvent.DISPUTED;
+      shipmentId = event.data[0];
+      metadata.disputeState = 'OPEN';
+      metadata.reasonHash = event.data[2];
+      metadata.raisedBy = event.data[1];
+    } else if (event.name === CHAIN_EVENT_NAMES.DISPUTE_RESOLVED) {
+      // #1053 — close the dispute record with the contract's own outcome.
+      // `resolution` is reflected verbatim, never inferred from the status.
+      milestoneEvent = MilestoneEvent.RESOLVED;
+      shipmentId = event.data[0];
+      metadata.disputeState = 'CLOSED';
       metadata.resolution = event.data[1];
-    } else if (event.name === CHAIN_EVENT_TOPICS.SHIPMENT_CANCELLED) {
-      milestoneEvent = MilestoneEvent.CANCELLED;
-      shipmentId = event.topic[1];
-      metadata.cancelledBy = event.data[0];
-      metadata.reasonHash = event.data[1];
-    } else if (event.name === CHAIN_EVENT_TOPICS.SHIPMENT_EXPIRED) {
-      milestoneEvent = MilestoneEvent.EXPIRED;
-      shipmentId = event.topic[1];
-      metadata.reason = event.data[1];
-    } else if (event.name === CHAIN_EVENT_TOPICS.CARRIER_HANDOFF) {
-      milestoneEvent = MilestoneEvent.CARRIER_HANDOFF;
-      shipmentId = event.topic[1];
-      metadata.fromCarrier = event.data[0];
-      metadata.toCarrier = event.data[1];
+      metadata.reasonHash = event.data[2];
+      metadata.resolvedBy = event.data[3];
+      // `resolve_dispute` clears the escrow balance and with it the freeze.
+      metadata.escrowFrozen = false;
+    } else if (event.name === CHAIN_EVENT_NAMES.ESCROW_FROZEN) {
+      // #1053 — freeze state is explicit on-chain state, never inferred.
+      // `raise_dispute` emits this in the SAME transaction as `dispute_raised`,
+      // so the freeze is merged into that row instead of replacing it.
+      const freezeMetadata: Record<string, unknown> = {
+        escrowFrozen: true,
+        escrowFreezeReason: event.data[1],
+        frozenBy: event.data[2],
+        frozenAt: event.data[3],
+      };
+
+      if (dryRun) {
+        const found = await LedgerBlock.exists({ transactionHash: event.tx_hash });
+        if (found) existing += 1;
+        else upserted += 1;
+        continue;
+      }
+
+      const merged = await LedgerBlock.updateOne(
+        { transactionHash: event.tx_hash },
+        {
+          $set: Object.fromEntries(
+            Object.entries(freezeMetadata).map(([key, value]) => [`metadata.${key}`, value])
+          ),
+        }
+      );
+      const matched = (merged as { matchedCount?: number } | undefined)?.matchedCount;
+      if (matched === 0) {
+        // Standalone freeze (suspension, pause, circuit breaker): no dispute
+        // row exists for this transaction, so create one.
+        const res = await LedgerBlock.updateOne(
+          { transactionHash: event.tx_hash },
+          {
+            $setOnInsert: {
+              shipmentId: event.data[0],
+              transactionHash: event.tx_hash,
+              actor: 'stellar-indexer',
+            },
+            $set: {
+              milestoneEvent: MilestoneEvent.ESCROW_FROZEN,
+              metadata: { ...metadata, ...freezeMetadata },
+              confirmations,
+              verified,
+            },
+          },
+          { upsert: true }
+        );
+        if ((res as { upsertedCount?: number } | undefined)?.upsertedCount) {
+          upserted += 1;
+          if (verified) observeConfirmationLag(event.name, event.ledger_closed_at);
+        }
+      } else {
+        existing += 1;
+      }
+
+      if (cursor && persistCursor) {
+        await saveStoredCursor(cursor, undefined, new Date(event.ledger_closed_at));
+        recordIndexerCursorEvent(event.ledger_closed_at);
+      }
+      continue;
     } else {
-      // Unknown event - P14-06: throw ERR_CHAIN_INVALID_EVENT
-      logger.warn({ eventName: event.name, eventId: event.id }, 'Unknown chain event topic');
       continue;
     }
 
@@ -574,32 +666,21 @@ export async function indexStellarTransactions(
       upserted += 1;
       // #1044 — already-confirmed on first sight; otherwise reverifyAnchoredBlocks observes it later.
       if (verified) observeConfirmationLag(event.name, event.ledger_closed_at);
-    }
-
-    // P13-06: Idempotent upserts - record duplicates metrics
-    // Check if this event was already processed using tx_hash as idempotency key
-    const existingBlock = await LedgerBlock.findOne({
-      transactionHash: event.tx_hash,
-    }).lean();
-
-    if (existingBlock) {
-      // Duplicate event - metrics only, no re-processing
+    } else {
       logger.debug(
         { eventId: event.id, txHash: event.tx_hash, eventName: event.name },
         'Duplicate chain event skipped (idempotent upsert)'
       );
-      // Could emit duplicate metrics here
-    } else if (
-      event.name === CHAIN_EVENT_TOPICS.STATUS_UPDATED ||
-      event.name === CHAIN_EVENT_NAMES.ANCHOR
-    ) {
+    }
+
+    if (event.name === CHAIN_EVENT_NAMES.ANCHOR) {
       await recordTelemetryConfirmation(adapter, event.tx_hash, event.ledger);
-    } else if (
-      event.name === CHAIN_EVENT_TOPICS.ESCROW_RELEASED ||
-      event.name === CHAIN_EVENT_TOPICS.DELIVERY_CONFIRMED ||
-      event.name === CHAIN_EVENT_NAMES.ESCROW_RELEASE
-    ) {
+    } else if (event.name === CHAIN_EVENT_NAMES.ESCROW_RELEASE) {
       await recordPaymentConfirmation(adapter, event.tx_hash, event.ledger);
+    } else if (event.name === CHAIN_EVENT_NAMES.DISPUTE_RESOLVED) {
+      // #1036 — the DB mirrors the resolution outcome from the chain event;
+      // it is never decided locally by the service that submitted resolve_dispute.
+      await applyDisputeResolution(event.data[0], event.data[1]);
     }
 
     await enqueueChainWebhookEvent({

@@ -17,7 +17,8 @@ import { logger } from '../../shared/logger/logger.js';
 import { auditLog } from '../../shared/utils/auditLog.js';
 import { blockToken } from '../../infra/redis/tokenBlocklist.js';
 import { verifyToken } from '../auth/auth.service.js';
-import { updateOrganization } from '../organizations/organizations.repo.js';
+import { findOrganizationById, updateOrganization } from '../organizations/organizations.repo.js';
+import { provisionCarrierRole } from '../../services/chain/rbac.service.js';
 
 /**
  * Creates a new user account under the caller's organization.
@@ -58,22 +59,43 @@ export async function createTeamMember(input: {
   email: string;
   name: string;
   role?: string;
+  walletAddress?: string;
   callerOrganizationId: string;
+  actorUserId?: string;
 }) {
   const existing = await findUserByEmail(input.email);
   if (existing) throw new AppError(409, 'Email already in use', 'EMAIL_TAKEN');
 
   // SECURITY: [Unauthorized Password Bypass] — This prevents authentication prior to invitation completion by setting a cryptographically random, high-entropy placeholder string as the bcrypt hash, which is impossible to guess or match.
   const lockedHash = await bcrypt.hash(randomBytes(32).toString('hex'), 10);
+  const role = input.role || UserRole.VIEWER;
 
   // Force override organizationId from caller's JWT context
-  return createUser({
+  const user = await createUser({
     email: input.email,
     name: input.name,
     passwordHash: lockedHash,
-    role: input.role || UserRole.VIEWER,
+    role,
     organizationId: input.callerOrganizationId, // Override with caller's org
+    walletAddress: input.walletAddress,
   });
+
+  // #1042 — a DRIVER (carrier) with an on-chain address gets registered and
+  // whitelisted for their organization's on-chain company, if it has one too.
+  if (role === UserRole.DRIVER && input.walletAddress) {
+    const organization = await findOrganizationById(input.callerOrganizationId);
+    if (organization?.walletAddress) {
+      await provisionCarrierRole({
+        organizationId: input.callerOrganizationId,
+        companyAddress: organization.walletAddress,
+        carrierUserId: user._id.toString(),
+        carrierAddress: input.walletAddress,
+        actorUserId: input.actorUserId,
+      });
+    }
+  }
+
+  return user;
 }
 
 export interface ListOrganizationUsersResult {

@@ -1,7 +1,8 @@
+import { randomUUID } from 'node:crypto';
 import { Shipment } from './shipments.model.js';
 import type { FilterQuery, SortOrder } from 'mongoose';
 import { getChainAdapter, getChainActorAddress } from '../../services/chain/factory.js';
-import type { AnchorEventInput, EscrowResult } from '../../services/chain/types.js';
+import type { EscrowResult } from '../../services/chain/types.js';
 import { generateDataHash, buildCanonicalShipmentPayload } from '../../shared/utils/crypto.js';
 import { uploadFileToStorage } from '../../services/storage/upload.js';
 import {
@@ -496,8 +497,10 @@ export const getShipmentTimelineService = async (
 };
 
 /**
- * Creates a new shipment record and anchors its creation through the ChainAdapter port.
- * Anchoring is best-effort: a chain failure is logged and the shipment is still returned.
+ * Creates a shipment and its create_shipment outbox entry in one atomic document
+ * write (#997). The API observes `pending_chain`; the chain-outbox worker submits
+ * and marks the row `anchored`. No chain call happens on the request path, so a
+ * chain outage can never produce a shipment without a durable outbox row.
  * @param {object} data - Shipment creation payload.
  * @param {string=} data.trackingNumber - Optional tracking number.
  * @param {string} data.origin - Shipment origin.
@@ -514,27 +517,17 @@ export const createShipmentService = async (data: {
   const { actorUserId, ...shipmentData } = data;
   const trackingNumber =
     shipmentData.trackingNumber || `NVN-${Math.floor(100000 + Math.random() * 900000)}`;
-  const shipment = new Shipment({ ...shipmentData, trackingNumber });
+  const shipment = new Shipment({
+    ...shipmentData,
+    trackingNumber,
+    chainOutbox: {
+      status: 'pending_chain',
+      idempotencyKey: randomUUID(),
+      attempts: 0,
+      availableAt: new Date(),
+    },
+  });
   await shipment.save();
-
-  try {
-    const actor = getChainActorAddress();
-    const anchorInput: AnchorEventInput = {
-      shipment_id: shipment._id.toString(),
-      data_hash: generateDataHash({
-        shipmentId: shipment._id.toString(),
-        trackingNumber: shipment.trackingNumber,
-        origin: shipment.origin,
-        destination: shipment.destination,
-      }),
-      actor,
-    };
-    const receipt = await getChainAdapter().anchorEvent(anchorInput);
-    shipment.stellarTxHash = receipt.txHash;
-    await shipment.save();
-  } catch (err) {
-    logger.warn({ err, shipmentId: shipment._id.toString() }, 'Chain tokenization skipped');
-  }
 
   auditLog({
     userId: actorUserId ?? 'system',

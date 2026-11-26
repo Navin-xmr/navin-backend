@@ -16,10 +16,18 @@
  */
 import type { ErrorCode } from '../../shared/http/errors.js';
 import type {
+  AddCarrierArgs,
+  AddCarrierToWhitelistArgs,
+  AddCompanyArgs,
   AnchorArgs,
   ChainEvent,
   ChainEventDecodeFailure,
+  ChainFunctionName,
+  ConfirmDeliveryArgs,
+  CreateShipmentArgs,
+  RaiseDisputeArgs,
   ReleaseEscrowArgs,
+  ResolveDisputeArgs,
   UpdateStatusArgs,
 } from '../../shared/types/chain.js';
 
@@ -31,6 +39,27 @@ export type AnchorEventInput = AnchorArgs;
 
 /** Input for `release_escrow(caller, shipment_id)` — spec-validated shape (v2). */
 export type ReleaseEscrowInput = ReleaseEscrowArgs;
+
+/** Input for `create_shipment(sender, receiver, carrier, data_hash, payment_milestones, deadline)` (#1037). */
+export type CreateShipmentInput = CreateShipmentArgs;
+
+/** Input for `raise_dispute(caller, shipment_id, reason_hash)` (#1036). */
+export type RaiseDisputeInput = RaiseDisputeArgs;
+
+/** Input for `resolve_dispute(admin, shipment_id, outcome)` (#1036). */
+export type ResolveDisputeInput = ResolveDisputeArgs;
+
+/** Input for `add_company(admin, company)` (#1042). */
+export type AddCompanyInput = AddCompanyArgs;
+
+/** Input for `add_carrier(admin, company, carrier)` (#1042). */
+export type AddCarrierInput = AddCarrierArgs;
+
+/** Input for `add_carrier_to_whitelist(admin, company, carrier)` (#1042). */
+export type AddCarrierToWhitelistInput = AddCarrierToWhitelistArgs;
+
+/** Input for `confirm_delivery(receiver, shipment_id, proof_hash)` — spec-validated shape. */
+export type ConfirmDeliveryInput = ConfirmDeliveryArgs;
 
 /**
  * Optional identity of the logical event being submitted (#1078). When given,
@@ -77,25 +106,69 @@ export interface EscrowResult extends ChainTxReceipt {
   shipmentId: ReleaseEscrowInput['shipment_id'];
 }
 
+/** Result of `create_shipment` — receipt plus the contract-assigned `u64` id (#1037). */
+export interface CreateShipmentResult extends ChainTxReceipt {
+  shipmentId: number;
+}
+
+/** Result of a role-provisioning call (`add_company`/`add_carrier`/`add_carrier_to_whitelist`). */
+export type RoleProvisionResult = ChainTxReceipt;
+
+/** Outcome of a preflight role/whitelist check — no transaction is submitted (#1042). */
+export interface RolePreflightResult {
+  allowed: boolean;
+  /** Set when `allowed` is false — the specific port error the submission would reject with. */
+  reason?: ChainErrorCode;
+}
+
+/** RBAC actions `preflightRole` can check ahead of submission (#1042). */
+export type RoleProvisionAction = Extract<
+  ChainFunctionName,
+  'add_company' | 'add_carrier' | 'add_carrier_to_whitelist'
+>;
+
+export interface ConfirmDeliveryResult extends ChainTxReceipt {
+  receiver: ConfirmDeliveryInput['receiver'];
+  shipmentId: ConfirmDeliveryInput['shipment_id'];
+}
 /** Opaque resume position: the `id` of the last event processed. */
 export type ChainEventCursor = ChainEvent['id'];
 
-/** Input for `confirm_delivery(receiver, shipment_id, amount?, idempotency_key?)` (P12-12). */
-export interface ConfirmDeliveryInput {
-  receiver: string;
-  shipment_id: string;
-  /** Optional amount for partial release; omit for full escrow release. */
-  amount?: string;
-  /** Contract-provided idempotency key for deduplication (P13-06). */
-  idempotency_key?: string;
+/** ─── Read-only chain state (simulation only, short-TTL cacheable) ─── */
+
+/** Input for reading an escrow balance. */
+export interface ReadEscrowBalanceInput {
+  payment_id: string;
 }
 
-/** Result of confirm_delivery (co-emits delivery_confirmed + escrow_released). */
-export interface ConfirmDeliveryResult extends ChainTxReceipt {
-  shipmentId: string;
-  /** Whether this was a partial release (amount < total escrow). */
-  partial: boolean;
+/** Escrow balance read result. Balance is in stroops as a decimal string. */
+export interface ReadEscrowBalanceResult {
+  /** Balance in stroops (1 XLM = 10^7 stroops), as a decimal string. */
+  balance: string;
+  simulated: boolean;
 }
+
+/** Input for reading a shipment's on-chain status. */
+export interface ReadShipmentStatusInput {
+  shipment_id: string;
+}
+
+/** Shipment on-chain status read result. */
+export interface ReadShipmentStatusResult {
+  /** Derived on-chain milestone/status (e.g. ESCROWED, RELEASED, REFUNDED). */
+  status: string;
+  simulated: boolean;
+}
+
+/** Contract version read result. */
+export interface ReadContractVersionResult {
+  /** Contract / spec version string. */
+  version: string;
+  simulated: boolean;
+}
+
+/** Result shape shared by all read-only chain queries. */
+export type ChainReadResult<T> = T & { simulated: boolean };
 
 /**
  * On-chain shipment ID (`u64` in the shipment contract). How it maps to the
@@ -143,23 +216,61 @@ export interface ChainAdapter {
   releaseEscrow(input: ReleaseEscrowInput, options?: ChainSubmitOptions): Promise<EscrowResult>;
 
   /**
-   * Confirm delivery and release escrow in one contract call (P12-12).
-   * Co-emits both `delivery_confirmed` and `escrow_released` events.
-   * Supports partial release (amount specified) vs full release (amount omitted).
-   * Uses idempotency_key for deduplication (P13-06).
-   * @throws {AppError} ERR_CHAIN_* on rejection; ERR_CHAIN_TIMEOUT on polling timeout.
-   */
-  confirmDelivery?(input: ConfirmDeliveryInput): Promise<ConfirmDeliveryResult>;
-
-  /**
-   * Record a shipment status transition on-chain, authorized by `caller`.
-   * The caller supplies the canonical-payload `data_hash`; it is passed through unchanged.
-   * @throws {AppError} ERR_CHAIN_INVALID_STATUS (illegal transition / finalized shipment),
-   * ERR_CHAIN_DUPLICATE_ACTION (idempotency window), ERR_CHAIN_UNAUTHORIZED,
-   * ERR_CHAIN_SHIPMENT_NOT_FOUND, ERR_CHAIN_INVALID_HASH; other contract errors surface as
-   * ERR_CHAIN_UNKNOWN with the raw code in `details`.
+   * Update a shipment's on-chain status (`update_status`).
+   * @throws {AppError} `ChainErrorCode` on rejection.
    */
   updateStatus(input: UpdateStatusInput): Promise<UpdateStatusResult>;
+
+  /**
+   * Confirm delivery of a shipment — co-emits `delivery_success` and `escrow_released` events.
+   * Only the `receiver` (auth precondition) may call this.
+   * @throws {AppError} `ChainErrorCode` on rejection (e.g. ERR_CHAIN_UNAUTHORIZED).
+   */
+  confirmDelivery(input: ConfirmDeliveryInput): Promise<ConfirmDeliveryResult>;
+
+  /**
+   * Create a shipment on-chain (#1037). Participant distinctness and milestone
+   * sums are validated locally for fast failure; the contract remains
+   * authoritative — contract-side rejections surface unmapped via
+   * `chainErrorToAppError`.
+   * @returns The confirmed receipt plus the contract-assigned `u64` shipment id.
+   * @throws {AppError} `ChainErrorCode` on rejection (e.g. ERR_CHAIN_INSUFFICIENT_FUNDS).
+   */
+  createShipment(input: CreateShipmentInput): Promise<CreateShipmentResult>;
+
+  /**
+   * Raise a dispute for a shipment with a required reason hash (#1036).
+   * The DB projection mirrors the outcome from the resulting `dispute_raised`
+   * event rather than deciding locally.
+   * @throws {AppError} `ChainErrorCode` (e.g. ERR_CHAIN_SHIPMENT_NOT_FOUND).
+   */
+  raiseDispute(input: RaiseDisputeInput): Promise<ChainTxReceipt>;
+
+  /**
+   * Resolve a previously raised dispute (#1036). The resolution outcome is
+   * taken from the resulting `dispute_resolved` event, never decided locally.
+   * @throws {AppError} `ChainErrorCode` (e.g. ERR_CHAIN_INVALID_TRANSITION).
+   */
+  resolveDispute(input: ResolveDisputeInput): Promise<ChainTxReceipt>;
+
+  /** Provision a company role on-chain (#1042). */
+  addCompany(input: AddCompanyInput): Promise<RoleProvisionResult>;
+
+  /** Provision a carrier role on-chain, scoped to a company (#1042). */
+  addCarrier(input: AddCarrierInput): Promise<RoleProvisionResult>;
+
+  /** Add a carrier to a company's on-chain whitelist (#1042). */
+  addCarrierToWhitelist(input: AddCarrierToWhitelistInput): Promise<RoleProvisionResult>;
+
+  /**
+   * Report whether an RBAC action would be rejected for missing role/whitelist
+   * state *before* submitting it (#1042) — no transaction is sent. Backed by
+   * read-only simulation where the adapter supports it.
+   */
+  preflightRole(
+    action: RoleProvisionAction,
+    input: AddCompanyInput | AddCarrierInput | AddCarrierToWhitelistInput
+  ): Promise<RolePreflightResult>;
 
   /**
    * Spec-validated contract events in ledger order, resuming strictly after
@@ -206,4 +317,9 @@ export interface ChainAdapter {
   /** Admin `G…`/`C…` address. */
   getAdmin?(): Promise<string>;
   getExpectedTokenDecimals?(): Promise<number>;
+
+  /** Read-only chain state queries (P14-12, simulation only, short-TTL cacheable). */
+  readEscrowBalance?(input: ReadEscrowBalanceInput): Promise<ReadEscrowBalanceResult>;
+  readShipmentStatus?(input: ReadShipmentStatusInput): Promise<ReadShipmentStatusResult>;
+  readContractVersion?(): Promise<ReadContractVersionResult>;
 }

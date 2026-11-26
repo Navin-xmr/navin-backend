@@ -6619,7 +6619,7 @@ paths:
            (`getTransaction` + `getEvents`) for `txHash` on `network` (and `contractId`) and confirm the on-chain
            digest equals `dataHash`.
 
-        See `docs/blockchain.md` for the copy-pasteable browser implementation.
+        See `docs/chain-verification.md` for the copy-pasteable browser implementation.
       tags:
         - Ledger
       security:
@@ -6663,6 +6663,210 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+
+  /api/ledger/chain/shipment-status/{shipmentId}:
+    get:
+      operationId: ledger_get_chain_shipment_status
+      x-required-role: [ADMIN, MANAGER, VIEWER]
+      summary: Read on-chain shipment status (simulation only, cached)
+      description: >
+        Returns the on-chain shipment status derived from chain events.
+        Reads use simulation only and are safe to cache briefly (60s TTL).
+        Results are invalidated on escrow events.
+      tags:
+        - Ledger
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: shipmentId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Shipment ObjectId
+      responses:
+        '200':
+          description: Shipment status retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      status:
+                        type: string
+                        description: Derived on-chain milestone/status
+                      simulated:
+                        type: boolean
+                        description: True when read from simulated adapter
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden - insufficient role
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/ledger/chain/escrow-balance/{paymentId}:
+    get:
+      operationId: ledger_get_chain_escrow_balance
+      x-required-role: [ADMIN, MANAGER, VIEWER]
+      summary: Read on-chain escrow balance (simulation only, cached)
+      description: >
+        Returns the on-chain escrow balance for a payment in stroops.
+        Reads use simulation only and are safe to cache briefly (60s TTL).
+        Results are invalidated on escrow events.
+      tags:
+        - Ledger
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: paymentId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Payment ObjectId
+      responses:
+        '200':
+          description: Escrow balance retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      balance:
+                        type: string
+                        description: Balance in stroops (1 XLM = 10^7 stroops)
+                      simulated:
+                        type: boolean
+                        description: True when read from simulated adapter
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden - insufficient role
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/ledger/chain/settlement-record/{paymentId}:
+    get:
+      operationId: ledger_get_chain_settlement_record
+      x-required-role: [ADMIN, MANAGER, VIEWER]
+      summary: Read settlement record (simulation only, cached)
+      description: >
+        Returns the settlement record combining on-chain escrow balance
+        and shipment status. Reads use simulation only and are safe to
+        cache briefly (60s TTL).
+      tags:
+        - Ledger
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: paymentId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Payment ObjectId
+      responses:
+        '200':
+          description: Settlement record retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      paymentId:
+                        type: string
+                      escrowBalance:
+                        type: object
+                        properties:
+                          balance:
+                            type: string
+                          simulated:
+                            type: boolean
+                      shipmentStatus:
+                        type: object
+                        properties:
+                          status:
+                            type: string
+                          simulated:
+                            type: boolean
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden - insufficient role
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/ledger/chain/contract-version:
+    get:
+      operationId: ledger_get_chain_contract_version
+      x-required-role: [ADMIN, MANAGER, VIEWER]
+      summary: Read contract / spec version (simulation only, cached)
+      description: >
+        Returns the chain contract / spec version.
+        Reads use simulation only and are safe to cache briefly (60s TTL).
+      tags:
+        - Ledger
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Contract version retrieved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+                  data:
+                    type: object
+                    properties:
+                      version:
+                        type: string
+                        description: Contract / spec version string
+                      simulated:
+                        type: boolean
+                        description: True when read from simulated adapter
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden - insufficient role
 
   /api/events/poll:
     get:
@@ -7728,6 +7932,35 @@ components:
             Stellar transaction hash for the shipment tokenization (or related
             on-chain) operation. Used for explorer links and ledger events.
           x-implemented: true
+        chainOutbox:
+          type: object
+          nullable: true
+          description: >
+            #997 — transactional outbox for create_shipment. Created atomically with
+            the shipment in `pending_chain`; the worker submits and resolves it to
+            `anchored` (or `failed` after retries).
+          properties:
+            status:
+              type: string
+              enum: [pending_chain, processing, anchored, failed]
+            idempotencyKey:
+              type: string
+              description: Stable dedupe key for the chain submission.
+            attempts:
+              type: integer
+            availableAt:
+              type: string
+              format: date-time
+            lastError:
+              type: string
+              nullable: true
+            txHash:
+              type: string
+              nullable: true
+            ledger:
+              type: integer
+              nullable: true
+          x-implemented: true
         deliveryProof:
           type: object
           nullable: true
@@ -8054,6 +8287,26 @@ components:
           description: >
             Canonical JSON payload that was hashed into dataHash and anchored on-chain.
             Stored alongside the block for independent verification.
+        schemaVersion:
+          type: integer
+          default: 1
+          description: v2 chain event schema version; legacy rows read as 1.
+        eventCounter:
+          type: integer
+          default: 0
+          description: Monotonic v2 event counter; legacy rows read as 0.
+        idempotencyKey:
+          type: string
+          nullable: true
+          description: Stable key used to deduplicate replayed v2 events.
+        contractId:
+          type: string
+          nullable: true
+          description: Emitting Soroban contract id.
+        eventTopic:
+          type: string
+          nullable: true
+          description: Contract event topic name (e.g. create_shipment).
         transactionHash:
           type: string
           nullable: true
@@ -8119,6 +8372,7 @@ components:
         network:
           type: string
           enum: [testnet, public]
+          example: testnet
           description: >
             Stellar network the block was written under (`public` = mainnet). Recorded at
             write time; legacy blocks without a recorded network report the server's
@@ -8143,6 +8397,57 @@ components:
           description: >
             Client `Idempotency-Key` of the request that produced the block. Null when the
             request carried none or the block predates persistence of this field.
+    ChainShipmentStatus:
+      type: object
+      description: On-chain shipment status read result (simulation only).
+      properties:
+        status:
+          type: string
+          description: Derived on-chain milestone/status (e.g. ESCROWED, RELEASED, REFUNDED).
+        simulated:
+          type: boolean
+          description: True when read from the simulated adapter.
+    ChainEscrowBalance:
+      type: object
+      description: On-chain escrow balance read result (simulation only).
+      properties:
+        balance:
+          type: string
+          description: Balance in stroops (1 XLM = 10^7 stroops), as a decimal string.
+        simulated:
+          type: boolean
+          description: True when read from the simulated adapter.
+    ChainSettlementRecord:
+      type: object
+      description: Settlement record combining on-chain escrow balance and shipment status.
+      properties:
+        paymentId:
+          type: string
+          description: Payment ObjectId.
+        escrowBalance:
+          type: object
+          properties:
+            balance:
+              type: string
+            simulated:
+              type: boolean
+        shipmentStatus:
+          type: object
+          properties:
+            status:
+              type: string
+            simulated:
+              type: boolean
+    ChainContractVersion:
+      type: object
+      description: Contract / spec version read result (simulation only).
+      properties:
+        version:
+          type: string
+          description: Contract / spec version string.
+        simulated:
+          type: boolean
+          description: True when read from the simulated adapter.
     Notification:
       type: object
       description: A notification entry for a user.

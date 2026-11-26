@@ -80,6 +80,9 @@ export const ErrorCodes = {
   CHAIN_INVALID_PROOF: 'ERR_CHAIN_INVALID_PROOF',
   /** Contract `InvalidStatus` — escrow action attempted in the wrong shipment state. */
   CHAIN_INVALID_STATUS: 'ERR_CHAIN_INVALID_STATUS',
+  CHAIN_MISSING_AUTH: 'ERR_CHAIN_MISSING_AUTH',
+  CHAIN_INSUFFICIENT_BUDGET: 'ERR_CHAIN_INSUFFICIENT_BUDGET',
+  CHAIN_MISSING_TRUSTLINE: 'ERR_CHAIN_MISSING_TRUSTLINE',
   /** Contract `DuplicateAction` — identical (shipment, status, data_hash) inside the idempotency window. */
   CHAIN_DUPLICATE_ACTION: 'ERR_CHAIN_DUPLICATE_ACTION',
   /** Contract `ShipmentNotFound` — no on-chain shipment with that id. */
@@ -92,6 +95,25 @@ export const ErrorCodes = {
   CHAIN_TIMEOUT: 'ERR_CHAIN_TIMEOUT',
   /** P12-06: RPC returned TRY_AGAIN_LATER - temporary failure, retry later. */
   CHAIN_TRY_AGAIN_LATER: 'ERR_CHAIN_TRY_AGAIN_LATER',
+  // #1035 — real failure classes for the v2.2 surface (role/RBAC, shipments, disputes).
+  /** Contract `RoleDenied` — caller lacks the required company/carrier role or whitelist entry. */
+  CHAIN_ROLE_DENIED: 'ERR_CHAIN_ROLE_DENIED',
+  /** Contract `InvalidTransition` — dispute/shipment action attempted from the wrong state. */
+  CHAIN_INVALID_TRANSITION: 'ERR_CHAIN_INVALID_TRANSITION',
+  /** Contract `EscrowLocked` — escrow is frozen (e.g. by an open dispute). */
+  CHAIN_ESCROW_LOCKED: 'ERR_CHAIN_ESCROW_LOCKED',
+  /** Contract `InsufficientFunds` — escrow balance cannot cover the requested action. */
+  CHAIN_INSUFFICIENT_FUNDS: 'ERR_CHAIN_INSUFFICIENT_FUNDS',
+  /** Contract `ContractPaused` — the contract is paused by an emergency admin switch. */
+  CHAIN_CONTRACT_PAUSED: 'ERR_CHAIN_CONTRACT_PAUSED',
+  /** Contract `TokenTransferFailed` — the underlying token transfer/mint failed. */
+  CHAIN_TOKEN_TRANSFER_FAILED: 'ERR_CHAIN_TOKEN_TRANSFER_FAILED',
+  /** Contract `RateLimited` — caller exceeded the contract's rate limit. */
+  CHAIN_RATE_LIMITED: 'ERR_CHAIN_RATE_LIMITED',
+  /** Contract `CircuitBreakerOpen` — the contract's circuit breaker tripped. */
+  CHAIN_CIRCUIT_BREAKER_OPEN: 'ERR_CHAIN_CIRCUIT_BREAKER_OPEN',
+  /** Contract `ShipmentFinalized` — shipment already reached a terminal state. */
+  CHAIN_SHIPMENT_FINALIZED: 'ERR_CHAIN_SHIPMENT_FINALIZED',
   CHAIN_FEE_BUDGET_EXCEEDED: 'ERR_CHAIN_FEE_BUDGET_EXCEEDED',
   WEBHOOKS_ENCRYPTION_KEY_MISSING: 'ERR_WEBHOOKS_ENCRYPTION_KEY_MISSING',
   WEBHOOKS_INVALID_SECRET: 'ERR_WEBHOOKS_INVALID_SECRET',

@@ -5,6 +5,7 @@ import {
   Address,
   contract as contractClient,
   nativeToScVal,
+  scValToNative,
   TransactionBuilder,
   Keypair,
   BASE_FEE,
@@ -16,16 +17,24 @@ import { stellarNetworkPassphrase } from '../../config/stellarNetwork.js';
 import { AppError, ErrorCodes } from '../../shared/http/errors.js';
 import { logger } from '../../shared/logger/logger.js';
 import {
+  AddCarrierArgsSchema,
+  AddCarrierToWhitelistArgsSchema,
+  AddCompanyArgsSchema,
   AddressSchema,
   Bytes32HexSchema,
+  CreateShipmentArgsSchema,
+  RaiseDisputeArgsSchema,
+  ResolveDisputeArgsSchema,
   SymbolSchema,
   parseChainEvent,
+  simulationErrorToAppError,
   isChainEventDecodeFailure,
   UpdateStatusArgsSchema,
   chainErrorToAppError,
   updateStatusErrorToAppError,
 } from '../../shared/types/chain.js';
 import type { ChainEvent, ChainEventDecodeFailure } from '../../shared/types/chain.js';
+import { decodeDeliveryEvent } from './eventDecoder.js';
 import {
   decodeAddress,
   decodeI128,
@@ -40,6 +49,9 @@ import { retryWithBackoff } from './retry.js';
 import type { RetryPolicy } from './retry.js';
 import { SorobanStateReader } from './soroban.state-reader.js';
 import type {
+  AddCarrierInput,
+  AddCarrierToWhitelistInput,
+  AddCompanyInput,
   AnchorEventInput,
   AnchorResult,
   ChainAdapter,
@@ -51,8 +63,20 @@ import type {
   ChainShipmentStatus,
   ChainSubmitOptions,
   ChainTxReceipt,
+  CreateShipmentInput,
+  CreateShipmentResult,
   EscrowResult,
+  RaiseDisputeInput,
+  ReadContractVersionResult,
+  ReadEscrowBalanceInput,
+  ReadEscrowBalanceResult,
+  ReadShipmentStatusInput,
+  ReadShipmentStatusResult,
   ReleaseEscrowInput,
+  ResolveDisputeInput,
+  RoleProvisionAction,
+  RolePreflightResult,
+  RoleProvisionResult,
   UpdateStatusInput,
   UpdateStatusResult,
 } from './types.js';
@@ -349,6 +373,46 @@ export class SorobanAdapter implements ChainAdapter {
     return undefined;
   }
 
+  async confirmDelivery(input: ConfirmDeliveryInput): Promise<ConfirmDeliveryResult> {
+    if (!Bytes32HexSchema.safeParse(input.proof_hash).success) {
+      throw new AppError(
+        422,
+        'proof_hash must be 32 bytes of lowercase hex',
+        ErrorCodes.CHAIN_INVALID_PROOF
+      );
+    }
+
+    // Auth precondition: only the receiver (signing key) may confirm delivery.
+    // Check before submit so we never waste a transaction on an unauthorized caller.
+    const signer = this.signer();
+    if (signer.publicKey() !== input.receiver) {
+      throw new AppError(
+        403,
+        'Only the delivery receiver can confirm delivery',
+        ErrorCodes.CHAIN_UNAUTHORIZED
+      );
+    }
+
+    const contract = this.getContract();
+    const op = contract.call(
+      'confirm_delivery',
+      new Address(input.receiver).toScVal(),
+      nativeToScVal(input.shipment_id, { type: 'symbol' }),
+      nativeToScVal(Buffer.from(input.proof_hash, 'hex'), { type: 'bytes' })
+    );
+
+    const { txHash, ledger } = await serializeSubmission(this.signer().publicKey(), () =>
+      this.invokePipeline(op)
+    );
+    return {
+      txHash,
+      ledger,
+      simulated: false,
+      receiver: input.receiver,
+      shipmentId: input.shipment_id,
+    };
+  }
+
   async updateStatus(input: UpdateStatusInput): Promise<UpdateStatusResult> {
     // Validates against the real ABI: caller Address, shipment_id u64, ShipmentStatus
     // variant name, data_hash BytesN<32>. Fails before any RPC call.
@@ -387,6 +451,266 @@ export class SorobanAdapter implements ChainAdapter {
     };
   }
 
+  /**
+   * Read the escrow balance for a payment using simulation only (no state change).
+   */
+  async readEscrowBalance(input: ReadEscrowBalanceInput): Promise<ReadEscrowBalanceResult> {
+    const contract = this.getContract();
+    const op = contract.call('get_balance', nativeToScVal(input.payment_id, { type: 'symbol' }));
+
+    const tx = new TransactionBuilder(await this.server.getAccount(this.signer().publicKey()), {
+      fee: BASE_FEE,
+      networkPassphrase: this.networkPassphrase,
+    })
+      .addOperation(op)
+      .setTimeout(30)
+      .build();
+
+    const simRes = await this.server.simulateTransaction(tx);
+    if (rpc.Api.isSimulationError(simRes)) {
+      throw new AppError(400, 'Soroban read simulation failed', ErrorCodes.CHAIN_UNKNOWN, {
+        function: 'get_balance',
+        paymentId: input.payment_id,
+      });
+    }
+
+    // Read-only simulation result — do not send the transaction.
+    const result = simRes.result as { returnValue?: unknown };
+    const balance = result.returnValue ? String(result.returnValue) : '0';
+    return { balance, simulated: false };
+  }
+
+  /**
+   * Read the on-chain shipment status using simulation only (no state change).
+   */
+  async readShipmentStatus(input: ReadShipmentStatusInput): Promise<ReadShipmentStatusResult> {
+    const contract = this.getContract();
+    const op = contract.call('get_status', nativeToScVal(input.shipment_id, { type: 'symbol' }));
+
+    const tx = new TransactionBuilder(await this.server.getAccount(this.signer().publicKey()), {
+      fee: BASE_FEE,
+      networkPassphrase: this.networkPassphrase,
+    })
+      .addOperation(op)
+      .setTimeout(30)
+      .build();
+
+    const simRes = await this.server.simulateTransaction(tx);
+    if (rpc.Api.isSimulationError(simRes)) {
+      throw new AppError(400, 'Soroban read simulation failed', ErrorCodes.CHAIN_UNKNOWN, {
+        function: 'get_status',
+        shipmentId: input.shipment_id,
+      });
+    }
+
+    const result = simRes.result as { returnValue?: unknown };
+    const status = result.returnValue ? String(result.returnValue) : 'UNKNOWN';
+    return { status, simulated: false };
+  }
+
+  /**
+   * Read the contract version using simulation only (no state change).
+   */
+  async readContractVersion(): Promise<ReadContractVersionResult> {
+    const contract = this.getContract();
+    const op = contract.call('get_version');
+
+    const tx = new TransactionBuilder(await this.server.getAccount(this.signer().publicKey()), {
+      fee: BASE_FEE,
+      networkPassphrase: this.networkPassphrase,
+    })
+      .addOperation(op)
+      .setTimeout(30)
+      .build();
+
+    const simRes = await this.server.simulateTransaction(tx);
+    if (rpc.Api.isSimulationError(simRes)) {
+      throw new AppError(400, 'Soroban read simulation failed', ErrorCodes.CHAIN_UNKNOWN, {
+        function: 'get_version',
+      });
+    }
+
+    const result = simRes.result as { returnValue?: unknown };
+    const version = result.returnValue ? String(result.returnValue) : 'unknown';
+    return { version, simulated: false };
+  }
+
+  async createShipment(input: CreateShipmentInput): Promise<CreateShipmentResult> {
+    const parsed = CreateShipmentArgsSchema.safeParse(input);
+    if (!parsed.success) {
+      throw new AppError(
+        422,
+        `Invalid create_shipment arguments: ${parsed.error.message}`,
+        ErrorCodes.CHAIN_INVALID_AMOUNT
+      );
+    }
+
+    const contract = this.getContract();
+    const op = contract.call(
+      'create_shipment',
+      new Address(input.sender).toScVal(),
+      new Address(input.receiver).toScVal(),
+      new Address(input.carrier).toScVal(),
+      nativeToScVal(Buffer.from(input.data_hash, 'hex'), { type: 'bytes' }),
+      nativeToScVal(
+        input.payment_milestones.map(m => BigInt(m)),
+        { type: 'i128' }
+      ),
+      nativeToScVal(input.deadline, { type: 'u64' })
+    );
+
+    const { txHash, ledger, returnValue } = await this.invokePipeline(op);
+    const shipmentId = typeof returnValue === 'bigint' ? Number(returnValue) : returnValue;
+    if (typeof shipmentId !== 'number' || !Number.isFinite(shipmentId)) {
+      throw new AppError(
+        502,
+        'create_shipment did not return a numeric shipment id',
+        ErrorCodes.CHAIN_UNKNOWN
+      );
+    }
+    return { txHash, ledger, simulated: false, shipmentId };
+  }
+
+  async raiseDispute(input: RaiseDisputeInput): Promise<ChainTxReceipt> {
+    const parsed = RaiseDisputeArgsSchema.safeParse(input);
+    if (!parsed.success) {
+      throw new AppError(
+        422,
+        `Invalid raise_dispute arguments: ${parsed.error.message}`,
+        ErrorCodes.CHAIN_INVALID_HASH
+      );
+    }
+
+    const contract = this.getContract();
+    const op = contract.call(
+      'raise_dispute',
+      new Address(input.caller).toScVal(),
+      nativeToScVal(input.shipment_id, { type: 'symbol' }),
+      nativeToScVal(Buffer.from(input.reason_hash, 'hex'), { type: 'bytes' })
+    );
+
+    const { txHash, ledger } = await this.invokePipeline(op);
+    return { txHash, ledger, simulated: false };
+  }
+
+  async resolveDispute(input: ResolveDisputeInput): Promise<ChainTxReceipt> {
+    const parsed = ResolveDisputeArgsSchema.safeParse(input);
+    if (!parsed.success) {
+      throw new AppError(
+        422,
+        `Invalid resolve_dispute arguments: ${parsed.error.message}`,
+        ErrorCodes.CHAIN_INVALID_TRANSITION
+      );
+    }
+
+    const contract = this.getContract();
+    const op = contract.call(
+      'resolve_dispute',
+      new Address(input.admin).toScVal(),
+      nativeToScVal(input.shipment_id, { type: 'symbol' }),
+      nativeToScVal(input.outcome, { type: 'symbol' })
+    );
+
+    const { txHash, ledger } = await this.invokePipeline(op);
+    return { txHash, ledger, simulated: false };
+  }
+
+  async addCompany(input: AddCompanyInput): Promise<RoleProvisionResult> {
+    const parsed = AddCompanyArgsSchema.safeParse(input);
+    if (!parsed.success) {
+      throw new AppError(
+        422,
+        `Invalid add_company arguments: ${parsed.error.message}`,
+        ErrorCodes.CHAIN_ROLE_DENIED
+      );
+    }
+    const { txHash, ledger } = await this.invokePipeline(this.roleOp('add_company', input));
+    return { txHash, ledger, simulated: false };
+  }
+
+  async addCarrier(input: AddCarrierInput): Promise<RoleProvisionResult> {
+    const parsed = AddCarrierArgsSchema.safeParse(input);
+    if (!parsed.success) {
+      throw new AppError(
+        422,
+        `Invalid add_carrier arguments: ${parsed.error.message}`,
+        ErrorCodes.CHAIN_ROLE_DENIED
+      );
+    }
+    const { txHash, ledger } = await this.invokePipeline(this.roleOp('add_carrier', input));
+    return { txHash, ledger, simulated: false };
+  }
+
+  async addCarrierToWhitelist(input: AddCarrierToWhitelistInput): Promise<RoleProvisionResult> {
+    const parsed = AddCarrierToWhitelistArgsSchema.safeParse(input);
+    if (!parsed.success) {
+      throw new AppError(
+        422,
+        `Invalid add_carrier_to_whitelist arguments: ${parsed.error.message}`,
+        ErrorCodes.CHAIN_ROLE_DENIED
+      );
+    }
+    const { txHash, ledger } = await this.invokePipeline(
+      this.roleOp('add_carrier_to_whitelist', input)
+    );
+    return { txHash, ledger, simulated: false };
+  }
+
+  /**
+   * Dry-run an RBAC action through simulation only — never assembled, signed or
+   * sent. Reports the exact `ERR_CHAIN_*` the real submission would reject with,
+   * so callers can surface an actionable error before spending a transaction.
+   */
+  async preflightRole(
+    action: RoleProvisionAction,
+    input: AddCompanyInput | AddCarrierInput | AddCarrierToWhitelistInput
+  ): Promise<RolePreflightResult> {
+    const keypair = this.signer();
+    const sourceAccount = await this.server.getAccount(keypair.publicKey()).catch(() => {
+      throw new AppError(502, 'Failed to load account from Soroban RPC', ErrorCodes.CHAIN_UNKNOWN);
+    });
+    const tx = new TransactionBuilder(sourceAccount, {
+      fee: BASE_FEE,
+      networkPassphrase: this.networkPassphrase,
+    })
+      .addOperation(this.roleOp(action, input))
+      .setTimeout(30)
+      .build();
+
+    const simRes = await this.server.simulateTransaction(tx);
+    if (!rpc.Api.isSimulationError(simRes)) {
+      return { allowed: true };
+    }
+    const contractErrorMatch = String(simRes.error).match(/Error\(Contract, #(\d+)\)/);
+    if (!contractErrorMatch?.[1]) {
+      throw new AppError(400, 'Soroban simulation failed', ErrorCodes.CHAIN_UNKNOWN);
+    }
+    const err = chainErrorToAppError(parseInt(contractErrorMatch[1], 10));
+    return { allowed: false, reason: err.code as RolePreflightResult['reason'] };
+  }
+
+  private roleOp(
+    action: RoleProvisionAction,
+    input: AddCompanyInput | AddCarrierInput | AddCarrierToWhitelistInput
+  ): ReturnType<Contract['call']> {
+    const contract = this.getContract();
+    if (action === 'add_company') {
+      const args = input as AddCompanyInput;
+      return contract.call(
+        action,
+        new Address(args.admin).toScVal(),
+        new Address(args.company).toScVal()
+      );
+    }
+    const args = input as AddCarrierInput | AddCarrierToWhitelistInput;
+    return contract.call(
+      action,
+      new Address(args.admin).toScVal(),
+      new Address(args.company).toScVal(),
+      new Address(args.carrier).toScVal()
+    );
+  }
+
   async *streamEvents(cursor?: ChainEventCursor): AsyncIterable<ChainEvent> {
     for await (const event of this.streamEventsWithFailures(cursor)) {
       if (isChainEventDecodeFailure(event)) {
@@ -407,7 +731,13 @@ export class SorobanAdapter implements ChainAdapter {
     }
 
     try {
-      const filters: rpc.Api.EventFilter[] = [{ type: 'contract', contractIds: [this.contractId] }];
+      const filters: rpc.Api.EventFilter[] = [
+        {
+          type: 'contract',
+          contractIds: [this.contractId],
+          topics: [['anchor'], ['esc_init'], ['esc_rel']],
+        },
+      ];
       const request: rpc.Api.GetEventsRequest = cursor
         ? { cursor, filters }
         : { startLedger: startLedger ?? 0, filters };
@@ -422,9 +752,11 @@ export class SorobanAdapter implements ChainAdapter {
             tx_hash: rawEvent.txHash,
             ledger: rawEvent.ledger,
             ledger_closed_at: rawEvent.ledgerClosedAt,
-            name: rawEvent.topic?.[0],
-            topic: rawEvent.topic,
-            data: rawEvent.value,
+            ...(decodeDeliveryEvent(rawEvent) ?? {
+              name: rawEvent.topic?.[0],
+              topic: rawEvent.topic,
+              data: rawEvent.value,
+            }),
           });
           yield parsed;
         } catch (err) {
@@ -467,68 +799,8 @@ export class SorobanAdapter implements ChainAdapter {
     }
   }
 
-
-  /**
-   * P12-12: Confirm delivery and release escrow via contract's `confirm_delivery`.
-   * Co-emits delivery_confirmed + escrow_released.
-   * Uses contract's idempotency_key for deduplication (P13-06).
-   */
-  async confirmDelivery(input: {
-    receiver: string;
-    shipment_id: string;
-    amount?: string;
-    idempotency_key?: string;
-  }): Promise<ConfirmDeliveryResult> {
-    return instrumentSubmission('confirm_delivery', async () => {
-      // Validate inputs
-      if (!AddressSchema.safeParse(input.receiver).success) {
-        throw new AppError(
-          422,
-          'receiver must be a valid Stellar address',
-          ErrorCodes.CHAIN_UNAUTHORIZED
-        );
-      }
-      if (!SymbolSchema.safeParse(input.shipment_id).success) {
-        throw new AppError(
-          422,
-          'shipment_id must be a valid Soroban Symbol',
-          ErrorCodes.CHAIN_UNKNOWN
-        );
-      }
-
-      const contract = this.getContract();
-      const op = contract.call(
-        'confirm_delivery',
-        new Address(input.receiver).toScVal(),
-        nativeToScVal(input.shipment_id, { type: 'symbol' }),
-        // amount: optional for partial vs full release
-        input.amount
-          ? nativeToScVal(BigInt(input.amount), { type: 'i128' })
-          : nativeToScVal(null, { type: 'void' }),
-        // idempotency_key: optional
-        input.idempotency_key
-          ? nativeToScVal(input.idempotency_key, { type: 'symbol' })
-          : nativeToScVal(null, { type: 'void' })
-      );
-
-      const { txHash, ledger } = await this.invokePipeline(op);
-
-      // Determine if partial release based on whether amount was specified
-      const partial = !!input.amount;
-
-      return {
-        txHash,
-        ledger,
-        simulated: false,
-        shipmentId: input.shipment_id,
-        partial,
-      };
-    });
-  }
-
   /**
    * Invocation pipeline: simulate -> assemble -> sign -> send -> poll
-   * P12-12: Always goes through the contract - no simulated path for soroban mode.
    * P12-06: Bounded backoff polling with configurable interval and hard timeout.
    * P13-06: Uses RPC event id as fallback for duplicate detection.
    */
@@ -536,7 +808,7 @@ export class SorobanAdapter implements ChainAdapter {
     op: ReturnType<Contract['call']>,
     onSent?: (txHash: string) => void,
     decodeContractError: (code: number) => AppError = chainErrorToAppError
-  ): Promise<{ txHash: string; ledger: number }> {
+  ): Promise<{ txHash: string; ledger: number; returnValue?: unknown }> {
     const keypair = this.signer();
     const sourceAccount = await this.server.getAccount(keypair.publicKey()).catch(() => {
       throw new AppError(502, 'Failed to load account from Soroban RPC', ErrorCodes.CHAIN_UNKNOWN);
@@ -553,11 +825,7 @@ export class SorobanAdapter implements ChainAdapter {
     // 1. Simulate
     const simRes = await this.server.simulateTransaction(tx);
     if (rpc.Api.isSimulationError(simRes)) {
-      const contractErrorMatch = String(simRes.error).match(/Error\(Contract, #(\d+)\)/);
-      if (contractErrorMatch?.[1]) {
-        throw decodeContractError(parseInt(contractErrorMatch[1], 10));
-      }
-      throw new AppError(400, 'Soroban simulation failed', ErrorCodes.CHAIN_UNKNOWN);
+      throw simulationErrorToAppError(simRes.error, decodeContractError);
     }
 
     const resources = simRes.transactionData.build().resources();
@@ -580,14 +848,17 @@ export class SorobanAdapter implements ChainAdapter {
     const sendRes = await this.server.sendTransaction(assembled);
     if (sendRes.status === 'ERROR') {
       // P13-06: Handle duplicate transaction (re-submission after network issue)
-      const errorStr = String(sendRes.error ?? '');
+      const rawErr =
+        (sendRes as { error?: unknown; errorResult?: unknown }).error ??
+        (sendRes as { errorResult?: unknown }).errorResult;
+      const errorStr = String(rawErr ?? '');
       if (errorStr.includes('DUPLICATE') || errorStr.includes('already exists')) {
         // Already submitted - poll for existing result
         onSent?.(sendRes.hash);
         return this.pollForConfirmation(sendRes.hash);
       }
       throw new AppError(400, 'Soroban sendTransaction failed', ErrorCodes.CHAIN_UNKNOWN, {
-        error: sendRes.error,
+        error: rawErr,
       });
     }
     if (sendRes.status === 'TRY_AGAIN_LATER') {
@@ -606,10 +877,12 @@ export class SorobanAdapter implements ChainAdapter {
 
   /**
    * Poll for transaction confirmation (P12-06).
-   * Returns { txHash, ledger } only on confirmed SUCCESS.
+   * Returns { txHash, ledger, returnValue } only on confirmed SUCCESS.
    * Throws CHAIN_SUBMISSION_TIMEOUT on timeout so the submission retry (#1078) can act on it.
    */
-  private async pollForConfirmation(txHash: string): Promise<{ txHash: string; ledger: number }> {
+  private async pollForConfirmation(
+    txHash: string
+  ): Promise<{ txHash: string; ledger: number; returnValue?: unknown }> {
     const startTime = Date.now();
     const timeoutMs = this.pollTimeoutMs;
 
@@ -617,12 +890,16 @@ export class SorobanAdapter implements ChainAdapter {
       const statusRes = await this.server.getTransaction(txHash);
 
       if (statusRes.status === 'SUCCESS') {
-        return { txHash, ledger: statusRes.ledger };
+        const returnValue = statusRes.returnValue
+          ? scValToNative(statusRes.returnValue)
+          : undefined;
+        return { txHash, ledger: statusRes.ledger, returnValue };
       }
 
       if (statusRes.status === 'FAILED') {
         // P13-06: Distinguish transaction failure modes
-        if ('resultCode' in statusRes && statusRes.resultCode?.includes('tx')) {
+        const resultXdr = statusRes.resultXdr ? String(statusRes.resultXdr) : undefined;
+        if (resultXdr && resultXdr.includes('tx')) {
           throw new AppError(
             400,
             'Soroban transaction failed on-chain',
@@ -641,15 +918,16 @@ export class SorobanAdapter implements ChainAdapter {
       const elapsed = Date.now() - startTime;
       if (elapsed > timeoutMs) {
         // P13-06: NOT_FOUND past the deadline may be a re-org or RPC lag.
+        const lastStatus: string = statusRes.status;
         const detail =
-          statusRes.status === 'NOT_FOUND'
+          lastStatus === 'NOT_FOUND'
             ? 'transaction not found (possible re-org or RPC lag)'
-            : `last status ${statusRes.status}`;
+            : `last status ${lastStatus}`;
         throw new AppError(
           504,
           `Soroban transaction polling timed out after ${timeoutMs}ms: ${detail}`,
           ErrorCodes.CHAIN_SUBMISSION_TIMEOUT,
-          { txHash, elapsedMs: elapsed, lastStatus: statusRes.status }
+          { txHash, elapsedMs: elapsed, lastStatus }
         );
       }
       await new Promise(resolve => setTimeout(resolve, this.pollIntervalMs));

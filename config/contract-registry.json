@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json.schemastore.org/schemaCat",
+  "version": 1,
+  "description": "Committed registry of deployed chain contract IDs (P15-01). Source of truth for startup configuration; never edit ad-hoc env values to deploy a new contract.",
+  "networks": {
+    "testnet": {
+      "sourceCommit": "89e38e0e6a3f58ccb7cb3c6d5b5b06ae63a3b5ad",
+      "contracts": {
+        "shipment": {
+          "id": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2B",
+          "wasmHash": "0000000000000000000000000000000000000000000000000000000000000000"
+        },
+        "token": {
+          "id": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2C",
+          "wasmHash": "1111111111111111111111111111111111111111111111111111111111111111"
+        },
+        "nft": {
+          "id": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2D",
+          "wasmHash": "2222222222222222222222222222222222222222222222222222222222222222"
+        }
+      }
+    },
+    "public": {
+      "sourceCommit": "",
+      "contracts": {
+        "shipment": { "id": "", "wasmHash": "" },
+        "token": { "id": "", "wasmHash": "" },
+        "nft": { "id": "", "wasmHash": "" }
+      }
+    }
+  }
+}
