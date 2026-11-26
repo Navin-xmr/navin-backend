@@ -140,6 +140,20 @@
         "GABQGAYDAMBQGAYDAMBQGAYDAMBQGAYDAMBQGAYDAMBQGAYDAMBQHGPC",
         "ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb"
       ]
+    },
+    "status_updated": {
+      "id": "0002200479567253509-0000000001",
+      "contract_id": "CACAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAINCW",
+      "tx_hash": "8d5f2bc4cf1830a08be305cead8bbae0f1f5b2d5e1c5e2f1de5f301b2c4d5e6f",
+      "ledger": 512403,
+      "ledger_closed_at": "2026-09-27T10:23:10Z",
+      "name": "status_updated",
+      "topic": ["status_updated", "42"],
+      "data": [
+        "Created",
+        "InTransit",
+        "ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb"
+      ]
     }
   }
 }

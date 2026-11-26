@@ -624,6 +624,13 @@ export async function indexStellarTransactions(
       metadata.proofHash = event.data[0];
       metadata.payee = event.data[1];
       metadata.amount = event.data[2];
+    } else if (event.name === CHAIN_EVENT_NAMES.STATUS_UPDATED) {
+      milestoneEvent = MilestoneEvent.STATUS_UPDATED;
+      shipmentId = event.topic[1];
+      dataHash = event.data[2];
+      metadata.dataHash = dataHash;
+      metadata.oldStatus = event.data[0];
+      metadata.newStatus = event.data[1];
     } else if (event.name === CHAIN_EVENT_NAMES.DISPUTE_RAISED) {
       // #1053 — open the dispute record. reason_hash is stored verbatim:
       // only the SHA-256 digest is on-chain, never the free-text evidence.

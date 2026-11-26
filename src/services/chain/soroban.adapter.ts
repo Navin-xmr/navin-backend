@@ -901,7 +901,7 @@ export class SorobanAdapter implements ChainAdapter {
       if (errorStr.includes('DUPLICATE') || errorStr.includes('already exists')) {
         // Already submitted - poll for existing result
         onSent?.(sendRes.hash);
-        return this.pollForConfirmation(sendRes.hash);
+        return this.pollForConfirmation(sendRes.hash, decodeContractError);
       }
       throw new AppError(400, 'Soroban sendTransaction failed', ErrorCodes.CHAIN_UNKNOWN, {
         error: rawErr,
@@ -918,7 +918,7 @@ export class SorobanAdapter implements ChainAdapter {
 
     // 5. Poll with hard timeout (P12-06)
     onSent?.(sendRes.hash);
-    return this.pollForConfirmation(sendRes.hash);
+    return this.pollForConfirmation(sendRes.hash, decodeContractError);
   }
 
   /**
@@ -927,7 +927,8 @@ export class SorobanAdapter implements ChainAdapter {
    * Throws CHAIN_SUBMISSION_TIMEOUT on timeout so the submission retry (#1078) can act on it.
    */
   private async pollForConfirmation(
-    txHash: string
+    txHash: string,
+    decodeContractError: (code: number) => AppError = chainErrorToAppError
   ): Promise<{ txHash: string; ledger: number; returnValue?: unknown }> {
     const startTime = Date.now();
     const timeoutMs = this.pollTimeoutMs;
@@ -943,8 +944,13 @@ export class SorobanAdapter implements ChainAdapter {
       }
 
       if (statusRes.status === 'FAILED') {
+        // Extract contract error from failed transaction result
+        const resultXdr = statusRes.resultXdr ? String(statusRes.resultXdr) : '';
+        const contractErrorMatch = resultXdr.match(/Error\(Contract, #(\d+)\)/);
+        if (contractErrorMatch?.[1]) {
+          throw decodeContractError(parseInt(contractErrorMatch[1], 10));
+        }
         // P13-06: Distinguish transaction failure modes
-        const resultXdr = statusRes.resultXdr ? String(statusRes.resultXdr) : undefined;
         if (resultXdr && resultXdr.includes('tx')) {
           throw new AppError(
             400,

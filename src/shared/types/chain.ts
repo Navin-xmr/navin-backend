@@ -380,6 +380,7 @@ export const CHAIN_EVENT_NAMES = {
   ANCHOR: 'anchor',
   ESCROW_INIT: 'esc_init',
   ESCROW_RELEASE: 'esc_rel',
+  STATUS_UPDATED: 'status_updated',
   DELIVERY_SUCCESS: 'delivery_success',
   DELIVERY_CONFIRMED: 'delivery_confirmed',
   /** v2.2 (#1053) — `raise_dispute` emitted this before `escrow_frozen`. */
@@ -438,6 +439,16 @@ export const EscrowReleaseEventSchema = z
     name: z.literal(CHAIN_EVENT_NAMES.ESCROW_RELEASE),
     topic: z.tuple([z.literal(CHAIN_EVENT_NAMES.ESCROW_RELEASE), SymbolSchema]),
     data: z.tuple([Bytes32HexSchema, AddressSchema, PositiveI128Schema]),
+  })
+  .strict();
+
+/** topic `["status_updated", shipment_id]` · data `(old_status, new_status, data_hash)` */
+export const StatusUpdatedEventSchema = z
+  .object({
+    ...eventEnvelope,
+    name: z.literal(CHAIN_EVENT_NAMES.STATUS_UPDATED),
+    topic: z.tuple([z.literal(CHAIN_EVENT_NAMES.STATUS_UPDATED), U64StringSchema]),
+    data: z.tuple([ShipmentStatusSchema, ShipmentStatusSchema, Bytes32HexSchema]),
   })
   .strict();
 
@@ -609,6 +620,7 @@ export const ChainEventSchema = z.discriminatedUnion('name', [
   AnchorEventSchema,
   EscrowInitEventSchema,
   EscrowReleaseEventSchema,
+  StatusUpdatedEventSchema,
   DeliverySuccessEventSchema,
   DeliveryConfirmedEventSchema,
   DisputeRaisedEventSchema,
@@ -621,6 +633,7 @@ export const ChainEventSchema = z.discriminatedUnion('name', [
 export type AnchorEvent = z.infer<typeof AnchorEventSchema>;
 export type EscrowInitEvent = z.infer<typeof EscrowInitEventSchema>;
 export type EscrowReleaseEvent = z.infer<typeof EscrowReleaseEventSchema>;
+export type StatusUpdatedEvent = z.infer<typeof StatusUpdatedEventSchema>;
 export type DeliverySuccessEvent = z.infer<typeof DeliverySuccessEventSchema>;
 export type DeliveryConfirmedEvent = z.infer<typeof DeliveryConfirmedEventSchema>;
 export type DisputeRaisedEvent = z.infer<typeof DisputeRaisedEventSchema>;
