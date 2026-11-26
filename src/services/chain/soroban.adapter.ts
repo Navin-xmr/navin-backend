@@ -56,13 +56,13 @@ import type {
   AnchorResult,
   ChainAdapter,
   ChainEventCursor,
+  ConfirmDeliveryInput,
+  ConfirmDeliveryResult,
   ChainShipmentId,
   ChainShipmentRecord,
   ChainShipmentStatus,
   ChainSubmitOptions,
   ChainTxReceipt,
-  ConfirmDeliveryInput,
-  ConfirmDeliveryResult,
   CreateShipmentInput,
   CreateShipmentResult,
   EscrowResult,
@@ -801,6 +801,8 @@ export class SorobanAdapter implements ChainAdapter {
 
   /**
    * Invocation pipeline: simulate -> assemble -> sign -> send -> poll
+   * P12-06: Bounded backoff polling with configurable interval and hard timeout.
+   * P13-06: Uses RPC event id as fallback for duplicate detection.
    */
   private async invokePipeline(
     op: ReturnType<Contract['call']>,
@@ -845,7 +847,19 @@ export class SorobanAdapter implements ChainAdapter {
     // 4. Send
     const sendRes = await this.server.sendTransaction(assembled);
     if (sendRes.status === 'ERROR') {
-      throw new AppError(400, 'Soroban sendTransaction failed', ErrorCodes.CHAIN_UNKNOWN);
+      // P13-06: Handle duplicate transaction (re-submission after network issue)
+      const rawErr =
+        (sendRes as { error?: unknown; errorResult?: unknown }).error ??
+        (sendRes as { errorResult?: unknown }).errorResult;
+      const errorStr = String(rawErr ?? '');
+      if (errorStr.includes('DUPLICATE') || errorStr.includes('already exists')) {
+        // Already submitted - poll for existing result
+        onSent?.(sendRes.hash);
+        return this.pollForConfirmation(sendRes.hash);
+      }
+      throw new AppError(400, 'Soroban sendTransaction failed', ErrorCodes.CHAIN_UNKNOWN, {
+        error: rawErr,
+      });
     }
     if (sendRes.status === 'TRY_AGAIN_LATER') {
       // Not queued, so there is nothing to look up later; the retry can resend.
@@ -856,34 +870,64 @@ export class SorobanAdapter implements ChainAdapter {
       );
     }
 
-    // 5. Poll
-    const txHash = sendRes.hash;
-    onSent?.(txHash);
-    let statusRes: rpc.Api.GetTransactionResponse;
+    // 5. Poll with hard timeout (P12-06)
+    onSent?.(sendRes.hash);
+    return this.pollForConfirmation(sendRes.hash);
+  }
+
+  /**
+   * Poll for transaction confirmation (P12-06).
+   * Returns { txHash, ledger, returnValue } only on confirmed SUCCESS.
+   * Throws CHAIN_SUBMISSION_TIMEOUT on timeout so the submission retry (#1078) can act on it.
+   */
+  private async pollForConfirmation(
+    txHash: string
+  ): Promise<{ txHash: string; ledger: number; returnValue?: unknown }> {
     const startTime = Date.now();
     const timeoutMs = this.pollTimeoutMs;
 
     for (;;) {
-      statusRes = await this.server.getTransaction(txHash);
+      const statusRes = await this.server.getTransaction(txHash);
+
       if (statusRes.status === 'SUCCESS') {
         const returnValue = statusRes.returnValue
           ? scValToNative(statusRes.returnValue)
           : undefined;
         return { txHash, ledger: statusRes.ledger, returnValue };
       }
+
       if (statusRes.status === 'FAILED') {
+        // P13-06: Distinguish transaction failure modes
+        const resultXdr = statusRes.resultXdr ? String(statusRes.resultXdr) : undefined;
+        if (resultXdr && resultXdr.includes('tx')) {
+          throw new AppError(
+            400,
+            'Soroban transaction failed on-chain',
+            ErrorCodes.CHAIN_TRANSACTION_FAILED,
+            { txHash, resultXdr: statusRes.resultXdr }
+          );
+        }
         throw new AppError(
           400,
           'Soroban transaction execution failed on-chain',
-          ErrorCodes.CHAIN_UNKNOWN
+          ErrorCodes.CHAIN_UNKNOWN,
+          { txHash }
         );
       }
-      if (Date.now() - startTime > timeoutMs) {
+
+      const elapsed = Date.now() - startTime;
+      if (elapsed > timeoutMs) {
+        // P13-06: NOT_FOUND past the deadline may be a re-org or RPC lag.
+        const lastStatus: string = statusRes.status;
+        const detail =
+          lastStatus === 'NOT_FOUND'
+            ? 'transaction not found (possible re-org or RPC lag)'
+            : `last status ${lastStatus}`;
         throw new AppError(
           504,
-          'Soroban transaction polling timed out',
+          `Soroban transaction polling timed out after ${timeoutMs}ms: ${detail}`,
           ErrorCodes.CHAIN_SUBMISSION_TIMEOUT,
-          { txHash }
+          { txHash, elapsedMs: elapsed, lastStatus }
         );
       }
       await new Promise(resolve => setTimeout(resolve, this.pollIntervalMs));

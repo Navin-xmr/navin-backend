@@ -666,6 +666,11 @@ export async function indexStellarTransactions(
       upserted += 1;
       // #1044 — already-confirmed on first sight; otherwise reverifyAnchoredBlocks observes it later.
       if (verified) observeConfirmationLag(event.name, event.ledger_closed_at);
+    } else {
+      logger.debug(
+        { eventId: event.id, txHash: event.tx_hash, eventName: event.name },
+        'Duplicate chain event skipped (idempotent upsert)'
+      );
     }
 
     if (event.name === CHAIN_EVENT_NAMES.ANCHOR) {
