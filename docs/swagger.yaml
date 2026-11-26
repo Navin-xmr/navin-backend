@@ -6619,7 +6619,7 @@ paths:
            (`getTransaction` + `getEvents`) for `txHash` on `network` (and `contractId`) and confirm the on-chain
            digest equals `dataHash`.
 
-        See `docs/blockchain.md` for the copy-pasteable browser implementation.
+        See `docs/chain-verification.md` for the copy-pasteable browser implementation.
       tags:
         - Ledger
       security:
@@ -7932,6 +7932,35 @@ components:
             Stellar transaction hash for the shipment tokenization (or related
             on-chain) operation. Used for explorer links and ledger events.
           x-implemented: true
+        chainOutbox:
+          type: object
+          nullable: true
+          description: >
+            #997 — transactional outbox for create_shipment. Created atomically with
+            the shipment in `pending_chain`; the worker submits and resolves it to
+            `anchored` (or `failed` after retries).
+          properties:
+            status:
+              type: string
+              enum: [pending_chain, processing, anchored, failed]
+            idempotencyKey:
+              type: string
+              description: Stable dedupe key for the chain submission.
+            attempts:
+              type: integer
+            availableAt:
+              type: string
+              format: date-time
+            lastError:
+              type: string
+              nullable: true
+            txHash:
+              type: string
+              nullable: true
+            ledger:
+              type: integer
+              nullable: true
+          x-implemented: true
         deliveryProof:
           type: object
           nullable: true
@@ -8258,6 +8287,26 @@ components:
           description: >
             Canonical JSON payload that was hashed into dataHash and anchored on-chain.
             Stored alongside the block for independent verification.
+        schemaVersion:
+          type: integer
+          default: 1
+          description: v2 chain event schema version; legacy rows read as 1.
+        eventCounter:
+          type: integer
+          default: 0
+          description: Monotonic v2 event counter; legacy rows read as 0.
+        idempotencyKey:
+          type: string
+          nullable: true
+          description: Stable key used to deduplicate replayed v2 events.
+        contractId:
+          type: string
+          nullable: true
+          description: Emitting Soroban contract id.
+        eventTopic:
+          type: string
+          nullable: true
+          description: Contract event topic name (e.g. create_shipment).
         transactionHash:
           type: string
           nullable: true
@@ -8323,6 +8372,7 @@ components:
         network:
           type: string
           enum: [testnet, public]
+          example: testnet
           description: >
             Stellar network the block was written under (`public` = mainnet). Recorded at
             write time; legacy blocks without a recorded network report the server's

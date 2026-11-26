@@ -13,6 +13,7 @@ export type AuditAction =
   | 'ANOMALY_DETECTED'
   | 'USER_INVITED'
   | 'DISPUTE_OPENED'
+  | 'DISPUTE_RESOLVED'
   | 'RBAC_ROLE_MODIFIED'
   | 'API_KEY_GENERATED';
 
@@ -30,7 +31,8 @@ function inferResource(action: AuditAction): string {
     action === 'SHIPMENT_STATUS_CHANGED' ||
     action === 'SHIPMENT_CREATED' ||
     action === 'PROOF_UPLOADED' ||
-    action === 'DISPUTE_OPENED'
+    action === 'DISPUTE_OPENED' ||
+    action === 'DISPUTE_RESOLVED'
   ) {
     return 'SHIPMENT';
   }

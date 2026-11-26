@@ -230,16 +230,39 @@ export async function buildSettlementSparkline(
 export async function disputePayment(
   id: string,
   disputeReason: string,
-  additionalNotes?: string
+  additionalNotes?: string,
+  chainInfo?: { reasonHash: string; txHash: string }
 ): Promise<IPayment | null> {
   return PaymentModel.findByIdAndUpdate(
     id,
     {
       status: PaymentStatus.DISPUTED,
+      // #1036 — escrow is frozen on-chain the moment raise_dispute confirms.
+      ...(chainInfo && { escrowFrozen: true }),
       'escrowRelease.disputedAt': new Date(),
       'escrowRelease.disputeReason': disputeReason,
       ...(additionalNotes ? { 'escrowRelease.additionalNotes': additionalNotes } : {}),
+      ...(chainInfo && {
+        'escrowRelease.disputeReasonHash': chainInfo.reasonHash,
+        'escrowRelease.disputeTxHash': chainInfo.txHash,
+      }),
     },
+    { new: true }
+  ).lean();
+}
+
+/**
+ * #1036 — records that `resolve_dispute` was submitted on-chain. The payment
+ * stays DISPUTED/frozen until the indexed `dispute_resolved` event decides
+ * the outcome (see src/workers/stellar-indexer.worker.ts) — never here.
+ */
+export async function submitDisputeResolution(
+  id: string,
+  resolveTxHash: string
+): Promise<IPayment | null> {
+  return PaymentModel.findByIdAndUpdate(
+    id,
+    { 'escrowRelease.resolveTxHash': resolveTxHash },
     { new: true }
   ).lean();
 }

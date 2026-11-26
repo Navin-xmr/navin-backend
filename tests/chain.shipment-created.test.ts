@@ -2,13 +2,15 @@
  * P13-08 / #1028 — both race orderings for shipment_created indexing.
  */
 import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from '@jest/globals';
 
 import { parseChainEvent } from '../src/shared/types/chain.js';
 import { resolveShipmentCreatedMapping } from '../src/modules/shipments/chainShipmentMapping.js';
 
+const __dirname = dirname(fileURLToPath(import.meta.url));
 const events = JSON.parse(readFileSync(join(__dirname, 'fixtures/chain/events.json'), 'utf8')) as {
   events: Record<string, unknown>;
 };

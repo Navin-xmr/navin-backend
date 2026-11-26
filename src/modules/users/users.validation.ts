@@ -15,6 +15,8 @@ export const CreateUserBodySchema = z.object({
   email: z.string().email(),
   name: z.string().min(1),
   role: z.nativeEnum(UserRole).default(UserRole.VIEWER),
+  /** On-chain carrier address (#1042) — DRIVER users with one get carrier-whitelisted. */
+  walletAddress: z.string().optional(),
 });
 
 /**

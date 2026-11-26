@@ -1,11 +1,13 @@
 import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from '@jest/globals';
 
 import { AppError, ErrorCodes } from '../src/shared/http/errors.js';
 import { NAVIN_ERRORS, NAVIN_ERROR_MAP, navinErrorToAppError } from '../src/shared/types/chain.js';
 
+const __dirname = dirname(fileURLToPath(import.meta.url));
 const vendored = JSON.parse(
   readFileSync(join(__dirname, 'fixtures/chain/navin-errors.json'), 'utf8')
 ) as { errors: Record<string, number> };

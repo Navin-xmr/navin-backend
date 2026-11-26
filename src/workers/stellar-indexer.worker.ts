@@ -25,6 +25,10 @@ import type {
 } from '../shared/types/chain.js';
 import { confirmAnchoredTelemetry } from '../modules/telemetry/telemetry.confirmation.js';
 import {
+  isDeliveryEventRecorded,
+  recordDeliveryEvent,
+} from '../modules/shipments/shipmentDelivery.service.js';
+import {
   observeConfirmationLag,
   recordIndexerCursorEvent,
   recordIndexerPoll,
@@ -277,6 +281,32 @@ async function recordPaymentConfirmation(
   }
 }
 
+/**
+ * #1036 — mirrors a `dispute_resolved` event's outcome into the Payment
+ * projection: `resolved` releases the frozen escrow, `rejected` unfreezes it
+ * back to Escrowed. The outcome always comes from here, never a service call.
+ */
+async function applyDisputeResolution(shipmentId: string, outcome: string): Promise<void> {
+  if (!mongoose.isValidObjectId(shipmentId)) return;
+
+  const nextStatus =
+    outcome === 'ReleaseToCarrier' || outcome === 'resolved'
+      ? PaymentStatus.RELEASED
+      : outcome === 'RefundToCompany' || outcome === 'PartialRefund'
+        ? PaymentStatus.REFUNDED
+        : PaymentStatus.ESCROWED;
+  await PaymentModel.updateOne(
+    { shipmentId: new mongoose.Types.ObjectId(shipmentId), status: PaymentStatus.DISPUTED },
+    {
+      $set: {
+        status: nextStatus,
+        escrowFrozen: false,
+        'escrowRelease.disputeOutcome': outcome,
+      },
+    }
+  );
+}
+
 async function updatePendingConfirmations(adapter: ChainAdapter): Promise<void> {
   const pendingPayments = await PaymentModel.find({
     status: PaymentStatus.RELEASED,
@@ -520,6 +550,22 @@ export async function indexStellarTransactions(
 
     cursor = event.id;
 
+    // #1043 — delivery events fold into a per-shipment ShipmentDelivery record (idempotent by
+    // event id). They bypass LedgerBlock: both topics share one tx hash, which keys LedgerBlock.
+    if (
+      event.name === CHAIN_EVENT_NAMES.DELIVERY_SUCCESS ||
+      event.name === CHAIN_EVENT_NAMES.DELIVERY_CONFIRMED
+    ) {
+      if (dryRun) {
+        if (await isDeliveryEventRecorded(event)) existing += 1;
+        else upserted += 1;
+        continue;
+      }
+      if ((await recordDeliveryEvent(event)) !== 'duplicate') upserted += 1;
+      if (cursor && persistCursor) await saveStoredCursor(cursor);
+      continue;
+    }
+
     // #1058 — confirmation depth is tracked for every event class, not just payments.
     const confirmations = await adapter.getConfirmationCount(event.ledger);
     const verified = confirmations >= confirmationThreshold();
@@ -703,6 +749,10 @@ export async function indexStellarTransactions(
       await recordTelemetryConfirmation(adapter, event.tx_hash, event.ledger);
     } else if (event.name === CHAIN_EVENT_NAMES.ESCROW_RELEASE) {
       await recordPaymentConfirmation(adapter, event.tx_hash, event.ledger);
+    } else if (event.name === CHAIN_EVENT_NAMES.DISPUTE_RESOLVED) {
+      // #1036 — the DB mirrors the resolution outcome from the chain event;
+      // it is never decided locally by the service that submitted resolve_dispute.
+      await applyDisputeResolution(event.data[0], event.data[1]);
     }
 
     await enqueueChainWebhookEvent({

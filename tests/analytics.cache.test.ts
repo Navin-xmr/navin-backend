@@ -31,6 +31,7 @@ describe('analytics redis cache', () => {
         scan: redisScan,
         del: redisDel,
       })),
+      getRedisConnection: jest.fn(() => ({})),
       redisConnection: {},
     }));
 

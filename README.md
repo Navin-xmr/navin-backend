@@ -461,6 +461,7 @@ socket.on('anomaly:detected', (anomaly) => {
 
 For detailed WebSocket documentation, see [WebSocket Features](docs/websockets.md).
 For the IoT → BullMQ → Stellar → anomaly detection flow, see [Telemetry Ingestion Pipeline](docs/telemetry-pipeline.md).
+For the client-side trustless verification of ledger blocks, see [Chain Verification Flow](docs/chain-verification.md).
 
 ---
 

@@ -52,7 +52,9 @@ export const createTeamMemberController: RequestHandler = async (req, res) => {
     email: body.email,
     name: body.name,
     role: body.role,
+    walletAddress: body.walletAddress,
     callerOrganizationId: req.user?.organizationId ?? '',
+    actorUserId: req.user?.userId,
   });
   sendResponse(res, 201, true, 'Team member created successfully', user);
 };

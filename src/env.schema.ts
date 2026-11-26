@@ -78,6 +78,12 @@ const EnvShape = z.object({
   //   soroban             — live Soroban RPC; requires SOROBAN_RPC_URL + ESCROW_CONTRACT_ID.
   SOROBAN_ADAPTER: z.enum(['simulated', 'soroban']).default('simulated'),
   SOROBAN_RPC_URL: z.string().url('SOROBAN_RPC_URL must be a valid URL').optional(),
+  // #995 — passphrase and deployed contract ids. Network defaults are resolved in
+  // src/config/index.ts; explicit values always win over the derived defaults.
+  SOROBAN_NETWORK_PASSPHRASE: z.string().min(1).optional(),
+  SHIPMENT_CONTRACT_ID: z.string().min(1).optional(),
+  TOKEN_CONTRACT_ID: z.string().min(1).optional(),
+  NFT_CONTRACT_ID: z.string().min(1).optional(),
   ESCROW_CONTRACT_ID: z.string().min(1).optional(),
   SOROBAN_MAX_RESOURCE_FEE_TESTNET: z.coerce.number().int().positive().safe().default(10_000_000),
   SOROBAN_MAX_RESOURCE_FEE_PUBLIC: z.coerce.number().int().positive().safe().default(1_000_000),

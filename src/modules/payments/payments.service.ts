@@ -6,12 +6,14 @@ import type {
   CreatePaymentInput,
   UpdatePaymentStatusInput,
   DisputeSettlementInput,
+  ResolveDisputeInput,
 } from './payments.validation.js';
 import { getStellarExplorerUrl } from '../../services/chain/explorer.js';
 import { emitPaymentStatusChange } from '../../infra/socket/io.js';
 import type { SettlementStatusPayload } from '../../shared/types/socketEvents.js';
 import { auditLog } from '../../shared/utils/auditLog.js';
-import { getChainAdapter } from '../../services/chain/factory.js';
+import { getChainActorAddress, getChainAdapter } from '../../services/chain/factory.js';
+import { generateDataHash } from '../../shared/utils/crypto.js';
 import { ShipmentStatus } from '../../shared/constants/shipments.js';
 import { Shipment } from '../shipments/shipments.model.js';
 import { amountToStroops } from './payments.reconciliation.js';
@@ -197,16 +199,41 @@ export async function releasePaymentService(
  * @returns {Promise<unknown>} Updated settlement document.
  * @throws {AppError} 404 when settlement not found.
  */
-export async function disputeSettlementService(id: string, input: DisputeSettlementInput) {
+export async function disputeSettlementService(
+  id: string,
+  input: DisputeSettlementInput,
+  actorUserId?: string
+) {
   const payment = await paymentsRepo.getPaymentById(id);
   if (!payment) {
     throw new AppError(404, 'Settlement not found', ErrorCodes.PAYMENT_NOT_FOUND);
   }
 
-  const updated = await paymentsRepo.disputePayment(id, input.reason, input.notes);
+  // #1036 — raise_dispute is called on-chain with a required reason hash; the
+  // contract remains authoritative (its rejections surface unmapped).
+  const shipmentId = payment.shipmentId.toString();
+  const reasonHash = generateDataHash({ reason: input.reason });
+  const receipt = await getChainAdapter().raiseDispute({
+    caller: getChainActorAddress(),
+    shipment_id: shipmentId,
+    reason_hash: reasonHash,
+  });
+
+  const updated = await paymentsRepo.disputePayment(id, input.reason, input.notes, {
+    reasonHash,
+    txHash: receipt.txHash,
+  });
   if (!updated) {
     throw new AppError(500, 'Failed to dispute settlement', ErrorCodes.INTERNAL_ERROR);
   }
+
+  auditLog({
+    userId: actorUserId ?? 'system',
+    action: 'DISPUTE_OPENED',
+    resourceId: id,
+    timestamp: new Date(),
+    metadata: { reasonHash, txHash: receipt.txHash },
+  });
 
   const settlementPayload: SettlementStatusPayload = {
     paymentId: updated._id.toString(),
@@ -327,5 +354,52 @@ export async function reconcileEscrowRefundService(input: {
     timestamp: new Date(),
     metadata: { txHash: input.txHash, amount: input.amount },
   });
+  return augmentPayment(updated);
+}
+
+/**
+ * Submits `resolve_dispute` on-chain for a disputed settlement (#1036).
+ * Deliberately does **not** change the settlement's status/outcome here —
+ * that comes only from the indexed `dispute_resolved` event
+ * (src/workers/stellar-indexer.worker.ts), so the DB never guesses ahead of
+ * the chain.
+ */
+export async function resolveSettlementDisputeService(
+  id: string,
+  input: ResolveDisputeInput,
+  actorUserId?: string
+) {
+  const payment = await paymentsRepo.getPaymentById(id);
+  if (!payment) {
+    throw new AppError(404, 'Settlement not found', ErrorCodes.PAYMENT_NOT_FOUND);
+  }
+  if (payment.status !== PaymentStatus.DISPUTED) {
+    throw new AppError(
+      409,
+      'Settlement has no open dispute to resolve',
+      ErrorCodes.SHIPMENT_INVALID_TRANSITION
+    );
+  }
+
+  const admin = getChainActorAddress();
+  const receipt = await getChainAdapter().resolveDispute({
+    admin,
+    shipment_id: payment.shipmentId.toString(),
+    outcome: input.outcome,
+  });
+
+  const updated = await paymentsRepo.submitDisputeResolution(id, receipt.txHash);
+  if (!updated) {
+    throw new AppError(500, 'Failed to record dispute resolution', ErrorCodes.INTERNAL_ERROR);
+  }
+
+  auditLog({
+    userId: actorUserId ?? 'system',
+    action: 'DISPUTE_RESOLVED',
+    resourceId: id,
+    timestamp: new Date(),
+    metadata: { outcome: input.outcome, txHash: receipt.txHash },
+  });
+
   return augmentPayment(updated);
 }

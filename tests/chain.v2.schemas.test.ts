@@ -151,7 +151,9 @@ describe('v2 function schemas — round trip and mutations', () => {
     });
 
     it.each(Object.keys(fixture))('rejects when field "%s" has the wrong type', key => {
-      expect(schema.safeParse({ ...fixture, [key]: 12345 }).success).toBe(false);
+      // {} fails every spec primitive (string/number/array), unlike a bare
+      // number literal which happens to be the correct type for `deadline`.
+      expect(schema.safeParse({ ...fixture, [key]: {} }).success).toBe(false);
     });
 
     it('rejects an extra field (strict schema / spec drift)', () => {

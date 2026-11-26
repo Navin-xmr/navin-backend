@@ -95,7 +95,17 @@ export const DisputeSettlementBodySchema = z.object({
   notes: z.string().optional(),
 });
 
+/**
+ * Body schema for `POST /api/settlements/:id/dispute/resolve` (#1036).
+ * `outcome` picks which on-chain `resolve_dispute` branch to submit — the
+ * settlement's resulting status is still taken from the chain event, not here.
+ */
+export const ResolveDisputeBodySchema = z.object({
+  outcome: z.enum(['resolved', 'rejected']),
+});
+
 export type CreatePaymentInput = z.infer<typeof CreatePaymentBodySchema>;
 export type UpdatePaymentStatusInput = z.infer<typeof UpdatePaymentStatusBodySchema>;
 export type GetPaymentsQuery = z.infer<typeof GetPaymentsQuerySchema>;
 export type DisputeSettlementInput = z.infer<typeof DisputeSettlementBodySchema>;
+export type ResolveDisputeInput = z.infer<typeof ResolveDisputeBodySchema>;
