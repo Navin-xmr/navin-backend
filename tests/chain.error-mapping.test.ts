@@ -4,10 +4,13 @@ import {
   chainErrorToAppError,
   updateStatusErrorToAppError,
   CHAIN_CONTRACT_ERRORS,
-  UPDATE_STATUS_CONTRACT_ERRORS,
   CHAIN_ERROR_MAP,
+  NAVIN_ERRORS,
+  NAVIN_ERROR_MAP,
+  UPDATE_STATUS_CONTRACT_ERRORS,
   UPDATE_STATUS_ERROR_MAP,
 } from '../src/shared/types/chain.js';
+import type { NavinErrorName } from '../src/shared/types/chain.js';
 
 /**
  * Failure-injection matrix for every NavinError class (#1034).
@@ -17,75 +20,27 @@ import {
  * - That no state is corrupted
  */
 describe('Chain Error Mapping Matrix', () => {
-  describe('Legacy contract errors (anchor, init_escrow, release_escrow)', () => {
-    const legacyErrorMatrix = [
-      {
-        name: 'NotAuthorized',
-        code: CHAIN_CONTRACT_ERRORS.NotAuthorized,
-        expectedCode: ErrorCodes.CHAIN_UNAUTHORIZED,
-        expectedStatus: 403,
-      },
-      {
-        name: 'InvalidHash',
-        code: CHAIN_CONTRACT_ERRORS.InvalidHash,
-        expectedCode: ErrorCodes.CHAIN_INVALID_HASH,
-        expectedStatus: 422,
-      },
-      {
-        name: 'AlreadyAnchored',
-        code: CHAIN_CONTRACT_ERRORS.AlreadyAnchored,
-        expectedCode: ErrorCodes.CHAIN_ALREADY_ANCHORED,
-        expectedStatus: 409,
-      },
-      {
-        name: 'EscrowExists',
-        code: CHAIN_CONTRACT_ERRORS.EscrowExists,
-        expectedCode: ErrorCodes.CHAIN_ESCROW_EXISTS,
-        expectedStatus: 409,
-      },
-      {
-        name: 'EscrowNotFound',
-        code: CHAIN_CONTRACT_ERRORS.EscrowNotFound,
-        expectedCode: ErrorCodes.CHAIN_ESCROW_NOT_FOUND,
-        expectedStatus: 404,
-      },
-      {
-        name: 'EscrowAlreadyReleased',
-        code: CHAIN_CONTRACT_ERRORS.EscrowAlreadyReleased,
-        expectedCode: ErrorCodes.CHAIN_ESCROW_ALREADY_RELEASED,
-        expectedStatus: 409,
-      },
-      {
-        name: 'InvalidAmount',
-        code: CHAIN_CONTRACT_ERRORS.InvalidAmount,
-        expectedCode: ErrorCodes.CHAIN_INVALID_AMOUNT,
-        expectedStatus: 422,
-      },
-      {
-        name: 'InvalidProof',
-        code: CHAIN_CONTRACT_ERRORS.InvalidProof,
-        expectedCode: ErrorCodes.CHAIN_INVALID_PROOF,
-        expectedStatus: 422,
-      },
-      {
-        name: 'InvalidStatus',
-        code: CHAIN_CONTRACT_ERRORS.InvalidStatus,
-        expectedCode: ErrorCodes.CHAIN_INVALID_STATUS,
-        expectedStatus: 409,
-      },
-    ];
+  describe('NavinError contract errors (chainErrorToAppError)', () => {
+    const navinErrorMatrix = (Object.entries(NAVIN_ERRORS) as [NavinErrorName, number][]).map(
+      ([name, code]) => ({
+        name,
+        code,
+        expectedCode: NAVIN_ERROR_MAP[name].code,
+        expectedStatus: NAVIN_ERROR_MAP[name].status,
+      })
+    );
 
-    it.each(legacyErrorMatrix)(
+    it.each(navinErrorMatrix)(
       'should decode $name (code $code) → $expectedCode ($expectedStatus)',
-      ({ code, expectedCode, expectedStatus }) => {
+      ({ name, code, expectedCode, expectedStatus }) => {
         const error = chainErrorToAppError(code);
         expect(error.code).toBe(expectedCode);
         expect(error.statusCode).toBe(expectedStatus);
-        expect(error.details).toEqual({ contractCode: code });
+        expect(error.details).toEqual({ contractCode: code, variant: name });
       }
     );
 
-    it('should map unknown legacy error codes to ERR_CHAIN_UNKNOWN (502)', () => {
+    it('should map unknown contract error codes to ERR_CHAIN_UNKNOWN (502)', () => {
       const unknownCode = 9999;
       const error = chainErrorToAppError(unknownCode);
       expect(error.code).toBe(ErrorCodes.CHAIN_UNKNOWN);
@@ -93,8 +48,13 @@ describe('Chain Error Mapping Matrix', () => {
       expect(error.details).toEqual({ contractCode: unknownCode });
     });
 
-    it('should map all CHAIN_ERROR_MAP entries to ErrorCodes', () => {
-      Object.entries(CHAIN_ERROR_MAP).forEach(([name, { code, status }]) => {
+    it('should map all NAVIN_ERROR_MAP and CHAIN_ERROR_MAP entries to ErrorCodes', () => {
+      Object.values(NAVIN_ERROR_MAP).forEach(({ code, status }) => {
+        expect(Object.values(ErrorCodes)).toContain(code);
+        expect(status).toBeGreaterThanOrEqual(400);
+        expect(status).toBeLessThan(600);
+      });
+      Object.values(CHAIN_ERROR_MAP).forEach(({ code, status }) => {
         expect(Object.values(ErrorCodes)).toContain(code);
         expect(status).toBeGreaterThanOrEqual(400);
         expect(status).toBeLessThan(600);
@@ -167,7 +127,7 @@ describe('Chain Error Mapping Matrix', () => {
     });
 
     it('should map all UPDATE_STATUS_ERROR_MAP entries to ErrorCodes', () => {
-      Object.entries(UPDATE_STATUS_ERROR_MAP).forEach(([name, { code, status }]) => {
+      Object.values(UPDATE_STATUS_ERROR_MAP).forEach(({ code, status }) => {
         expect(Object.values(ErrorCodes)).toContain(code);
         expect(status).toBeGreaterThanOrEqual(400);
         expect(status).toBeLessThan(600);
