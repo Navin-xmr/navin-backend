@@ -20,7 +20,7 @@ import { AppError, ErrorCodes } from '../../shared/http/errors.js';
 import { CHAIN_EVENT_NAMES, CHAIN_SPEC_VERSION } from '../../shared/types/chain.js';
 
 /** Chain operations that submit a transaction (closed set). */
-export const CHAIN_OPERATIONS = ['anchor_event', 'release_escrow'] as const;
+export const CHAIN_OPERATIONS = ['anchor_event', 'release_escrow', 'refund_escrow'] as const;
 export type ChainOperation = (typeof CHAIN_OPERATIONS)[number];
 
 export const QUEUE_NAMES = ['transaction_queue', 'stellar_indexer_queue'] as const;

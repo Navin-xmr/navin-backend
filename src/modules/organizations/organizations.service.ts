@@ -3,13 +3,18 @@ import { ErrorCodes } from '../../shared/http/errors.js';
 import * as organizationsRepo from './organizations.repo.js';
 import type { IOrganization } from '../../shared/types/user.js';
 import { UserRole } from '../../shared/constants/index.js';
+import { provisionCompanyRole } from '../../services/chain/rbac.service.js';
 
-export async function createOrganizationService(input: {
-  name: string;
-  type: string;
-  settings?: Record<string, unknown>;
-  callerRole: string;
-}): Promise<IOrganization> {
+export async function createOrganizationService(
+  input: {
+    name: string;
+    type: string;
+    settings?: Record<string, unknown>;
+    walletAddress?: string;
+    callerRole: string;
+  },
+  actorUserId?: string
+): Promise<IOrganization> {
   if (input.callerRole !== UserRole.SUPER_ADMIN) {
     throw new AppError(403, 'Only SUPER_ADMIN can create organizations', ErrorCodes.FORBIDDEN);
   }
@@ -20,6 +25,17 @@ export async function createOrganizationService(input: {
   }
 
   const org = await organizationsRepo.createOrganization(input);
+
+  // #1042 — provision the on-chain company role whenever the org has a chain
+  // address. Organizations without one are not meant to act on-chain yet.
+  if (org.walletAddress) {
+    await provisionCompanyRole({
+      organizationId: org._id.toString(),
+      companyAddress: org.walletAddress,
+      actorUserId,
+    });
+  }
+
   return org;
 }
 

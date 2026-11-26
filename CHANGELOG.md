@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Soroban preflight simulation error mapping for contract failures, missing authorization,
+  insufficient resource budget and missing trustlines; failed simulations retain raw RPC
+  details and never call `sendTransaction` (#1016).
+- Strict Soroban primitive schemas for `u64`, `i128`, `Address`, `BytesN<32>`, `Symbol`,
+  milestone vectors and contract enums, including 7-decimal amount documentation (#1015).
+- A Stellar quickstart Compose harness and nightly workflow for adapter contract deployment
+  smoke tests from navin-contracts WASM (#1013).
+- Soroban `getEvents` topic and contract filtering for the event-stream indexer (#1014).
 - Soroban simulation fee/CPU/ledger-byte ceilings with a typed retryable error and observable over-budget metric (#1074).
 - Frontend chain verification v2 guide and deterministic fixture covering canonical payload hashing and idempotency keys (#1071, #1079).
 - Soroban submission operations runbook and per-network resource policy configuration (#1074).
@@ -24,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - V2 schema round-trip/mutation suite (`tests/chain.v2.schemas.test.ts`, `reports/chain-schema-coverage.md`) and chain threat model with negative tests (`docs/chain-threat-model.md`) (#1057, #1059).
 
 **Phase 6 — Hash-and-Emit chain architecture**
+--
 
 - `ChainAdapter` port (`src/services/chain/types.ts`) with `anchorEvent`, `releaseEscrow`, `streamEvents`, `getConfirmationCount` and the `AnchorResult` / `EscrowResult` / `ChainEvent` shapes; domain modules may depend on the port and the factory only, never on an adapter implementation or the Stellar SDK (#650).
 - `SimulatedAdapter` (`src/services/chain/simulated.adapter.ts`) — Horizon `manageData` anchors and releases with `simulated: true` receipts; every result is explicitly flagged so demos never imply a real escrow (#650).
@@ -58,6 +67,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Enforced `jest.resetModules()` before ESM mock registration across chain, worker, shipment, settlement, payment, telemetry, and anomaly suites; lint rejects direct imports and mocks of `stellar.service.js`, and payment explorer URL formatting now lives in a shared utility (#976, #809, #974, #975).
 - Replaced explicit `any` in test fixtures, standardized realtime event constants, and used ObjectId fixtures across test suites (#982, #981, #980, #979)
 - Corrected `docs/PAGINATION.md` pagination strategy table: users dual-mode is live, documented the payments `total` meta variance, added shipment timeline to the cursor list (#576)
 - Refactored `loginLimiter` in `src/shared/middleware/rateLimiter.ts` to reuse `createRateLimitHandler()`, removing the duplicated inline 429 handler (#815)

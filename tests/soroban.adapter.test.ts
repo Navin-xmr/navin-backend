@@ -1,5 +1,5 @@
-import { describe, expect, it, jest, beforeEach } from '@jest/globals';
-import { rpc } from '@stellar/stellar-sdk';
+import { describe, expect, it, jest } from '@jest/globals';
+import { Account, Keypair, rpc } from '@stellar/stellar-sdk';
 import { SorobanAdapter } from '../src/services/chain/soroban.adapter.js';
 import { ErrorCodes } from '../src/shared/http/errors.js';
 
@@ -51,6 +51,35 @@ describe('SorobanAdapter pipeline', () => {
       code: ErrorCodes.CHAIN_UNKNOWN,
       statusCode: 500,
     });
+  });
+
+  it.each([
+    ['Error(Contract, #10)', 'ERR_CHAIN_CONTRACT_REJECTED'],
+    ['insufficient budget', 'ERR_CHAIN_INSUFFICIENT_BUDGET'],
+    ['missing trustline', 'ERR_CHAIN_MISSING_TRUSTLINE'],
+  ])('stops after a failed simulation: %s', async (rawError, expectedCode) => {
+    const keypair = Keypair.random();
+    const sendTransaction = jest.fn();
+    const rpcServer = {
+      getAccount: jest.fn(async () => new Account(keypair.publicKey(), '1')),
+      simulateTransaction: jest.fn(async () => ({ error: rawError })),
+      sendTransaction,
+    };
+
+    const adapter = new SorobanAdapter({
+      secretKey: keypair.secret(),
+      contractId: 'CACAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAINCW',
+      rpcServer: rpcServer as never,
+    });
+
+    await expect(
+      adapter.anchorEvent({
+        shipment_id: 'ship123',
+        data_hash: 'a'.repeat(64),
+        actor: keypair.publicKey(),
+      })
+    ).rejects.toMatchObject({ code: expectedCode });
+    expect(sendTransaction).not.toHaveBeenCalled();
   });
 
   it('surfaces malformed RPC events and continues yielding later events', async () => {

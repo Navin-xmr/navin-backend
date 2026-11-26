@@ -11,12 +11,20 @@ import {
   CHAIN_FUNCTION_AUTH,
   CHAIN_FUNCTIONS,
   CHAIN_SPEC_VERSION,
+  NAVIN_ERRORS,
   ChainContractErrorSchema,
   ChainEventSchema,
   ChainEventVerificationSchema,
   ChainFunctionArgsSchemas,
+  I128Schema,
+  MilestoneVecSchema,
+  RoleSchema,
+  SettlementStatusSchema,
+  ShipmentStatusSchema,
+  U64Schema,
   chainErrorToAppError,
   parseChainEvent,
+  simulationErrorToAppError,
 } from '../src/shared/types/chain.js';
 
 type Json = Record<string, unknown>;
@@ -53,7 +61,77 @@ describe('v2 spec pin', () => {
     ['errors.json', errors.spec_version],
   ])('%s matches CHAIN_SPEC_VERSION', (_file, version) => {
     expect(version).toBe(CHAIN_SPEC_VERSION);
-    expect(CHAIN_SPEC_VERSION).toBe('2.1.0');
+    expect(CHAIN_SPEC_VERSION).toBe('2.2.0');
+  });
+
+  describe('Soroban primitive schemas', () => {
+    it('accepts u64 boundaries and rejects overflow or malformed values', () => {
+      expect(U64Schema.parse('0')).toBe('0');
+      expect(U64Schema.parse('18446744073709551615')).toBe('18446744073709551615');
+      expect(U64Schema.safeParse('18446744073709551616').success).toBe(false);
+      expect(U64Schema.safeParse('01').success).toBe(false);
+      expect(U64Schema.safeParse(1).success).toBe(false);
+    });
+
+    it('accepts i128 boundaries and rejects overflow', () => {
+      expect(I128Schema.parse('-170141183460469231731687303715884105728')).toBe(
+        '-170141183460469231731687303715884105728'
+      );
+      expect(I128Schema.parse('170141183460469231731687303715884105727')).toBe(
+        '170141183460469231731687303715884105727'
+      );
+      expect(I128Schema.safeParse('170141183460469231731687303715884105728').success).toBe(false);
+      expect(I128Schema.safeParse(1500000000).success).toBe(false);
+    });
+
+    it('accepts contract symbols and milestone vectors', () => {
+      expect(
+        MilestoneVecSchema.parse([
+          ['CREATED', 1],
+          ['DELIVERED', 4294967295],
+        ])
+      ).toEqual([
+        ['CREATED', 1],
+        ['DELIVERED', 4294967295],
+      ]);
+      expect(MilestoneVecSchema.safeParse([['x'.repeat(33), 1]]).success).toBe(false);
+    });
+
+    it('validates ShipmentStatus, Role and SettlementStatus enums', () => {
+      expect(ShipmentStatusSchema.parse('Delivered')).toBe('Delivered');
+      expect(ShipmentStatusSchema.safeParse('delivered').success).toBe(false);
+      expect(RoleSchema.parse('DRIVER')).toBe('DRIVER');
+      expect(RoleSchema.safeParse('OWNER').success).toBe(false);
+      expect(SettlementStatusSchema.parse('ESCROWED')).toBe('ESCROWED');
+      expect(SettlementStatusSchema.safeParse('PENDING_PAYMENT').success).toBe(false);
+    });
+  });
+
+  describe('simulation failure mapping', () => {
+    it.each([
+      ['Error(Contract, #10)', ErrorCodes.CHAIN_CONTRACT_REJECTED, 409],
+      ['Error(Contract, #11)', ErrorCodes.CHAIN_CONTRACT_REJECTED, 409],
+      ['Error(Contract, #14)', ErrorCodes.CHAIN_INVALID_AMOUNT, 422],
+    ])('decodes real NavinError codes distinctly: %s', (rawError, code, status) => {
+      const error = simulationErrorToAppError(rawError);
+      expect(error).toMatchObject({ code, statusCode: status });
+      expect(error.details).toMatchObject({ contractCode: expect.any(Number), rawError });
+    });
+
+    it('maps host diagnostics and retains raw details', () => {
+      expect(simulationErrorToAppError('missing auth for source account')).toMatchObject({
+        code: ErrorCodes.CHAIN_MISSING_AUTH,
+        statusCode: 403,
+      });
+      expect(simulationErrorToAppError('insufficient budget or resource limit')).toMatchObject({
+        code: ErrorCodes.CHAIN_INSUFFICIENT_BUDGET,
+        statusCode: 402,
+      });
+      expect(simulationErrorToAppError('account does not have a trustline')).toMatchObject({
+        code: ErrorCodes.CHAIN_MISSING_TRUSTLINE,
+        statusCode: 422,
+      });
+    });
   });
 });
 
@@ -73,7 +151,9 @@ describe('v2 function schemas — round trip and mutations', () => {
     });
 
     it.each(Object.keys(fixture))('rejects when field "%s" has the wrong type', key => {
-      expect(schema.safeParse({ ...fixture, [key]: 12345 }).success).toBe(false);
+      // {} fails every spec primitive (string/number/array), unlike a bare
+      // number literal which happens to be the correct type for `deadline`.
+      expect(schema.safeParse({ ...fixture, [key]: {} }).success).toBe(false);
     });
 
     it('rejects an extra field (strict schema / spec drift)', () => {
@@ -155,7 +235,7 @@ describe('v2 error schemas — round trip and mutations', () => {
       code: ErrorCodes.CHAIN_INVALID_STATUS,
       statusCode: 409,
     });
-    expect(chainErrorToAppError(CHAIN_CONTRACT_ERRORS.NotAuthorized)).toMatchObject({
+    expect(chainErrorToAppError(NAVIN_ERRORS.Unauthorized)).toMatchObject({
       code: ErrorCodes.CHAIN_UNAUTHORIZED,
       statusCode: 403,
     });

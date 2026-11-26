@@ -1,5 +1,5 @@
 {
-  "spec_version": "2.1.0",
+  "spec_version": "2.2.0",
   "events": {
     "anchor": {
       "id": "0002200479567253504-0000000001",
@@ -39,6 +39,120 @@
         "3e23e8160039594a33894f6564e1b1348bbd7a0088d42c4acb73eeaed59c009d",
         "GABQGAYDAMBQGAYDAMBQGAYDAMBQGAYDAMBQGAYDAMBQGAYDAMBQHGPC",
         "1500000000"
+      ]
+    },
+    "delivery_success": {
+      "id": "0002200479567253507-0000000001",
+      "contract_id": "CACAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAINCW",
+      "tx_hash": "4a1c0e9b7d2f5836a1b0c9d8e7f60514233241506978a9bacbdcedfe0f1e2d3c",
+      "ledger": 512500,
+      "ledger_closed_at": "2026-09-27T10:30:00Z",
+      "name": "delivery_success",
+      "topic": ["delivery_success"],
+      "data": [
+        "42",
+        "Delivered",
+        "ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb",
+        "1790505000",
+        "GABQGAYDAMBQGAYDAMBQGAYDAMBQGAYDAMBQGAYDAMBQGAYDAMBQHGPC"
+      ]
+    },
+    "delivery_confirmed": {
+      "id": "0002200479567253507-0000000002",
+      "contract_id": "CACAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAINCW",
+      "tx_hash": "4a1c0e9b7d2f5836a1b0c9d8e7f60514233241506978a9bacbdcedfe0f1e2d3c",
+      "ledger": 512500,
+      "ledger_closed_at": "2026-09-27T10:30:00Z",
+      "name": "delivery_confirmed",
+      "topic": ["delivery_confirmed"],
+      "data": [
+        "42",
+        "Delivered",
+        "ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb",
+        "1790505000",
+        "GABAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEJXA"
+      ]
+    },
+    "dispute_raised": {
+      "id": "0002200479567253600-0000000001",
+      "contract_id": "CACAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAINCW",
+      "tx_hash": "7c1e5a2b9d4f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f9",
+      "ledger": 512500,
+      "ledger_closed_at": "2026-09-27T11:00:00Z",
+      "name": "dispute_raised",
+      "topic": ["dispute_raised"],
+      "data": [
+        "65f1a2b3c4d5e6f708192a3b",
+        "GABQGAYDAMBQGAYDAMBQGAYDAMBQGAYDAMBQGAYDAMBQGAYDAMBQHGPC",
+        "c3e23e8160039594a33894f6564e1b1348bbd7a0088d42c4acb73eeaed59c00d"
+      ]
+    },
+    "escrow_frozen": {
+      "id": "0002200479567253600-0000000002",
+      "contract_id": "CACAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAINCW",
+      "tx_hash": "7c1e5a2b9d4f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f9",
+      "ledger": 512500,
+      "ledger_closed_at": "2026-09-27T11:00:00Z",
+      "name": "escrow_frozen",
+      "topic": ["escrow_frozen"],
+      "data": [
+        "65f1a2b3c4d5e6f708192a3b",
+        "DisputeRaised",
+        "GABQGAYDAMBQGAYDAMBQGAYDAMBQGAYDAMBQGAYDAMBQGAYDAMBQHGPC",
+        "1790000000"
+      ]
+    },
+    "dispute_resolved": {
+      "id": "0002200479567253700-0000000001",
+      "contract_id": "CACAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAINCW",
+      "tx_hash": "a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293",
+      "ledger": 512530,
+      "ledger_closed_at": "2026-09-27T11:30:00Z",
+      "name": "dispute_resolved",
+      "topic": ["dispute_resolved"],
+      "data": [
+        "65f1a2b3c4d5e6f708192a3b",
+        "RefundToCompany",
+        "d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f809",
+        "GABQGAYDAMBQGAYDAMBQGAYDAMBQGAYDAMBQGAYDAMBQGAYDAMBQHGPC"
+      ]
+    },
+    "escrow_refunded": {
+      "id": "0002200479567253507-0000000001",
+      "contract_id": "CACAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAINCW",
+      "tx_hash": "5e39232fedaaead9ef31ac0d4e0f6d8863b3e77b16d9b63eecbcae1a2b1d1e9c",
+      "ledger": 512401,
+      "ledger_closed_at": "2026-09-27T10:21:10Z",
+      "name": "escrow_refunded",
+      "topic": ["escrow_refunded", "65f1a2b3c4d5e6f708192a3b"],
+      "data": ["1500000000", "GAAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQDZ7H"]
+    },
+    "shipment_created": {
+      "id": "0002200479567253508-0000000001",
+      "contract_id": "CACAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAINCW",
+      "tx_hash": "6c4e1ab3be072f9f7ad2f4bd9c7aa9d9e0e4a1c4d0b4d1e0cd4e2f0a1b3c4d5e",
+      "ledger": 512402,
+      "ledger_closed_at": "2026-09-27T10:22:10Z",
+      "name": "shipment_created",
+      "topic": ["shipment_created", "65f1a2b3c4d5e6f708192a3b"],
+      "data": [
+        "GABAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEJXA",
+        "GABQGAYDAMBQGAYDAMBQGAYDAMBQGAYDAMBQGAYDAMBQGAYDAMBQHGPC",
+        "ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb"
+      ]
+    },
+    "status_updated": {
+      "id": "0002200479567253509-0000000001",
+      "contract_id": "CACAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAINCW",
+      "tx_hash": "8d5f2bc4cf1830a08be305cead8bbae0f1f5b2d5e1c5e2f1de5f301b2c4d5e6f",
+      "ledger": 512403,
+      "ledger_closed_at": "2026-09-27T10:23:10Z",
+      "name": "status_updated",
+      "topic": ["status_updated", "42"],
+      "data": [
+        "Created",
+        "InTransit",
+        "ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb"
       ]
     }
   }

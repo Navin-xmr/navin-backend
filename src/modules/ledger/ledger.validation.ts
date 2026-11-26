@@ -16,3 +16,17 @@ export const GetLedgerBlocksQuerySchema = z.object({
 });
 
 export type GetLedgerBlocksQuery = z.infer<typeof GetLedgerBlocksQuerySchema>;
+
+// ─── Chain read param schemas (P14-12) ───
+
+export const ChainShipmentStatusParamSchema = z.object({
+  shipmentId: z.string().min(1),
+});
+
+export type ChainShipmentStatusParam = z.infer<typeof ChainShipmentStatusParamSchema>;
+
+export const ChainPaymentIdParamSchema = z.object({
+  paymentId: z.string().min(1),
+});
+
+export type ChainPaymentIdParam = z.infer<typeof ChainPaymentIdParamSchema>;

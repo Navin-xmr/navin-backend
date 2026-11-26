@@ -55,6 +55,7 @@ const socketIoMock = createSocketIoMock({
   emitPaymentStatusChange: emitPaymentStatusChangeMock,
 });
 
+jest.resetModules();
 await jest.unstable_mockModule('../src/modules/ledger/ledger.model.js', () => ({
   LedgerBlock: {
     updateOne: ledgerUpdateOneMock,
@@ -365,6 +366,8 @@ describe('stellar indexer worker - event driven', () => {
       }),
     }));
     await indexStellarTransactions(makeAdapter([releaseEvent], 2));
+    // #797 — all three indexed event classes must insert the canonical
+    // `milestoneEvent` field, never the legacy split-brain `eventType`.
     expect(ledgerUpdateOneMock).toHaveBeenCalledWith(
       { transactionHash: releaseEvent.tx_hash },
       expect.objectContaining({
@@ -377,6 +380,12 @@ describe('stellar indexer worker - event driven', () => {
       }),
       { upsert: true }
     );
+    const [, releaseUpdate] = ledgerUpdateOneMock.mock.calls[0] as [
+      unknown,
+      { $set: Record<string, unknown>; $setOnInsert: Record<string, unknown> },
+    ];
+    expect(releaseUpdate.$setOnInsert).not.toHaveProperty('eventType');
+    expect(releaseUpdate.$set).not.toHaveProperty('eventType');
     expect(emitPaymentStatusChangeMock).not.toHaveBeenCalled();
 
     await indexStellarTransactions(makeAdapter([releaseEvent], 3));

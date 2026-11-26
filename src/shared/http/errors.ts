@@ -60,6 +60,8 @@ export const ErrorCodes = {
   SHIPMENT_NOT_FOUND: 'ERR_SHIPMENT_NOT_FOUND',
   SHIPMENT_INVALID_TRANSITION: 'ERR_SHIPMENT_INVALID_TRANSITION',
   PAYMENT_NOT_FOUND: 'ERR_PAYMENT_NOT_FOUND',
+  /** P14-08 #1032 — refund attempted on a released/escalated settlement, or release after refund. */
+  PAYMENTS_ESCROW_FINAL: 'ERR_PAYMENTS_ESCROW_FINAL',
   SETTLEMENT_NOT_FOUND: 'ERR_SETTLEMENT_NOT_FOUND',
   SETTLEMENT_ALREADY_DISPUTED: 'ERR_SETTLEMENT_ALREADY_DISPUTED',
   ORGANIZATION_NOT_FOUND: 'ERR_ORGANIZATION_NOT_FOUND',
@@ -80,12 +82,42 @@ export const ErrorCodes = {
   CHAIN_INVALID_PROOF: 'ERR_CHAIN_INVALID_PROOF',
   /** Contract `InvalidStatus` — escrow action attempted in the wrong shipment state. */
   CHAIN_INVALID_STATUS: 'ERR_CHAIN_INVALID_STATUS',
+  CHAIN_MISSING_AUTH: 'ERR_CHAIN_MISSING_AUTH',
+  CHAIN_INSUFFICIENT_BUDGET: 'ERR_CHAIN_INSUFFICIENT_BUDGET',
+  CHAIN_MISSING_TRUSTLINE: 'ERR_CHAIN_MISSING_TRUSTLINE',
   /** Contract `DuplicateAction` — identical (shipment, status, data_hash) inside the idempotency window. */
   CHAIN_DUPLICATE_ACTION: 'ERR_CHAIN_DUPLICATE_ACTION',
   /** Contract `ShipmentNotFound` — no on-chain shipment with that id. */
   CHAIN_SHIPMENT_NOT_FOUND: 'ERR_CHAIN_SHIPMENT_NOT_FOUND',
+  /** P11-08 #1030 — a known `NavinError` variant without a dedicated backend code. */
+  CHAIN_CONTRACT_REJECTED: 'ERR_CHAIN_CONTRACT_REJECTED',
   CHAIN_UNKNOWN: 'ERR_CHAIN_UNKNOWN',
   CHAIN_INVALID_EVENT: 'ERR_CHAIN_INVALID_EVENT',
+  /** P12-06: Transaction execution failed on-chain (distinct from simulation failure). */
+  CHAIN_TRANSACTION_FAILED: 'ERR_CHAIN_TRANSACTION_FAILED',
+  /** P12-06: Polling for transaction confirmation timed out. */
+  CHAIN_TIMEOUT: 'ERR_CHAIN_TIMEOUT',
+  /** P12-06: RPC returned TRY_AGAIN_LATER - temporary failure, retry later. */
+  CHAIN_TRY_AGAIN_LATER: 'ERR_CHAIN_TRY_AGAIN_LATER',
+  // #1035 — real failure classes for the v2.2 surface (role/RBAC, shipments, disputes).
+  /** Contract `RoleDenied` — caller lacks the required company/carrier role or whitelist entry. */
+  CHAIN_ROLE_DENIED: 'ERR_CHAIN_ROLE_DENIED',
+  /** Contract `InvalidTransition` — dispute/shipment action attempted from the wrong state. */
+  CHAIN_INVALID_TRANSITION: 'ERR_CHAIN_INVALID_TRANSITION',
+  /** Contract `EscrowLocked` — escrow is frozen (e.g. by an open dispute). */
+  CHAIN_ESCROW_LOCKED: 'ERR_CHAIN_ESCROW_LOCKED',
+  /** Contract `InsufficientFunds` — escrow balance cannot cover the requested action. */
+  CHAIN_INSUFFICIENT_FUNDS: 'ERR_CHAIN_INSUFFICIENT_FUNDS',
+  /** Contract `ContractPaused` — the contract is paused by an emergency admin switch. */
+  CHAIN_CONTRACT_PAUSED: 'ERR_CHAIN_CONTRACT_PAUSED',
+  /** Contract `TokenTransferFailed` — the underlying token transfer/mint failed. */
+  CHAIN_TOKEN_TRANSFER_FAILED: 'ERR_CHAIN_TOKEN_TRANSFER_FAILED',
+  /** Contract `RateLimited` — caller exceeded the contract's rate limit. */
+  CHAIN_RATE_LIMITED: 'ERR_CHAIN_RATE_LIMITED',
+  /** Contract `CircuitBreakerOpen` — the contract's circuit breaker tripped. */
+  CHAIN_CIRCUIT_BREAKER_OPEN: 'ERR_CHAIN_CIRCUIT_BREAKER_OPEN',
+  /** Contract `ShipmentFinalized` — shipment already reached a terminal state. */
+  CHAIN_SHIPMENT_FINALIZED: 'ERR_CHAIN_SHIPMENT_FINALIZED',
   CHAIN_FEE_BUDGET_EXCEEDED: 'ERR_CHAIN_FEE_BUDGET_EXCEEDED',
   WEBHOOKS_ENCRYPTION_KEY_MISSING: 'ERR_WEBHOOKS_ENCRYPTION_KEY_MISSING',
   WEBHOOKS_INVALID_SECRET: 'ERR_WEBHOOKS_INVALID_SECRET',

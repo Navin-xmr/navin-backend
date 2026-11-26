@@ -31,7 +31,6 @@ await jest.unstable_mockModule('../src/services/chain/factory.js', () =>
 await jest.unstable_mockModule('../src/services/chain/explorer.js', () => ({
   getStellarExplorerUrl: jest.fn((hash: string) => `https://stellar.expert/explorer/testnet/tx/${hash}`),
 }));
-
 const { createPaymentService } = await import('../src/modules/payments/payments.service.js');
 const { AppError } = await import('../src/shared/http/errors.js');
 

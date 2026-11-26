@@ -33,6 +33,7 @@ const telemetryModelMock = createTelemetryModelMock({
 });
 const socketIoMock = createSocketIoMock();
 
+jest.resetModules();
 await jest.unstable_mockModule('../src/modules/ledger/ledger.model.js', () => ({
   LedgerBlock: {
     updateOne: ledgerUpdateOneMock,
@@ -44,6 +45,9 @@ await jest.unstable_mockModule(
   () => telemetryModelMock
 );
 await jest.unstable_mockModule('../src/infra/socket/io.js', () => socketIoMock);
+await jest.unstable_mockModule('../src/modules/webhooks/chainWebhook.service.js', () => ({
+  enqueueChainWebhookEvent: jest.fn<() => Promise<number>>().mockResolvedValue(0),
+}));
 
 const { indexStellarTransactions } = await import('../src/workers/stellar-indexer.worker.js');
 

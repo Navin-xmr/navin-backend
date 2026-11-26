@@ -1,5 +1,14 @@
 import { env } from '../env.js';
-import { resolveStellarUrls } from './stellarNetwork.js';
+import { resolveContractRegistry } from './contractRegistry.js';
+import { resolveSorobanConfig, resolveStellarUrls } from './stellarNetwork.js';
+
+// P15-01: deployed contract IDs come from the committed registry. Any
+// configured ID must match it (enforced outside tests, where fixtures are used).
+const contracts = resolveContractRegistry(
+  env.STELLAR_NETWORK,
+  { shipment: env.ESCROW_CONTRACT_ID },
+  { strict: env.NODE_ENV !== 'test' }
+);
 
 const allowedOrigins = env.ALLOWED_ORIGINS.split(',')
   .map(origin => origin.trim())
@@ -10,6 +19,13 @@ const allowedOrigins = env.ALLOWED_ORIGINS.split(',')
 const stellarUrls = resolveStellarUrls(env.STELLAR_NETWORK, {
   horizonUrl: env.HORIZON_URL,
   sorobanRpcUrl: env.SOROBAN_RPC_URL,
+});
+
+// #995 — passphrase/RPC default per network; env overrides win. No contract id
+// or RPC URL literals live outside this (config) layer.
+const sorobanNetwork = resolveSorobanConfig(env.STELLAR_NETWORK, {
+  rpcUrl: env.SOROBAN_RPC_URL,
+  networkPassphrase: env.SOROBAN_NETWORK_PASSPHRASE,
 });
 
 export const config = {
@@ -54,9 +70,16 @@ export const config = {
     apiKey: process.env.CLOUDINARY_API_KEY,
     apiSecret: process.env.CLOUDINARY_API_SECRET,
   },
-  sorobanRpcUrl: stellarUrls.sorobanRpcUrl,
+  sorobanRpcUrl: sorobanNetwork.rpcUrl,
   escrowContractId: env.ESCROW_CONTRACT_ID,
+  contractRegistry: contracts,
   chainAdapter: env.SOROBAN_ADAPTER,
+  /** #995 — network-derived signing passphrase, overridable via env. */
+  sorobanNetworkPassphrase: sorobanNetwork.networkPassphrase,
+  /** #995 — deployed contract ids; absent when not configured for this network. */
+  shipmentContractId: env.SHIPMENT_CONTRACT_ID,
+  tokenContractId: env.TOKEN_CONTRACT_ID,
+  nftContractId: env.NFT_CONTRACT_ID,
   sorobanFeePolicy: {
     maxResourceFeeByNetwork: {
       testnet: env.SOROBAN_MAX_RESOURCE_FEE_TESTNET,

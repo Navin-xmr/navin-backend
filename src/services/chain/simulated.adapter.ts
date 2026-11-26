@@ -37,9 +37,15 @@ import { config } from '../../config/index.js';
 import { instrumentSubmission } from '../../infra/metrics/chainMetrics.js';
 import { AppError, ErrorCodes } from '../../shared/http/errors.js';
 import {
+  AddCarrierArgsSchema,
+  AddCarrierToWhitelistArgsSchema,
+  AddCompanyArgsSchema,
   AddressSchema,
   Bytes32HexSchema,
   CHAIN_EVENT_NAMES,
+  CreateShipmentArgsSchema,
+  RaiseDisputeArgsSchema,
+  ResolveDisputeArgsSchema,
   SymbolSchema,
   UpdateStatusArgsSchema,
   parseChainEvent,
@@ -48,13 +54,33 @@ import type { ChainEvent } from '../../shared/types/chain.js';
 import { generateDataHash } from '../../shared/utils/crypto.js';
 import { KeyedSerializer } from './serializer.js';
 import type {
+  AddCarrierInput,
+  AddCarrierToWhitelistInput,
+  AddCompanyInput,
   AnchorEventInput,
   AnchorResult,
   ChainAdapter,
   ChainErrorCode,
   ChainEventCursor,
+  ChainTxReceipt,
+  ConfirmDeliveryInput,
+  ConfirmDeliveryResult,
+  CreateShipmentInput,
+  CreateShipmentResult,
   EscrowResult,
+  RaiseDisputeInput,
+  ReadContractVersionResult,
+  ReadEscrowBalanceInput,
+  ReadEscrowBalanceResult,
+  ReadShipmentStatusInput,
+  ReadShipmentStatusResult,
   ReleaseEscrowInput,
+  RefundEscrowInput,
+  RefundResult,
+  ResolveDisputeInput,
+  RoleProvisionAction,
+  RolePreflightResult,
+  RoleProvisionResult,
   UpdateStatusInput,
   UpdateStatusResult,
 } from './types.js';
@@ -64,6 +90,11 @@ const SIMULATED_CONTRACT_ID = StrKey.encodeContract(Buffer.alloc(32));
 
 const ANCHOR_KEY_PREFIX = 'telemetry:';
 const RELEASE_KEY_PREFIX = 'release:';
+const REFUND_KEY_PREFIX = 'refund:';
+const SHIPMENT_KEY_PREFIX = 'shipment:';
+const DISPUTE_KEY_PREFIX = 'dispute:';
+const RESOLVE_KEY_PREFIX = 'resolve:';
+const ROLE_KEY_PREFIX = 'role:';
 const STATUS_KEY_PREFIX = 'status:';
 const PAGE_SIZE = 200;
 const MAX_BAD_SEQ_RETRIES = 2;
@@ -130,6 +161,11 @@ function assertBytes32(value: string, field: string, code: ChainErrorCode): void
   }
 }
 
+/** Fast local-validation failure before a submission — the contract stays authoritative. */
+function chainValidationError(error: { message: string }, code: ChainErrorCode) {
+  return chainError(422, `Invalid arguments: ${error.message}`, code);
+}
+
 export class SimulatedAdapter implements ChainAdapter {
   private readonly horizon: HorizonClient;
   private readonly secretKey: string | undefined;
@@ -183,6 +219,141 @@ export class SimulatedAdapter implements ChainAdapter {
     return { txHash: hash, ledger, simulated: true, shipmentId: input.shipment_id };
   }
 
+  async createShipment(input: CreateShipmentInput): Promise<CreateShipmentResult> {
+    const parsed = CreateShipmentArgsSchema.safeParse(input);
+    if (!parsed.success) throw chainValidationError(parsed.error, ErrorCodes.CHAIN_INVALID_AMOUNT);
+
+    const digest = generateDataHash(input);
+    const { hash, ledger } = await this.submitManageData(
+      `${SHIPMENT_KEY_PREFIX}${digest.slice(0, 32)}`,
+      digest
+    );
+    // Simulated mode has no real ledger-assigned id; the confirming ledger is
+    // a stable, monotonically increasing stand-in — never used by SorobanAdapter.
+    return { txHash: hash, ledger, simulated: true, shipmentId: ledger };
+  }
+
+  async raiseDispute(input: RaiseDisputeInput): Promise<ChainTxReceipt> {
+    const parsed = RaiseDisputeArgsSchema.safeParse(input);
+    if (!parsed.success) throw chainValidationError(parsed.error, ErrorCodes.CHAIN_INVALID_HASH);
+
+    const { hash, ledger } = await this.submitManageData(
+      `${DISPUTE_KEY_PREFIX}${input.shipment_id}`,
+      input.reason_hash
+    );
+    return { txHash: hash, ledger, simulated: true };
+  }
+
+  async resolveDispute(input: ResolveDisputeInput): Promise<ChainTxReceipt> {
+    const parsed = ResolveDisputeArgsSchema.safeParse(input);
+    if (!parsed.success) throw chainValidationError(parsed.error, ErrorCodes.CHAIN_UNKNOWN);
+
+    const digest = generateDataHash({ shipment_id: input.shipment_id, outcome: input.outcome });
+    const { hash, ledger } = await this.submitManageData(
+      `${RESOLVE_KEY_PREFIX}${input.shipment_id}`,
+      digest
+    );
+    return { txHash: hash, ledger, simulated: true };
+  }
+
+  async addCompany(input: AddCompanyInput): Promise<RoleProvisionResult> {
+    const parsed = AddCompanyArgsSchema.safeParse(input);
+    if (!parsed.success) throw chainValidationError(parsed.error, ErrorCodes.CHAIN_ROLE_DENIED);
+    return this.submitRoleAction('add_company', input.company, input);
+  }
+
+  async addCarrier(input: AddCarrierInput): Promise<RoleProvisionResult> {
+    const parsed = AddCarrierArgsSchema.safeParse(input);
+    if (!parsed.success) throw chainValidationError(parsed.error, ErrorCodes.CHAIN_ROLE_DENIED);
+    return this.submitRoleAction('add_carrier', `${input.company}:${input.carrier}`, input);
+  }
+
+  async addCarrierToWhitelist(input: AddCarrierToWhitelistInput): Promise<RoleProvisionResult> {
+    const parsed = AddCarrierToWhitelistArgsSchema.safeParse(input);
+    if (!parsed.success) throw chainValidationError(parsed.error, ErrorCodes.CHAIN_ROLE_DENIED);
+    return this.submitRoleAction(
+      'add_carrier_to_whitelist',
+      `${input.company}:${input.carrier}`,
+      input
+    );
+  }
+
+  /** No role/whitelist state exists in simulated mode — nothing to deny. */
+  async preflightRole(
+    _action: RoleProvisionAction,
+    _input: AddCompanyInput | AddCarrierInput | AddCarrierToWhitelistInput
+  ): Promise<RolePreflightResult> {
+    return { allowed: true };
+  }
+
+  private async submitRoleAction(
+    action: string,
+    key: string,
+    payload: unknown
+  ): Promise<RoleProvisionResult> {
+    const digest = generateDataHash(payload as Record<string, unknown>);
+    const { hash, ledger } = await this.submitManageData(
+      `${ROLE_KEY_PREFIX}${action}:${key}`,
+      digest
+    );
+    return { txHash: hash, ledger, simulated: true };
+  }
+
+  async confirmDelivery(input: ConfirmDeliveryInput): Promise<ConfirmDeliveryResult> {
+    assertBytes32(input.proof_hash, 'proof_hash', ErrorCodes.CHAIN_INVALID_PROOF);
+
+    // Auth precondition: only the receiver (signing key) may confirm delivery.
+    const signer = this.signer();
+    if (signer.publicKey() !== input.receiver) {
+      throw chainError(
+        403,
+        'Only the delivery receiver can confirm delivery',
+        ErrorCodes.CHAIN_UNAUTHORIZED
+      );
+    }
+
+    // Simulated: no contract call or funds moved. Record as a manage-data write so the
+    // indexer can observe delivery_success / escrow_released via streamEvents.
+    const { hash, ledger } = await this.submitManageData(
+      `confirm:${input.shipment_id}`,
+      input.proof_hash
+    );
+    return {
+      txHash: hash,
+      ledger,
+      simulated: true,
+      receiver: input.receiver,
+      shipmentId: input.shipment_id,
+    };
+  }
+
+  refundEscrow(input: RefundEscrowInput): Promise<RefundResult> {
+    return instrumentSubmission('refund_escrow', () => this.doRefundEscrow(input));
+  }
+
+  private async doRefundEscrow(input: RefundEscrowInput): Promise<RefundResult> {
+    if (!AddressSchema.safeParse(input.caller).success) {
+      throw chainError(
+        422,
+        'caller must be a valid Stellar address',
+        ErrorCodes.CHAIN_UNAUTHORIZED
+      );
+    }
+    if (!SymbolSchema.safeParse(input.shipment_id).success) {
+      throw chainError(422, 'shipment_id must be a valid Soroban Symbol', ErrorCodes.CHAIN_UNKNOWN);
+    }
+    const refundDigest = generateDataHash({
+      caller: input.caller,
+      shipment_id: input.shipment_id,
+      kind: 'refund_escrow',
+    });
+    const { hash, ledger } = await this.submitManageData(
+      `${REFUND_KEY_PREFIX}${input.shipment_id}`,
+      refundDigest
+    );
+    return { txHash: hash, ledger, simulated: true, shipmentId: input.shipment_id };
+  }
+
   async updateStatus(input: UpdateStatusInput): Promise<UpdateStatusResult> {
     const parsed = UpdateStatusArgsSchema.safeParse(input);
     if (!parsed.success) {
@@ -208,6 +379,21 @@ export class SimulatedAdapter implements ChainAdapter {
       shipmentId: shipment_id,
       newStatus: new_status,
     };
+  }
+
+  async readEscrowBalance(_input: ReadEscrowBalanceInput): Promise<ReadEscrowBalanceResult> {
+    // Simulated mode does not track real balances: no contract holds funds.
+    return { balance: '0', simulated: true };
+  }
+
+  async readShipmentStatus(_input: ReadShipmentStatusInput): Promise<ReadShipmentStatusResult> {
+    // Simulated mode does not track real on-chain state: no contract holds
+    // escrow, so the status is UNKNOWN until a real adapter is configured.
+    return { status: 'UNKNOWN', simulated: true };
+  }
+
+  async readContractVersion(): Promise<ReadContractVersionResult> {
+    return { version: '1.2.0-draft-simulated', simulated: true };
   }
 
   async *streamEvents(cursor?: ChainEventCursor): AsyncIterable<ChainEvent> {

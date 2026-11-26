@@ -6,6 +6,7 @@ import {
   PaymentIdParamSchema,
   GetPaymentsQuerySchema,
   DisputeSettlementBodySchema,
+  ResolveDisputeBodySchema,
 } from './payments.validation.js';
 import {
   createPaymentController,
@@ -14,6 +15,7 @@ import {
   updatePaymentStatusController,
   getSettlementByIdController,
   disputeSettlementController,
+  resolveDisputeController,
   getSettlementSummaryController,
 } from './payments.controller.js';
 import { requireAuth } from '../../shared/middleware/requireAuth.js';
@@ -72,6 +74,13 @@ paymentsRouter.post(
   requireRole(UserRole.ADMIN, UserRole.MANAGER),
   validateRequest({ params: PaymentIdParamSchema, body: DisputeSettlementBodySchema }),
   asyncHandler(disputeSettlementController)
+);
+
+paymentsRouter.post(
+  '/:id/dispute/resolve',
+  requireRole(UserRole.ADMIN, UserRole.MANAGER),
+  validateRequest({ params: PaymentIdParamSchema, body: ResolveDisputeBodySchema }),
+  asyncHandler(resolveDisputeController)
 );
 
 // Keep the legacy getPaymentController export for backward-compat references

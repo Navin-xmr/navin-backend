@@ -10,6 +10,7 @@ const mockGetPaymentById = jest.fn<() => Promise<unknown>>();
 const mockUpdatePaymentStatus = jest.fn<() => Promise<unknown>>();
 const mockEmitPaymentStatusChange = settlementEmitterMock();
 
+jest.resetModules();
 await jest.unstable_mockModule('../src/modules/payments/payments.repo.js', () => ({
   getPaymentById: mockGetPaymentById,
   updatePaymentStatus: mockUpdatePaymentStatus,

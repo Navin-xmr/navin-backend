@@ -8,9 +8,12 @@ export type AuditAction =
   | 'PROOF_UPLOADED'
   | 'TELEMETRY_ANCHORED'
   | 'SETTLEMENT_RELEASED'
+  | 'SETTLEMENT_REFUND_REQUESTED'
+  | 'SETTLEMENT_REFUNDED'
   | 'ANOMALY_DETECTED'
   | 'USER_INVITED'
   | 'DISPUTE_OPENED'
+  | 'DISPUTE_RESOLVED'
   | 'RBAC_ROLE_MODIFIED'
   | 'API_KEY_GENERATED';
 
@@ -28,7 +31,8 @@ function inferResource(action: AuditAction): string {
     action === 'SHIPMENT_STATUS_CHANGED' ||
     action === 'SHIPMENT_CREATED' ||
     action === 'PROOF_UPLOADED' ||
-    action === 'DISPUTE_OPENED'
+    action === 'DISPUTE_OPENED' ||
+    action === 'DISPUTE_RESOLVED'
   ) {
     return 'SHIPMENT';
   }
@@ -37,7 +41,11 @@ function inferResource(action: AuditAction): string {
     return 'TELEMETRY';
   }
 
-  if (action === 'SETTLEMENT_RELEASED') {
+  if (
+    action === 'SETTLEMENT_RELEASED' ||
+    action === 'SETTLEMENT_REFUND_REQUESTED' ||
+    action === 'SETTLEMENT_REFUNDED'
+  ) {
     return 'PAYMENT';
   }
 
