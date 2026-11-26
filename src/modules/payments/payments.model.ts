@@ -7,6 +7,7 @@ export enum PaymentStatus {
   RELEASED = 'Released',
   FAILED = 'Failed',
   DISPUTED = 'Disputed',
+  /** P14-08 #1032 — set only after the `escrow_refunded` chain event is indexed. */
   REFUNDED = 'Refunded',
 }
 
@@ -44,6 +45,9 @@ export interface IPayment {
   /** #1036 — escrow is frozen on-chain while a dispute is open. */
   escrowFrozen?: boolean;
   escrowRelease?: IEscrowRelease;
+  /** P14-08 — chain truth for the refund, reconciled from `escrow_refunded`. */
+  refundTxHash?: string;
+  refundAmount?: string;
   createdAt: Date;
   updatedAt: Date;
   deletedAt?: Date;
@@ -107,6 +111,8 @@ const PaymentSchema = new Schema<IPayment>(
     confirmations: { type: Number, default: 0 },
     escrowFrozen: { type: Boolean, default: false },
     escrowRelease: { type: EscrowReleaseSchema },
+    refundTxHash: { type: String },
+    refundAmount: { type: String },
     deletedAt: { type: Date, default: null },
   },
   { timestamps: true }

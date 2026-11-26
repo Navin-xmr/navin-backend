@@ -14,6 +14,9 @@ import type { SettlementStatusPayload } from '../../shared/types/socketEvents.js
 import { auditLog } from '../../shared/utils/auditLog.js';
 import { getChainActorAddress, getChainAdapter } from '../../services/chain/factory.js';
 import { generateDataHash } from '../../shared/utils/crypto.js';
+import { ShipmentStatus } from '../../shared/constants/shipments.js';
+import { Shipment } from '../shipments/shipments.model.js';
+import { amountToStroops } from './payments.reconciliation.js';
 
 function augmentPayment(payment: IPayment): IPayment & { explorerUrl?: string } {
   return {
@@ -152,6 +155,26 @@ export async function releasePaymentService(
   stellarTxHash: string,
   actorUserId?: string
 ) {
+  const payment = await paymentsRepo.getPaymentById(paymentId);
+  if (!payment) {
+    throw new AppError(404, 'Settlement not found', ErrorCodes.PAYMENT_NOT_FOUND);
+  }
+  // P14-08 — a cancelled/refunded escrow is final: never release it later.
+  const shipment = await Shipment.findById(payment.shipmentId.toString()).lean<{
+    status: ShipmentStatus;
+  }>();
+  if (
+    payment.status === PaymentStatus.REFUNDED ||
+    payment.status === PaymentStatus.RELEASED ||
+    shipment?.status === ShipmentStatus.CANCELLED
+  ) {
+    throw new AppError(
+      409,
+      'Escrow is already released or refunded',
+      ErrorCodes.PAYMENTS_ESCROW_FINAL
+    );
+  }
+
   const updated = await updatePaymentStatusService(paymentId, {
     status: PaymentStatus.RELEASED,
     stellarTxHash,
@@ -223,6 +246,114 @@ export async function disputeSettlementService(
   };
   emitPaymentStatusChange(updated.shipmentId.toString(), settlementPayload);
 
+  return augmentPayment(updated);
+}
+
+/**
+ * P14-08 / #1032 — submit `refund_escrow` for a cancelled shipment. The payment
+ * status is deliberately NOT changed here: it becomes REFUNDED only when the
+ * `escrow_refunded` event is reconciled by {@link reconcileEscrowRefundService}.
+ */
+export async function requestEscrowRefundService(
+  paymentId: string,
+  input: { caller: string; shipmentId: string; actorUserId?: string }
+) {
+  const payment = await paymentsRepo.getPaymentById(paymentId);
+  if (!payment) {
+    throw new AppError(404, 'Settlement not found', ErrorCodes.PAYMENT_NOT_FOUND);
+  }
+  if (payment.status === PaymentStatus.RELEASED || payment.status === PaymentStatus.REFUNDED) {
+    throw new AppError(
+      409,
+      'Escrow is already released or refunded',
+      ErrorCodes.PAYMENTS_ESCROW_FINAL
+    );
+  }
+  const shipment = await Shipment.findById(payment.shipmentId.toString()).lean<{
+    status: ShipmentStatus;
+  }>();
+  if (shipment?.status !== ShipmentStatus.CANCELLED) {
+    throw new AppError(
+      409,
+      'Escrow can only be refunded for a cancelled shipment',
+      ErrorCodes.PAYMENTS_ESCROW_FINAL
+    );
+  }
+
+  const adapter = getChainAdapter();
+  if (!adapter.refundEscrow) {
+    throw new AppError(502, 'Chain adapter has no refund method', ErrorCodes.CHAIN_UNKNOWN);
+  }
+  const receipt = await adapter.refundEscrow({
+    caller: input.caller,
+    shipment_id: input.shipmentId,
+  });
+
+  auditLog({
+    userId: input.actorUserId ?? 'system',
+    action: 'SETTLEMENT_REFUND_REQUESTED',
+    resourceId: paymentId,
+    timestamp: new Date(),
+    metadata: { txHash: receipt.txHash, shipmentId: input.shipmentId },
+  });
+  return receipt;
+}
+
+/**
+ * Reconcile an indexed `escrow_refunded` event into the payment record. The
+ * chain amount is authoritative and must match the stored settlement amount;
+ * the guarded repo update is a no-op when the escrow was already final.
+ */
+export async function reconcileEscrowRefundService(input: {
+  shipmentId: string;
+  amount: string;
+  txHash: string;
+  actorUserId?: string;
+}) {
+  const payment = await paymentsRepo.getPaymentByShipmentId(input.shipmentId);
+  if (!payment) {
+    throw new AppError(404, 'Settlement not found', ErrorCodes.PAYMENT_NOT_FOUND);
+  }
+  if (amountToStroops(payment.amount) !== BigInt(input.amount)) {
+    throw new AppError(
+      502,
+      'Refund amount does not match the on-chain amount',
+      ErrorCodes.CHAIN_INVALID_AMOUNT,
+      { stored: payment.amount, chain: input.amount }
+    );
+  }
+
+  const updated = await paymentsRepo.refundPayment(
+    payment._id.toString(),
+    input.amount,
+    input.txHash
+  );
+  if (!updated) {
+    throw new AppError(
+      409,
+      'Escrow is already released or refunded',
+      ErrorCodes.PAYMENTS_ESCROW_FINAL
+    );
+  }
+
+  const settlementPayload: SettlementStatusPayload = {
+    paymentId: updated._id.toString(),
+    shipmentId: updated.shipmentId.toString(),
+    oldStatus: payment.status,
+    newStatus: updated.status,
+    amount: updated.amount,
+    txHash: input.txHash,
+    timestamp: new Date().toISOString(),
+  };
+  emitPaymentStatusChange(updated.shipmentId.toString(), settlementPayload);
+
+  auditLog({
+    userId: input.actorUserId ?? 'system',
+    action: 'SETTLEMENT_REFUNDED',
+    resourceId: updated._id.toString(),
+    timestamp: new Date(),
+    metadata: { txHash: input.txHash, amount: input.amount },
+  });
   return augmentPayment(updated);
 }
 

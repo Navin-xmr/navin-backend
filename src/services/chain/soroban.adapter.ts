@@ -73,6 +73,8 @@ import type {
   ReadShipmentStatusInput,
   ReadShipmentStatusResult,
   ReleaseEscrowInput,
+  RefundEscrowInput,
+  RefundResult,
   ResolveDisputeInput,
   RoleProvisionAction,
   RolePreflightResult,
@@ -252,13 +254,57 @@ export class SorobanAdapter implements ChainAdapter {
     });
   }
 
+  refundEscrow(input: RefundEscrowInput, options?: ChainSubmitOptions): Promise<RefundResult> {
+    return instrumentSubmission('refund_escrow', () => this.doRefundEscrow(input, options));
+  }
+
+  private async doRefundEscrow(
+    input: RefundEscrowInput,
+    options?: ChainSubmitOptions
+  ): Promise<RefundResult> {
+    if (!AddressSchema.safeParse(input.caller).success) {
+      throw new AppError(
+        422,
+        'caller must be a valid Stellar address',
+        ErrorCodes.CHAIN_UNAUTHORIZED
+      );
+    }
+    if (!SymbolSchema.safeParse(input.shipment_id).success) {
+      throw new AppError(
+        422,
+        'shipment_id must be a valid Soroban Symbol',
+        ErrorCodes.CHAIN_UNKNOWN
+      );
+    }
+
+    const contract = this.getContract();
+    const key = this.idempotencyKey(
+      'refund_escrow',
+      options,
+      options?.shipmentId ?? input.shipment_id
+    );
+
+    return this.submitOnce(key, async () => {
+      await this.preflight({});
+      const op = contract.call(
+        'refund_escrow',
+        new Address(input.caller).toScVal(),
+        nativeToScVal(input.shipment_id, { type: 'symbol' })
+      );
+      const { txHash, ledger } = await serializeSubmission(this.signer().publicKey(), () =>
+        this.submitWithRetry(op)
+      );
+      return { txHash, ledger, simulated: false, shipmentId: input.shipment_id };
+    });
+  }
+
   /**
    * Idempotency key for a submission, or undefined when the caller gave no
-   * event identity. The method name is part of the key so an anchor and a
-   * release with the same (shipment, event, counter) never share a receipt.
+   * event identity. The method name is part of the key so an anchor, a release
+   * and a refund with the same (shipment, event, counter) never share a receipt.
    */
   private idempotencyKey(
-    method: 'anchor' | 'release_escrow',
+    method: 'anchor' | 'release_escrow' | 'refund_escrow',
     options: ChainSubmitOptions | undefined,
     shipmentId: string
   ): string | undefined {

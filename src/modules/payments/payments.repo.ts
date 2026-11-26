@@ -121,6 +121,31 @@ export async function updatePaymentStatus(
   ).lean();
 }
 
+/**
+ * P14-08 — atomically reconcile a refund, guarded so a released or already
+ * refunded settlement can never be refunded twice.
+ */
+export async function refundPayment(
+  id: string,
+  amount: string,
+  txHash: string
+): Promise<IPayment | null> {
+  return PaymentModel.findOneAndUpdate(
+    {
+      _id: new Types.ObjectId(id),
+      status: { $nin: [PaymentStatus.RELEASED, PaymentStatus.REFUNDED] },
+    },
+    {
+      $set: {
+        status: PaymentStatus.REFUNDED,
+        refundAmount: amount,
+        refundTxHash: txHash,
+      },
+    },
+    { new: true }
+  ).lean();
+}
+
 export async function getPaymentByShipmentId(shipmentId: string): Promise<IPayment | null> {
   return PaymentModel.findOne({ shipmentId: new Types.ObjectId(shipmentId) }).lean();
 }

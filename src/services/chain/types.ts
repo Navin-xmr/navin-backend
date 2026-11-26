@@ -24,6 +24,7 @@ import type {
   ChainEventDecodeFailure,
   ChainFunctionName,
   ConfirmDeliveryArgs,
+  RefundEscrowArgs,
   CreateShipmentArgs,
   RaiseDisputeArgs,
   ReleaseEscrowArgs,
@@ -75,6 +76,9 @@ export interface ChainSubmitOptions {
   /** Needed for `releaseEscrow`, whose input carries a payment ID, not a shipment ID. */
   shipmentId?: string;
 }
+
+/** Input for `refund_escrow(caller, shipment_id)` — spec-validated shape (P14-08). */
+export type RefundEscrowInput = RefundEscrowArgs;
 
 /**
  * Input for `update_status(caller, shipment_id, new_status, data_hash)`.
@@ -131,6 +135,12 @@ export interface ConfirmDeliveryResult extends ChainTxReceipt {
   receiver: ConfirmDeliveryInput['receiver'];
   shipmentId: ConfirmDeliveryInput['shipment_id'];
 }
+
+/** P14-08 — the refunded shipment; the amount arrives via `escrow_refunded`. */
+export interface RefundResult extends ChainTxReceipt {
+  shipmentId: RefundEscrowInput['shipment_id'];
+}
+
 /** Opaque resume position: the `id` of the last event processed. */
 export type ChainEventCursor = ChainEvent['id'];
 
@@ -214,6 +224,14 @@ export interface ChainAdapter {
    * `{ success: false }` failure flag.
    */
   releaseEscrow(input: ReleaseEscrowInput, options?: ChainSubmitOptions): Promise<EscrowResult>;
+
+  /**
+   * Refund escrow for a cancelled/expired shipment, authorized by `caller`.
+   * Resolves only when the refund transaction is confirmed; the off-chain
+   * payment record must then be reconciled from the `escrow_refunded` event.
+   * @throws {AppError} ERR_CHAIN_* on rejection.
+   */
+  refundEscrow?(input: RefundEscrowInput, options?: ChainSubmitOptions): Promise<RefundResult>;
 
   /**
    * Update a shipment's on-chain status (`update_status`).

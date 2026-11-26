@@ -11,6 +11,8 @@ import {
   CHAIN_FUNCTION_AUTH,
   CHAIN_FUNCTIONS,
   CHAIN_SPEC_VERSION,
+  NAVIN_ERRORS,
+  NAVIN_ERROR_MAP,
   ChainContractErrorSchema,
   ChainEventSchema,
   ChainFunctionArgsSchemas,
@@ -219,9 +221,9 @@ describe('chain errors', () => {
 
   it('maps every contract error to a registered ERR_CHAIN_* AppError', () => {
     const registered = new Set<string>(Object.values(ErrorCodes));
-    for (const [name, code] of Object.entries(CHAIN_CONTRACT_ERRORS)) {
+    for (const [name, code] of Object.entries(NAVIN_ERRORS)) {
       const err = chainErrorToAppError(code);
-      const expected = CHAIN_ERROR_MAP[name as keyof typeof CHAIN_ERROR_MAP];
+      const expected = NAVIN_ERROR_MAP[name as keyof typeof NAVIN_ERROR_MAP];
       expect(err).toBeInstanceOf(AppError);
       expect(err.code).toBe(expected.code);
       expect(err.statusCode).toBe(expected.status);

@@ -60,6 +60,8 @@ export const ErrorCodes = {
   SHIPMENT_NOT_FOUND: 'ERR_SHIPMENT_NOT_FOUND',
   SHIPMENT_INVALID_TRANSITION: 'ERR_SHIPMENT_INVALID_TRANSITION',
   PAYMENT_NOT_FOUND: 'ERR_PAYMENT_NOT_FOUND',
+  /** P14-08 #1032 — refund attempted on a released/escalated settlement, or release after refund. */
+  PAYMENTS_ESCROW_FINAL: 'ERR_PAYMENTS_ESCROW_FINAL',
   SETTLEMENT_NOT_FOUND: 'ERR_SETTLEMENT_NOT_FOUND',
   SETTLEMENT_ALREADY_DISPUTED: 'ERR_SETTLEMENT_ALREADY_DISPUTED',
   ORGANIZATION_NOT_FOUND: 'ERR_ORGANIZATION_NOT_FOUND',
@@ -87,6 +89,8 @@ export const ErrorCodes = {
   CHAIN_DUPLICATE_ACTION: 'ERR_CHAIN_DUPLICATE_ACTION',
   /** Contract `ShipmentNotFound` — no on-chain shipment with that id. */
   CHAIN_SHIPMENT_NOT_FOUND: 'ERR_CHAIN_SHIPMENT_NOT_FOUND',
+  /** P11-08 #1030 — a known `NavinError` variant without a dedicated backend code. */
+  CHAIN_CONTRACT_REJECTED: 'ERR_CHAIN_CONTRACT_REJECTED',
   CHAIN_UNKNOWN: 'ERR_CHAIN_UNKNOWN',
   CHAIN_INVALID_EVENT: 'ERR_CHAIN_INVALID_EVENT',
   /** P12-06: Transaction execution failed on-chain (distinct from simulation failure). */

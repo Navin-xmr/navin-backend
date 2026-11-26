@@ -54,7 +54,7 @@ describe('SorobanAdapter pipeline', () => {
   });
 
   it.each([
-    ['Error(Contract, #10)', 'ERR_CHAIN_MISSING_AUTH'],
+    ['Error(Contract, #10)', 'ERR_CHAIN_CONTRACT_REJECTED'],
     ['insufficient budget', 'ERR_CHAIN_INSUFFICIENT_BUDGET'],
     ['missing trustline', 'ERR_CHAIN_MISSING_TRUSTLINE'],
   ])('stops after a failed simulation: %s', async (rawError, expectedCode) => {

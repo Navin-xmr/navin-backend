@@ -81,6 +81,8 @@ export interface IShipment {
   offChainMetadata?: Record<string, unknown>;
   stellarTokenId?: string;
   stellarTxHash?: string;
+  /** P13-08 — anchor hash from the indexed `shipment_created` event. */
+  chainDataHash?: string;
   /** #997 — pending_chain resolves to anchored once the worker submits create_shipment. */
   chainOutbox?: ShipmentChainOutbox;
   /** On-chain `u64` shipment id (decimal string); links indexed contract events to this shipment (#1043). */

@@ -108,6 +108,19 @@
         }
       ]
     },
+    "refund_escrow": {
+      "auth": "caller",
+      "inputs": [
+        {
+          "name": "caller",
+          "type": "Address"
+        },
+        {
+          "name": "shipment_id",
+          "type": "Symbol"
+        }
+      ]
+    },
     "create_shipment": {
       "auth": "sender",
       "inputs": [

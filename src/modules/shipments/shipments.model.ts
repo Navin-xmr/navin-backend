@@ -47,6 +47,8 @@ const ShipmentSchema = new Schema(
     offChainMetadata: { type: Schema.Types.Mixed },
     stellarTokenId: { type: String },
     stellarTxHash: { type: String },
+    /** P13-08 — anchor hash from the indexed `shipment_created` event. */
+    chainDataHash: { type: String },
     // #997 — embedded outbox: shipment write + enqueue are one atomic document write.
     chainOutbox: {
       type: {

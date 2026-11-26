@@ -8,6 +8,8 @@ export type AuditAction =
   | 'PROOF_UPLOADED'
   | 'TELEMETRY_ANCHORED'
   | 'SETTLEMENT_RELEASED'
+  | 'SETTLEMENT_REFUND_REQUESTED'
+  | 'SETTLEMENT_REFUNDED'
   | 'ANOMALY_DETECTED'
   | 'USER_INVITED'
   | 'DISPUTE_OPENED'
@@ -39,7 +41,11 @@ function inferResource(action: AuditAction): string {
     return 'TELEMETRY';
   }
 
-  if (action === 'SETTLEMENT_RELEASED') {
+  if (
+    action === 'SETTLEMENT_RELEASED' ||
+    action === 'SETTLEMENT_REFUND_REQUESTED' ||
+    action === 'SETTLEMENT_REFUNDED'
+  ) {
     return 'PAYMENT';
   }
 
